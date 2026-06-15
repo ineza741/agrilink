@@ -21,6 +21,43 @@ const defaultFarmHistory = [
   },
 ];
 
+const gatengaFarmSeed = {
+  id: "farm-seed-gatenga",
+  name: "Gatenga Demonstration Plot",
+  plotLabel: "Plot C",
+  region: "Gatenga Sector, Kicukiro District, Kigali City",
+  sizeHectares: 3.5,
+  landType: "Clay Loam",
+  irrigationType: "Sprinkler Irrigation",
+  primaryCrop: "Beans",
+  cooperativeName: "Kigali Urban Growers Network",
+  location: {
+    lat: -1.9983,
+    lng: 30.1038,
+    mapX: 58,
+    mapY: 61,
+    label: "Gatenga Sector, Kicukiro District, Kigali City, Rwanda",
+  },
+  photoName: "gatenga-demonstration-plot.jpg",
+  verificationStatus: "verified",
+  history: [
+    {
+      id: "history-gatenga-1",
+      crop: "Bush Beans",
+      season: "2025 B",
+      yield: "1.9 t/ha",
+      challenges: "Short dry spell during flowering and localized aphid pressure",
+    },
+    {
+      id: "history-gatenga-2",
+      crop: "Leafy Vegetables",
+      season: "2025 A",
+      yield: "4.1 t/ha mixed harvest",
+      challenges: "Waterlogging in low spots after intense rainfall",
+    },
+  ],
+};
+
 function createFarmRecord(ownerId, farm, overrides = {}) {
   return {
     id: overrides.id || `farm-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -150,6 +187,11 @@ function createSeedData(users) {
           },
           { id: "farm-seed-2", createdAt: "2026-06-03T11:30:00.000Z" }
         ),
+        createFarmRecord(
+          primaryFarmer.id,
+          gatengaFarmSeed,
+          { id: gatengaFarmSeed.id, createdAt: "2026-06-13T09:15:00.000Z" }
+        ),
       ]
     : [];
 
@@ -157,6 +199,29 @@ function createSeedData(users) {
     profiles,
     farms,
     bulkRegistrations: [],
+  };
+}
+
+function ensureRodrigueSeedFarm(data, users) {
+  const primaryFarmer = users.find((user) => user.id === "user-farmer-1");
+  if (!primaryFarmer) {
+    return data;
+  }
+
+  const hasGatengaFarm = data.farms.some((farm) => farm.id === gatengaFarmSeed.id);
+  if (hasGatengaFarm) {
+    return data;
+  }
+
+  return {
+    ...data,
+    farms: [
+      ...data.farms,
+      createFarmRecord(primaryFarmer.id, gatengaFarmSeed, {
+        id: gatengaFarmSeed.id,
+        createdAt: "2026-06-13T09:15:00.000Z",
+      }),
+    ],
   };
 }
 
@@ -193,7 +258,7 @@ function loadFarmerData() {
 
   try {
     const parsed = JSON.parse(saved);
-    const hydrated = ensureProfiles(parsed, users);
+    const hydrated = ensureRodrigueSeedFarm(ensureProfiles(parsed, users), users);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(hydrated));
     return hydrated;
   } catch {
@@ -236,7 +301,7 @@ export function FarmerDataProvider({ children }) {
 
   useEffect(() => {
     const users = authService.bootstrap();
-    setData((current) => ensureProfiles(current, users));
+    setData((current) => ensureRodrigueSeedFarm(ensureProfiles(current, users), users));
   }, [user?.id]);
 
   const value = useMemo(() => {

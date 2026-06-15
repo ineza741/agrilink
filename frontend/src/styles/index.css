@@ -1746,6 +1746,31 @@ button {
   font-style: normal;
 }
 
+.prototype-soil-source-note {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid #d6e8f5;
+  border-radius: 14px;
+  background: #f7fbff;
+}
+
+.prototype-soil-source-note strong {
+  color: #174b68;
+  font-size: 0.95rem;
+}
+
+.prototype-soil-source-note span {
+  color: #5d7894;
+  line-height: 1.5;
+}
+
+.prototype-soil-source-note em {
+  color: #b45309;
+  font-style: normal;
+  font-size: 0.9rem;
+}
+
 
 .prototype-soil-left,
 .prototype-soil-right {
@@ -1926,6 +1951,31 @@ button {
   line-height: 1.45;
 }
 
+.soil-score-feedback {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 1rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid #dbeaf6;
+  border-radius: 14px;
+  background: #f8fcff;
+}
+
+.soil-score-feedback strong {
+  color: #1f4d68;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.soil-score-feedback ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: #50708f;
+  line-height: 1.55;
+  text-align: left;
+}
+
 .prototype-crop-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1941,6 +1991,21 @@ button {
   border: 1px solid #cfe4f1;
   border-radius: 14px;
   background: #edf8ff;
+  width: 100%;
+  text-align: left;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.prototype-crop-card:hover {
+  transform: translateY(-2px);
+  border-color: #8fcbec;
+  box-shadow: 0 14px 30px rgba(30, 164, 233, 0.12);
+}
+
+.prototype-crop-card.selected {
+  border-color: #1ea4e9;
+  background: #e6f5ff;
+  box-shadow: 0 16px 32px rgba(30, 164, 233, 0.18);
 }
 
 .prototype-crop-card.full {
@@ -2025,6 +2090,58 @@ button {
   font-size: 0.8rem;
 }
 
+.soil-recommendation-detail {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1rem;
+  padding: 1rem 1.05rem;
+  border: 1px solid #d7e8f5;
+  border-radius: 14px;
+  background: #f9fcff;
+}
+
+.soil-recommendation-detail-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.soil-recommendation-detail-head strong {
+  color: #1d425c;
+  font-size: 1.05rem;
+}
+
+.soil-recommendation-detail-head span {
+  color: #0e9edf;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.soil-recommendation-detail > p {
+  margin: 0;
+  color: #42627f;
+  line-height: 1.55;
+}
+
+.soil-recommendation-detail-block {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.soil-recommendation-detail-block h4 {
+  margin: 0;
+  color: #214868;
+  font-size: 0.88rem;
+}
+
+.soil-recommendation-detail-block ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: #557490;
+  line-height: 1.55;
+}
+
 .soil-fertilizer-table {
   margin-top: 1.3rem;
   border: 1px solid #d9eaf4;
@@ -2054,6 +2171,14 @@ button {
   padding: 1.15rem;
   border-top: 1px solid #e7eff6;
   color: #24354d;
+}
+
+.soil-fertilizer-row span small {
+  display: block;
+  margin-top: 0.35rem;
+  color: #6a7f97;
+  font-size: 0.8rem;
+  line-height: 1.45;
 }
 
 .soil-state {
@@ -2198,6 +2323,13 @@ button {
 
 .soil-map-legend i.high {
   background: #1ea4e9;
+}
+
+.soil-map-source {
+  margin: 0.85rem 0 0;
+  color: #67819a;
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
 .soil-suitability-table {
@@ -2367,6 +2499,25 @@ button {
   padding-left: 1.2rem;
   color: #60718c;
   line-height: 1.6;
+}
+
+.soil-future-note {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: 1rem;
+  padding: 0.95rem 1rem;
+  border: 1px dashed #d4e1ee;
+  border-radius: 12px;
+  background: #fbfdff;
+}
+
+.soil-future-note strong {
+  color: #1d425c;
+}
+
+.soil-future-note span {
+  color: #68809a;
+  line-height: 1.5;
 }
 
 @media (max-width: 1180px) {
@@ -13335,6 +13486,23 @@ button {
   }
 }
 
+.prototype-weather-status {
+  background: #eef7ff;
+  border: 1px solid #d4e7f6;
+  border-radius: 16px;
+  color: #3f5f83;
+  font-size: 0.92rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  padding: 0.95rem 1rem;
+}
+
+.prototype-weather-status.warning {
+  background: #fff6ef;
+  border-color: #f0dbc6;
+  color: #8a684a;
+}
+
 @media (max-width: 768px) {
   .community-thread-actions,
   .community-story-foot,
@@ -13343,5 +13511,33 @@ button {
     align-items: stretch;
     flex-direction: column;
   }
+}
+
+.prototype-market-map-link {
+  align-items: center;
+  background: #f6fffb;
+  border: 1px solid #bfe0d4;
+  border-radius: 999px;
+  color: #1d6b4f;
+  display: inline-flex;
+  font-weight: 700;
+  justify-content: center;
+  min-width: 98px;
+  padding: 0.6rem 0.95rem;
+  text-decoration: none;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.prototype-market-map-link:hover {
+  background: #e7fff3;
+  border-color: #8ecaae;
+  color: #12573f;
+}
+
+.prototype-market-map-visual iframe {
+  border: 0;
+  border-radius: 20px 20px 0 0;
+  height: 100%;
+  width: 100%;
 }
 

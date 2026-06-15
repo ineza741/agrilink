@@ -17,6 +17,10 @@ import { useFarmerData } from "../../context/FarmerDataContext";
 
 const IRRIGATION_STORAGE_KEY = "agri-feed-irrigation-module-v1";
 
+function formatRwf(value) {
+  return `RWF ${Math.round(Number(value) || 0).toLocaleString()}`;
+}
+
 function createDefaultFarm() {
   return {
     id: "irrigation-default-farm",
@@ -171,9 +175,9 @@ function calculateAdvisory({
     waterRequirement,
     nutrients,
     costs: [
-      { label: "Water Usage (Pumping)", value: `$${waterCost.toLocaleString()}` },
-      { label: `Fertilizer (${fertilizerType})`, value: `$${fertilizerCost.toLocaleString()}` },
-      { label: "Application Labor", value: `$${laborCost.toLocaleString()}` },
+      { label: "Water Usage (Pumping)", value: formatRwf(waterCost) },
+      { label: `Fertilizer (${fertilizerType})`, value: formatRwf(fertilizerCost) },
+      { label: "Application Labor", value: formatRwf(laborCost) },
     ],
     totalCost,
     budgetFit,
@@ -421,7 +425,7 @@ export function IrrigationPage() {
                 </label>
 
                 <label>
-                  <span>Input Budget (USD)</span>
+                  <span>Input Budget (RWF)</span>
                   <input type="number" value={budget} onChange={(event) => setBudget(event.target.value)} />
                 </label>
 
@@ -541,7 +545,7 @@ export function IrrigationPage() {
 
             <div className="irrigation-total-row">
               <span>Estimated Total</span>
-              <strong>${advisory.totalCost.toLocaleString()}</strong>
+              <strong>{formatRwf(advisory.totalCost)}</strong>
             </div>
 
             <div className={`irrigation-budget-chip ${advisory.budgetFit === "Within Budget" ? "good" : "warning"}`}>

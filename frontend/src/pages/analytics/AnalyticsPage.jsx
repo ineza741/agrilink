@@ -10,7 +10,7 @@ import {
   Sparkles,
   UsersRound,
   BarChart3,
-  DollarSign,
+  Wallet,
   ShoppingCart,
   Sprout,
   MoreVertical,
@@ -48,6 +48,10 @@ const methodologyCards = [
 ];
 
 const ANALYTICS_STORAGE_KEY = "agri-feed-analytics-module-v1";
+
+function formatRwf(value) {
+  return `RWF ${Math.round(Number(value) || 0).toLocaleString()}`;
+}
 
 function createDefaultFarm() {
   return {
@@ -119,9 +123,9 @@ function buildAnalyticsData({ farm, cropType, dateRange, reportTemplate }) {
   }));
 
   const reportRows = [
-    { period: "June 2024", short: "JUN", yield: `${(yieldTons / 5.7).toFixed(1)} Tons`, revenue: `$${Math.round(revenue / 5.2).toLocaleString()}`, score: `${Math.min(94, sustainability + 6)}%`, status: "Verified" },
-    { period: "May 2024", short: "MAY", yield: `${(yieldTons / 6.2).toFixed(1)} Tons`, revenue: `$${Math.round(revenue / 5.6).toLocaleString()}`, score: `${Math.min(91, sustainability + 2)}%`, status: "Verified" },
-    { period: "April 2024", short: "APR", yield: `${(yieldTons / 6).toFixed(1)} Tons`, revenue: `$${Math.round(revenue / 5.4).toLocaleString()}`, score: `${Math.max(74, sustainability - 3)}%`, status: "Pending Review" },
+    { period: "June 2024", short: "JUN", yield: `${(yieldTons / 5.7).toFixed(1)} Tons`, revenue: formatRwf(Math.round(revenue / 5.2)), score: `${Math.min(94, sustainability + 6)}%`, status: "Verified" },
+    { period: "May 2024", short: "MAY", yield: `${(yieldTons / 6.2).toFixed(1)} Tons`, revenue: formatRwf(Math.round(revenue / 5.6)), score: `${Math.min(91, sustainability + 2)}%`, status: "Verified" },
+    { period: "April 2024", short: "APR", yield: `${(yieldTons / 6).toFixed(1)} Tons`, revenue: formatRwf(Math.round(revenue / 5.4)), score: `${Math.max(74, sustainability - 3)}%`, status: "Pending Review" },
   ];
 
   const reportTemplateLabel =
@@ -345,10 +349,10 @@ function FarmerAnalyticsView() {
   const farmerMetricCards = [
     {
       title: "Profit Estimation",
-      value: `$${analytics.profit.toLocaleString()}`,
+      value: formatRwf(analytics.profit),
       note: `${analytics.profit >= 0 ? "+" : ""}${Math.max(1.8, analytics.roi / 3).toFixed(1)}% vs last cycle`,
       tone: analytics.profit >= 0 ? "green" : "red",
-      icon: DollarSign,
+      icon: Wallet,
     },
     {
       title: "ROI %",
@@ -359,7 +363,7 @@ function FarmerAnalyticsView() {
     },
     {
       title: "Operating Costs",
-      value: `$${analytics.costs.toLocaleString()}`,
+      value: formatRwf(analytics.costs),
       note: `${Math.max(1.4, analytics.waterUseScore / 18).toFixed(1)}% controlled spend`,
       tone: "red",
       icon: ShoppingCart,

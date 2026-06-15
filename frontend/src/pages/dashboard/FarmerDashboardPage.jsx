@@ -8,6 +8,7 @@ import {
   Search,
   Sprout,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 const statCards = [
   {
@@ -55,9 +56,9 @@ const resourceRows = [
 ];
 
 const quickActions = [
-  { label: "Add Soil Test", icon: FlaskConical },
-  { label: "View Market", icon: Sprout },
-  { label: "Check Pests", icon: Search },
+  { label: "Add Soil Test", icon: FlaskConical, to: "/soil-crop" },
+  { label: "View Market", icon: Sprout, to: "/market-intelligence" },
+  { label: "Check Pests", icon: Search, to: "/pests-diseases" },
 ];
 
 function widthFromPercent(value) {
@@ -65,6 +66,8 @@ function widthFromPercent(value) {
 }
 
 export function FarmerDashboardPage() {
+  const navigate = useNavigate();
+
   return (
     <section className="farmer-dashboard-page">
       <div className="page-title-block farmer-page-title">
@@ -91,7 +94,11 @@ export function FarmerDashboardPage() {
                 ))}
               </div>
               {card.link ? (
-                <button type="button" className="text-link-button primary farmer-link-button">
+                <button
+                  type="button"
+                  className="text-link-button primary farmer-link-button"
+                  onClick={() => navigate("/recommendations")}
+                >
                   {card.link}
                 </button>
               ) : null}
@@ -146,7 +153,7 @@ export function FarmerDashboardPage() {
             ))}
           </div>
 
-          <button type="button" className="download-report-button">
+          <button type="button" className="download-report-button" onClick={() => navigate("/analytics")}>
             Download Reports
           </button>
         </aside>
@@ -158,7 +165,12 @@ export function FarmerDashboardPage() {
           {quickActions.map((action) => {
             const Icon = action.icon;
             return (
-              <button key={action.label} type="button" className="quick-action-chip">
+              <button
+                key={action.label}
+                type="button"
+                className="quick-action-chip"
+                onClick={() => navigate(action.to)}
+              >
                 <Icon size={14} />
                 <span>{action.label}</span>
                 <ArrowRight size={13} />
