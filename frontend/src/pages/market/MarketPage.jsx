@@ -1,6 +1,5 @@
 import { Bell, Bot, ExternalLink, MapPin, PackageCheck, ShipWheel, TrendingUp } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { FarmerPrototypeTopbar } from "../../components/common/FarmerPrototypeTopbar";
 import { useFarmerData } from "../../context/FarmerDataContext";
 
 const MARKET_STORAGE_KEY = "agri-feed-market-module-v1";
@@ -415,13 +414,6 @@ export function MarketPage() {
 
   return (
     <section className="management-page prototype-market-page">
-      <FarmerPrototypeTopbar
-        brand="AgriIntel AI"
-        items={["Dashboard", "Market Trends", "Inventory", "Advice"]}
-        active="Market Trends"
-        placeholder="Search crops or markets"
-      />
-
       <div className="page-title-block prototype-market-title">
         <h1>Market Intelligence</h1>
         <p>Live crop pricing, demand forecasting, logistics guidance, and best-time-to-sell recommendations.</p>

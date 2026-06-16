@@ -1,5 +1,5 @@
 import { Download, Map, MapPin, PlusCircle, Search, Users, Waves } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useFarmerData } from "../../context/FarmerDataContext";
@@ -178,6 +178,8 @@ function AdminFarmsView() {
   const [regionFilter, setRegionFilter] = useState("all");
   const [bulkText, setBulkText] = useState("");
   const [bulkStatus, setBulkStatus] = useState("");
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 4;
 
   const regions = useMemo(
     () => ["all", ...new Set(adminFarmerRows.map((row) => row.region).filter(Boolean))],
@@ -198,6 +200,18 @@ function AdminFarmsView() {
     });
   }, [adminFarmerRows, query, regionFilter]);
 
+    useEffect(() => {
+    setPage(1);
+  }, [query, regionFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(visibleRows.length / itemsPerPage));
+  const pagedRows = visibleRows.slice((page - 1) * itemsPerPage, page * itemsPerPage);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
   const adminSummary = useMemo(() => {
     const active = adminFarmerRows.filter((row) => row.status === "verified").length;
     const pending = adminFarmerRows.filter((row) => row.status === "pending").length;
@@ -253,11 +267,6 @@ function AdminFarmsView() {
   return (
     <section className="management-page prototype-admin-farmers-page">
       <div className="prototype-admin-farmers-title">
-        <div className="prototype-admin-farmers-breadcrumb">
-          <span>Admin</span>
-          <i>/</i>
-          <strong>Farmer Management</strong>
-        </div>
         <h1>Farmer Management</h1>
         <p>Manage registrations, multi-farm records, verification flow, and centralized farm mapping data.</p>
       </div>
@@ -326,7 +335,7 @@ function AdminFarmsView() {
             <span>Actions</span>
           </div>
 
-          {visibleRows.map((farmer) => (
+          {pagedRows.map((farmer) => (
             <div key={farmer.userId} className="prototype-admin-farmers-row richer">
               <div className="prototype-admin-farmer-cell">
                 <div className="prototype-admin-farmer-badge">{farmer.initials}</div>
@@ -351,7 +360,7 @@ function AdminFarmsView() {
               </span>
               <span>{new Date(farmer.joined).toLocaleDateString()}</span>
               <div className="prototype-admin-farmer-actions">
-                <button type="button" className="link">
+                <button type="button" className="link" onClick={() => setBulkStatus(`Viewing summary for ${farmer.name}.`)}>
                   View Profile
                 </button>
                 {farmer.status === "pending" ? (
@@ -369,7 +378,7 @@ function AdminFarmsView() {
         </div>
 
         <div className="prototype-admin-farmers-footer">
-          <span>Showing {visibleRows.length} of {adminFarmerRows.length} farmers</span>
+          <span>Showing {pagedRows.length ? (page - 1) * itemsPerPage + 1 : 0}-{Math.min(page * itemsPerPage, visibleRows.length)} of {visibleRows.length} filtered farmers</span>
           <div className="prototype-admin-farmers-pager">
             <button type="button">‹</button>
             <button type="button">›</button>
@@ -405,3 +414,5 @@ export function FarmsPage() {
   const { user } = useAuth();
   return user?.role === "admin" ? <AdminFarmsView /> : <FarmerFarmsView />;
 }
+
+

@@ -15,6 +15,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { useFarmerData } from "../../context/FarmerDataContext";
 import { apiClient } from "../../services/api";
+import { downloadJsonFile, downloadTextFile } from "../../utils/actions";
 
 const cropLibrary = [
   {
@@ -778,6 +779,24 @@ export function SoilCropPage() {
     setSubmittedForm(form);
   };
 
+  const exportAnalysis = () => {
+    downloadTextFile(
+      `${selectedFarm.name.toLowerCase().replace(/\s+/g, "-")}-soil-analysis.txt`,
+      `Soil & Crop Analysis\nFarm: ${selectedFarm.name}\nSource: ${sourceStatus}\nHealth Score: ${analysis.healthScore} (${analysis.healthLabel})\nSelected Recommendation: ${selectedRecommendation?.name || "N/A"}\n\nDegradation Alerts:\n- ${analysis.degradationAlerts.join("\n- ") || "None"}`
+    );
+  };
+
+  const exportHistory = () => {
+    downloadJsonFile("soil-analysis-history.json", {
+      farm: selectedFarm,
+      sourceStatus,
+      submittedForm,
+      analysis,
+      selectedRecommendation,
+      selectedRecommendationDetails,
+    });
+  };
+
   return (
     <section className="management-page prototype-soil-module">
       <div className="prototype-soil-head">
@@ -790,11 +809,11 @@ export function SoilCropPage() {
         </div>
 
         <div className="prototype-soil-head-actions">
-          <button type="button" className="prototype-soil-action secondary">
+          <button type="button" className="prototype-soil-action secondary" onClick={exportAnalysis}>
             <Download size={15} />
             <span>Export PDF</span>
           </button>
-          <button type="button" className="prototype-soil-action primary">
+          <button type="button" className="prototype-soil-action primary" onClick={exportHistory}>
             <FileClock size={15} />
             <span>View History</span>
           </button>

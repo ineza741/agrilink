@@ -17,8 +17,8 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { FarmerPrototypeTopbar } from "../../components/common/FarmerPrototypeTopbar";
 import { useFarmerData } from "../../context/FarmerDataContext";
+import { copyText, downloadCsvFile, downloadJsonFile, downloadTextFile } from "../../utils/actions";
 
 const statCards = [
   { title: "Total Platform Yield", value: "1.2M Tons", note: "+12%", icon: Leaf },
@@ -154,6 +154,38 @@ function buildAnalyticsData({ farm, cropType, dateRange, reportTemplate }) {
 }
 
 function AdminAnalyticsView() {
+  const [selectedMethodology, setSelectedMethodology] = useState(
+    methodologyCards.find((item) => item.active)?.title || methodologyCards[0].title
+  );
+  const [exportSelection, setExportSelection] = useState(exportChecks);
+
+  const exportReportBundle = (format) => {
+    const payload = {
+      generatedAt: new Date().toISOString(),
+      methodology: selectedMethodology,
+      includedDataPoints: exportSelection.filter((item) => item.checked).map((item) => item.label),
+      metrics: statCards,
+    };
+
+    if (format === "json") {
+      downloadJsonFile("system-reports-export.json", payload);
+      return;
+    }
+
+    if (format === "excel") {
+      downloadCsvFile("system-reports-export.csv", [
+        ["Metric", "Value", "Note"],
+        ...statCards.map((card) => [card.title, card.value, card.note]),
+      ]);
+      return;
+    }
+
+    downloadTextFile(
+      "system-reports-export.txt",
+      `System-Wide Reports & Export\nGenerated: ${payload.generatedAt}\nMethodology: ${selectedMethodology}\n\nIncluded:\n- ${payload.includedDataPoints.join("\n- ")}`
+    );
+  };
+
   return (
     <section className="management-page prototype-admin-reports-page">
       <div className="prototype-admin-reports-main">
@@ -163,11 +195,24 @@ function AdminAnalyticsView() {
           </div>
 
           <div className="prototype-admin-reports-actions">
-            <button type="button" className="prototype-admin-secondary-button">
+            <button
+              type="button"
+              className="prototype-admin-secondary-button"
+              onClick={() => downloadJsonFile("system-report-history.json", statCards)}
+            >
               <Clock3 size={15} />
               <span>View History</span>
             </button>
-            <button type="button" className="prototype-admin-primary-button">
+            <button
+              type="button"
+              className="prototype-admin-primary-button"
+              onClick={() =>
+                downloadTextFile(
+                  "ai-insight-summary.txt",
+                  `AI Insight Summary\n\nTop adoption rate: ${statCards[1].value}\nAdvisory accuracy: ${statCards[3].value}\nActive regions: ${statCards[2].value}`
+                )
+              }
+            >
               <Sparkles size={15} />
               <span>Generate AI Insight</span>
             </button>
@@ -225,7 +270,8 @@ function AdminAnalyticsView() {
                       <button
                         key={item.title}
                         type="button"
-                        className={item.active ? "prototype-admin-methodology-card active" : "prototype-admin-methodology-card"}
+                        className={selectedMethodology === item.title ? "prototype-admin-methodology-card active" : "prototype-admin-methodology-card"}
+                        onClick={() => setSelectedMethodology(item.title)}
                       >
                         <strong>{item.title}</strong>
                         <p>{item.body}</p>
@@ -236,7 +282,16 @@ function AdminAnalyticsView() {
 
                 <div className="prototype-admin-generator-footer">
                   <span>Compliant with ISO 31030:2021 Reporting Standards</span>
-                  <button type="button" className="prototype-admin-dark-button">
+                  <button
+                    type="button"
+                    className="prototype-admin-dark-button"
+                    onClick={() =>
+                      downloadTextFile(
+                        "government-report-preview.txt",
+                        `Government Report Preview\n\nMethodology: ${selectedMethodology}\nMetrics:\n- ${statCards.map((card) => `${card.title}: ${card.value} (${card.note})`).join("\n- ")}`
+                      )
+                    }
+                  >
                     Compile Preview Report
                   </button>
                 </div>
@@ -271,9 +326,19 @@ function AdminAnalyticsView() {
               <div className="prototype-admin-export-section">
                 <span>Include Data Points</span>
                 <div className="prototype-admin-check-list">
-                  {exportChecks.map((item) => (
+                  {exportSelection.map((item) => (
                     <label key={item.label} className="prototype-admin-check-row">
-                      <input type="checkbox" defaultChecked={item.checked} />
+                      <input
+                        type="checkbox"
+                        checked={item.checked}
+                        onChange={() =>
+                          setExportSelection((current) =>
+                            current.map((entry) =>
+                              entry.label === item.label ? { ...entry, checked: !entry.checked } : entry
+                            )
+                          )
+                        }
+                      />
                       <span>{item.label}</span>
                     </label>
                   ))}
@@ -286,7 +351,12 @@ function AdminAnalyticsView() {
                   {exportFormats.map((format) => {
                     const Icon = format.icon;
                     return (
-                      <button key={format.title} type="button" className="prototype-admin-export-format">
+                      <button
+                        key={format.title}
+                        type="button"
+                        className="prototype-admin-export-format"
+                        onClick={() => exportReportBundle(format.tone === "red" ? "pdf" : format.tone === "green" ? "excel" : "json")}
+                      >
                         <div className={`prototype-admin-export-icon ${format.tone}`}>
                           <Icon size={18} />
                         </div>
@@ -387,15 +457,23 @@ function FarmerAnalyticsView() {
           activityFilter === "Verified" ? row.status === "Verified" : row.status !== "Verified"
         );
 
+  const exportFarmerAnalytics = (format) => {
+    if (format === "excel") {
+      downloadCsvFile("farm-analytics.csv", [
+        ["Period", "Yield", "Revenue", "Score", "Status"],
+        ...filteredRows.map((row) => [row.period, row.yield, row.revenue, row.score, row.status]),
+      ]);
+      return;
+    }
+
+    downloadTextFile(
+      `${format === "report" ? "farm-report" : "farm-analytics-share"}.txt`,
+      `Farm Analytics\nFarm: ${selectedFarm.name}\nTemplate: ${analytics.reportTemplateLabel}\nYield: ${analytics.yieldTons} t\nRevenue: ${formatRwf(analytics.revenue)}\nCosts: ${formatRwf(analytics.costs)}\nROI: ${analytics.roi}%`
+    );
+  };
+
   return (
     <section className="management-page prototype-farm-analytics-page">
-      <FarmerPrototypeTopbar
-        brand="AgriIntel AI"
-        items={["Dashboard", "Analytics", "Yield Forecast", "Settings"]}
-        active="Analytics"
-        placeholder="Search analytics..."
-      />
-
       <div className="page-title-block prototype-farm-analytics-title">
         <h1>Farm Analytics &amp; Yield Reports</h1>
         <p>AI-assisted insights for academic-standard crop performance and financial planning.</p>
@@ -451,18 +529,30 @@ function FarmerAnalyticsView() {
       </div>
 
       <div className="prototype-farm-analytics-actions">
-        <button type="button" className="prototype-farm-analytics-secondary">
+        <button
+          type="button"
+          className="prototype-farm-analytics-secondary"
+          onClick={() => exportFarmerAnalytics("excel")}
+        >
           <FileSpreadsheet size={15} />
           <span>Excel</span>
         </button>
-        <button type="button" className="prototype-farm-analytics-primary">
+        <button
+          type="button"
+          className="prototype-farm-analytics-primary"
+          onClick={() => exportFarmerAnalytics("report")}
+        >
           <FileText size={15} />
           <span>{analytics.reportTemplateLabel}</span>
         </button>
         <button
           type="button"
           className="prototype-farm-analytics-secondary"
-          onClick={() => setShareReady((current) => !current)}
+          onClick={async () => {
+            const shareUrl = `${window.location.origin}/analytics?farm=${selectedFarm.id}`;
+            const copied = await copyText(shareUrl);
+            setShareReady(copied || !shareReady);
+          }}
         >
           <Sparkles size={15} />
           <span>{shareReady ? "Share Link Ready" : "Share Link"}</span>
@@ -585,7 +675,13 @@ function FarmerAnalyticsView() {
       <article className="prototype-panel prototype-farm-report-table-card">
         <div className="prototype-farm-analytics-card-head">
           <h2>Historical Monthly Reports</h2>
-          <button type="button" className="prototype-farm-report-link">View Archive →</button>
+          <button
+            type="button"
+            className="prototype-farm-report-link"
+            onClick={() => downloadJsonFile("farm-report-archive.json", filteredRows)}
+          >
+            View Archive →
+          </button>
         </div>
 
         <div className="prototype-farm-report-table">
@@ -615,8 +711,20 @@ function FarmerAnalyticsView() {
                 {row.status}
               </span>
               <div className="prototype-farm-report-actions">
-                <Download size={16} />
-                <MoreVertical size={16} />
+                <button
+                  type="button"
+                  className="prototype-farm-report-icon-button"
+                  onClick={() => downloadTextFile(`${row.period.replace(/\s+/g, "-").toLowerCase()}-report.txt`, JSON.stringify(row, null, 2))}
+                >
+                  <Download size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="prototype-farm-report-icon-button"
+                  onClick={() => downloadJsonFile(`${row.period.replace(/\s+/g, "-").toLowerCase()}-report.json`, row)}
+                >
+                  <MoreVertical size={16} />
+                </button>
               </div>
             </div>
           ))}

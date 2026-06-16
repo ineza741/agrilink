@@ -10,20 +10,9 @@ import {
   Tractor,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useAuth } from "../../context/AuthContext";
 import { useFarmerData } from "../../context/FarmerDataContext";
-import { FarmerPrototypeTopbar } from "../../components/common/FarmerPrototypeTopbar";
 
 const NOTIFICATION_STORAGE_KEY = "agri-feed-notification-module-v1";
-
-function initialsFromName(name = "User") {
-  return name
-    .split(" ")
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
 
 function loadStoredState() {
   try {
@@ -103,11 +92,7 @@ function channelLabel(channel) {
   return "In-App";
 }
 
-export function NotificationsPage() {
-  const { user } = useAuth();
-  const { currentFarms } = useFarmerData();
-  const initials = initialsFromName(user?.name);
-  const farmName = currentFarms[0]?.name || "your farm";
+export function NotificationsPage() {  const { currentFarms } = useFarmerData();  const farmName = currentFarms[0]?.name || "your farm";
   const stored = useMemo(() => loadStoredState(), []);
   const [activeTab, setActiveTab] = useState(stored.activeTab || "inbox");
   const [deliveryOptions, setDeliveryOptions] = useState(
@@ -169,41 +154,7 @@ export function NotificationsPage() {
   const activeList = activeTab === "history" ? historyItems : inboxItems;
 
   return (
-    <section className="management-page prototype-alert-page">
-      <FarmerPrototypeTopbar
-        brand="AgriSupport AI"
-        items={["Dashboard", "Crops", "Irrigation & Fertilizer", "Weather", "Reports"]}
-        active="Reports"
-        placeholder="Search alerts..."
-      />
-
-      <div className="prototype-alert-shell">
-        <aside className="prototype-alert-sidebar">
-          <div className="prototype-alert-brand">
-            <div className="brand-mark">
-              <Tractor size={18} />
-            </div>
-            <div>
-              <strong>AgriSupport AI</strong>
-              <span>Farmer Portal</span>
-            </div>
-          </div>
-
-          <nav className="prototype-alert-nav">
-            <button type="button">Dashboard</button>
-            <button type="button" className="active">Notifications</button>
-          </nav>
-
-          <div className="prototype-alert-user-card">
-            <div className="top-avatar">{initials}</div>
-            <div>
-              <strong>{user?.name || "User"}</strong>
-              <span>{user?.role === "admin" ? "Administrator" : "Premium Member"}</span>
-            </div>
-          </div>
-        </aside>
-
-        <div className="prototype-alert-main">
+    <section className="management-page prototype-alert-page">`r`n      <div className="prototype-alert-main standalone">
           <div className="page-title-block prototype-alert-title">
             <h1>Notification &amp; Alert Center</h1>
             <p>Monitor weather, pest, market, and system alerts with smart prioritization and multi-channel delivery.</p>
@@ -399,8 +350,8 @@ export function NotificationsPage() {
               </article>
             </aside>
           </div>
-        </div>
       </div>
     </section>
   );
 }
+

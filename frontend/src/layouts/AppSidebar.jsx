@@ -1,5 +1,5 @@
 import { Headphones, Tractor, X } from "lucide-react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import {
   adminNavigationSections,
   brandConfig,
@@ -18,6 +18,7 @@ function initialsFromName(name = "User") {
 
 export function AppSidebar({ isOpen = false, onClose = () => {} }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const isAdmin = user?.role === "admin";
   const sections = isAdmin ? adminNavigationSections : farmerNavigationSections;
   const initials = initialsFromName(user?.name);
@@ -91,7 +92,14 @@ export function AppSidebar({ isOpen = false, onClose = () => {} }) {
           </div>
         </div>
       ) : (
-        <button type="button" className="farmer-support-button">
+        <button
+          type="button"
+          className="farmer-support-button"
+          onClick={() => {
+            onClose();
+            navigate("/community");
+          }}
+        >
           <Headphones size={15} />
           <span>{brandConfig.supportLabel}</span>
         </button>

@@ -5,7 +5,6 @@ import {
   Check,
   ChevronDown,
   CloudLightning,
-  Home,
   ImageUp,
   MapPinned,
   Search,
@@ -14,8 +13,8 @@ import {
   Upload,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { FarmerPrototypeTopbar } from "../../components/common/FarmerPrototypeTopbar";
 import { useFarmerData } from "../../context/FarmerDataContext";
+import { downloadJsonFile, downloadTextFile } from "../../utils/actions";
 
 const PEST_STORAGE_KEY = "agri-feed-pest-module-v1";
 
@@ -74,22 +73,14 @@ const diseaseLibrary = [
   },
 ];
 
-const cropOptions = [
-  "Potato",
-  "Maize",
-  "Beans",
-  "Tomato",
-  "Vegetables",
-  "Cereals",
-];
-
+const cropOptions = ["Potato", "Maize", "Beans", "Tomato", "Vegetables", "Cereals"];
 const symptomOptions = ["Yellow Spots", "Brown Holes", "White Mold", "Wilting"];
 
 const outbreakHistorySeed = [
-  { date: "Aug 2023", pathogen: "Fusarium oxysporum", severity: "Moderate", action: "Soil treatment" },
-  { date: "May 2023", pathogen: "Spodoptera frugiperda", severity: "Extreme", action: "Aerial spraying" },
-  { date: "Jan 2023", pathogen: "Puccinia graminis", severity: "Low", action: "Early harvest" },
-  { date: "Dec 2022", pathogen: "Bemisia tabaci", severity: "Moderate", action: "Bio-control" },
+  { date: "Aug 2023", pathogen: "Fusarium oxysporum", severity: "Moderate", action: "Precision soil amendment" },
+  { date: "May 2023", pathogen: "Spodoptera frugiperda", severity: "Extreme", action: "UAV-targeted spraying" },
+  { date: "Jan 2023", pathogen: "Puccinia graminis", severity: "Low", action: "Controlled harvesting" },
+  { date: "Dec 2022", pathogen: "Bemisia tabaci", severity: "Moderate", action: "Bio-control program" },
 ];
 
 function createDefaultFarm() {
@@ -163,9 +154,9 @@ function computeRiskModel(farm, symptom, affectedArea, uploadedImageName) {
   const alerts = [
     riskScore >= 78
       ? {
-          title: "High-risk outbreak period",
+          title: "Critical Detection: Immediate Action Required",
           message:
-            "Humidity, crop stage, and symptom severity have crossed the outbreak threshold for immediate field response.",
+            "Potential outbreak thresholds have been crossed for the selected field. Rapid intervention is advised within the next 6-12 hours.",
         }
       : null,
     rainfallPressure >= 70
@@ -180,7 +171,7 @@ function computeRiskModel(farm, symptom, affectedArea, uploadedImageName) {
   const regionalOutbreak = {
     activeClusters: 2 + (seed % 4),
     hotspot: farm.region,
-    spreadTrend: riskScore >= 78 ? "Escalating" : riskScore >= 52 ? "Watch closely" : "Contained",
+    spreadTrend: riskScore >= 78 ? "Accelerating" : riskScore >= 52 ? "Watch closely" : "Contained",
   };
 
   return {
@@ -231,101 +222,137 @@ export function PestsPage() {
     [affectedArea, selectedCrop, selectedFarm, selectedSymptom, uploadedImageName]
   );
 
-  const displayedLibrary = useMemo(() => {
-    return diseaseLibrary.filter((item) => {
-      const query = librarySearch.toLowerCase();
-      return (
-        !query ||
-        item.title.toLowerCase().includes(query) ||
-        item.subtitle.toLowerCase().includes(query) ||
-        item.crop.toLowerCase().includes(query)
-      );
-    });
-  }, [librarySearch]);
+  const displayedLibrary = useMemo(
+    () =>
+      diseaseLibrary.filter((item) => {
+        const query = librarySearch.toLowerCase();
+        return (
+          !query ||
+          item.title.toLowerCase().includes(query) ||
+          item.subtitle.toLowerCase().includes(query) ||
+          item.crop.toLowerCase().includes(query)
+        );
+      }),
+    [librarySearch]
+  );
 
   const treatmentRecommendations = [
-    {
-      label: "Chemical treatment",
-      value: riskModel.library.treatment.chemical,
-    },
-    {
-      label: "Organic / IPM option",
-      value: riskModel.library.treatment.organic,
-    },
-    {
-      label: "Preventive measure",
-      value: riskModel.library.prevention,
-    },
+    { label: "Chemical treatment", value: riskModel.library.treatment.chemical },
+    { label: "Organic / IPM option", value: riskModel.library.treatment.organic },
+    { label: "Preventive measure", value: riskModel.library.prevention },
   ];
+
+  const hotspotIndex = useMemo(() => hashFarm(selectedFarm) % 24, [selectedFarm]);
+  const mapCells = useMemo(
+    () =>
+      Array.from({ length: 24 }, (_, index) => {
+        const row = Math.floor(index / 6);
+        const col = (index % 6) + 1;
+        const distance = Math.abs(index - hotspotIndex);
+        const tone =
+          index === hotspotIndex
+            ? "critical"
+            : distance === 1 || distance === 6
+              ? "elevated"
+              : distance === 2 || distance === 5
+                ? "watch"
+                : "normal";
+
+        return { id: `${String.fromCharCode(65 + row)}${col}`, tone };
+      }),
+    [hotspotIndex]
+  );
 
   const submitSymptomCheck = () => {
     const event = {
       date: new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric" }).format(new Date()),
       pathogen: riskModel.library.subtitle,
       severity: riskModel.severity,
-      action: riskModel.severity === "High" ? "Immediate intervention" : riskModel.severity === "Moderate" ? "Field scouting" : "Observation",
+      action:
+        riskModel.severity === "High"
+          ? "Immediate intervention"
+          : riskModel.severity === "Moderate"
+            ? "Field scouting"
+            : "Observation",
     };
 
     setHistoryLog((current) => [event, ...current].slice(0, 8));
   };
 
+  const downloadProtocol = () => {
+    downloadTextFile(
+      `${riskModel.library.title.toLowerCase().replace(/\s+/g, "-")}-protocol.txt`,
+      `Protocol: ${riskModel.library.title}\n\nChemical treatment:\n${riskModel.library.treatment.chemical}\n\nOrganic / IPM:\n${riskModel.library.treatment.organic}\n\nPreventive measure:\n${riskModel.library.prevention}`
+    );
+  };
+
+  const downloadHistoryReport = () => {
+    downloadJsonFile("pest-disease-history.json", {
+      farm: selectedFarm,
+      crop: selectedCrop,
+      symptom: selectedSymptom,
+      affectedArea,
+      riskScore: riskModel.riskScore,
+      severity: riskModel.severity,
+      historyLog,
+    });
+  };
+
   return (
     <section className="management-page prototype-pest-page">
-      <FarmerPrototypeTopbar
-        brand="AgriGuard AI"
-        items={["Dashboard", "Predictions", "Research", "History"]}
-        active="Predictions"
-        placeholder="Search diseases or pests..."
-      />
-
       <div className="prototype-pest-shell">
-        <aside className="prototype-pest-sidebar">
-          <span>Farmer Support</span>
-          <button type="button">
-            <Home size={16} />
-            <span>Overview</span>
-          </button>
-          <button type="button" className="active">
-            <Bug size={16} />
-            <span>Pest Prediction</span>
-          </button>
-
-          <div className="prototype-pest-edition-card">
-            <strong>Academic Edition</strong>
-            <p>Regional outbreak tracking and IPM support for farmer-level field response workflows.</p>
-          </div>
-        </aside>
-
         <div className="prototype-pest-main">
-          <div className="prototype-pest-breadcrumb">
-            <span>Home</span>
-            <span>&gt;</span>
-            <strong>Pest &amp; Disease Prediction</strong>
-          </div>
-
           <div className="page-title-block prototype-pest-title">
-            <h1>Pest &amp; Disease Prediction Tool</h1>
+            <h1>Pest &amp; Disease Intelligence</h1>
             <p>
-              AI-assisted risk forecasting, image-supported symptom review, and integrated pest
-              management advice for each farm location.
+              Academic-grade risk assessment combining crop symptoms, farm location, and outbreak
+              intelligence for each registered plot.
             </p>
           </div>
 
-          <div className="prototype-pest-top-grid">
-            <article className="prototype-panel prototype-pest-risk-card">
+          {riskModel.alerts[0] ? (
+            <article className="prototype-pest-banner">
+              <div className="prototype-pest-banner-icon">
+                <AlertTriangle size={22} />
+              </div>
+              <div className="prototype-pest-banner-copy">
+                <strong>{riskModel.alerts[0].title}</strong>
+                <p>{riskModel.alerts[0].message}</p>
+              </div>
+              <button type="button" onClick={downloadProtocol}>Review Protocol</button>
+            </article>
+          ) : null}
+
+          <div className="prototype-pest-bento">
+            <article className="prototype-panel prototype-pest-risk-card prototype-pest-span-8">
               <div className="prototype-pest-risk-head">
-                <h2>Current Regional Risk Level</h2>
+                <div>
+                  <h2>Regional Threat Level</h2>
+                  <p>Aggregate risk across 42 monitored variables</p>
+                </div>
                 <span>{riskModel.severity} Alert</span>
               </div>
 
-              <div className="prototype-pest-risk-score">
-                <strong>{riskModel.riskScore}</strong>
-                <small>/100</small>
-              </div>
+              <div className="prototype-pest-risk-summary">
+                <div className="prototype-pest-risk-score">
+                  <strong>{riskModel.riskScore}</strong>
+                  <small>/100</small>
+                </div>
 
-              <div className="prototype-pest-risk-change">
-                <ArrowUpRight size={14} />
-                <span>Humidity {riskModel.humidity}% · Rain spread {riskModel.rainfallPressure}%</span>
+                <div className="prototype-pest-risk-change">
+                  <ArrowUpRight size={16} />
+                  <div>
+                    <span>+{Math.max(6, Math.round(riskModel.rainfallPressure / 6))}% vs previous 24h</span>
+                    <small>
+                      Risk velocity:{" "}
+                      {riskModel.severity === "High"
+                        ? "Accelerating"
+                        : riskModel.severity === "Moderate"
+                          ? "Watch closely"
+                          : "Contained"}
+                    </small>
+                  </div>
+                </div>
               </div>
 
               <div className="prototype-pest-risk-bar">
@@ -335,7 +362,8 @@ export function PestsPage() {
               </div>
 
               <div className="prototype-pest-risk-scale">
-                <span>Low</span>
+                <span>Normal</span>
+                <span>Elevated</span>
                 <span>Moderate</span>
                 <span>Critical</span>
               </div>
@@ -349,10 +377,10 @@ export function PestsPage() {
               </div>
             </article>
 
-            <aside className="prototype-pest-advice-card">
+            <aside className="prototype-pest-advice-card prototype-pest-span-4">
               <div className="prototype-pest-advice-head">
                 <Sparkles size={18} />
-                <h2>Preventive Measures &amp; Treatment</h2>
+                <h2>Intelligence-Led Actions</h2>
               </div>
 
               <ul>
@@ -363,15 +391,16 @@ export function PestsPage() {
                 ))}
               </ul>
 
-              <button type="button">Download Protocol PDF</button>
+              <button type="button" onClick={downloadProtocol}>Download Protocol PDF</button>
             </aside>
-          </div>
 
-          <div className="prototype-pest-middle-grid">
-            <article className="prototype-panel prototype-pest-symptom-card">
+            <article className="prototype-panel prototype-pest-symptom-card prototype-pest-span-6">
               <div className="prototype-pest-card-head">
-                <h2>Symptom Checker Tool</h2>
-                <span>AI-driven analysis</span>
+                <div>
+                  <h2>AI Symptom Diagnostic</h2>
+                  <p>Field-level identification wizard</p>
+                </div>
+                <span>Step 1 of 3</span>
               </div>
 
               <label>
@@ -393,7 +422,7 @@ export function PestsPage() {
               </label>
 
               <label>
-                <span>Select Crop Type</span>
+                <span>Select Crop Taxonomy</span>
                 <div className="prototype-pest-select">
                   <select
                     value={selectedCrop}
@@ -411,7 +440,7 @@ export function PestsPage() {
               </label>
 
               <div className="prototype-pest-symptoms">
-                <span>Primary Leaf Symptom</span>
+                <span>Primary Observable Symptoms</span>
                 <div className="prototype-pest-symptom-grid">
                   {symptomOptions.map((symptom) => (
                     <button
@@ -427,7 +456,7 @@ export function PestsPage() {
               </div>
 
               <div className="prototype-pest-slider">
-                <span>Percentage of Affected Area</span>
+                <span>Affected Canopy Coverage</span>
                 <input
                   type="range"
                   min="0"
@@ -469,25 +498,67 @@ export function PestsPage() {
                     setUploadedImageName("");
                   }}
                 >
-                  Reset
+                  Reset Form
                 </button>
                 <button type="button" className="primary" onClick={submitSymptomCheck}>
-                  Analyze Symptoms
+                  Continue To Scan
                 </button>
               </div>
             </article>
 
+            <article className="prototype-panel prototype-pest-map-card prototype-pest-span-6">
+              <div className="prototype-pest-card-head">
+                <div>
+                  <h2>Spatial Risk Distribution</h2>
+                  <p>Real-time telemetry map</p>
+                </div>
+                <div className="prototype-pest-map-legend">
+                  <span><i className="critical" /> Critical</span>
+                  <span><i className="normal" /> Nominal</span>
+                </div>
+              </div>
+
+              <div className="prototype-pest-map-surface">
+                <div className="prototype-pest-map-grid">
+                  {mapCells.map((cell) => (
+                    <div key={cell.id} className={`prototype-pest-map-cell ${cell.tone}`}>
+                      {cell.tone === "critical" || cell.tone === "elevated" ? cell.id : ""}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="prototype-pest-map-location">
+                  <MapPinned size={16} />
+                  <div>
+                    <strong>{selectedFarm.region}</strong>
+                    <span>
+                      {typeof selectedFarm.location?.lat === "number"
+                        ? selectedFarm.location.lat.toFixed(4)
+                        : selectedFarm.location?.lat}
+                      ,{" "}
+                      {typeof selectedFarm.location?.lng === "number"
+                        ? selectedFarm.location.lng.toFixed(4)
+                        : selectedFarm.location?.lng}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <div className="prototype-pest-bottom-grid">
             <article className="prototype-panel prototype-pest-history-card">
               <div className="prototype-pest-card-head">
-                <h2>History Log of Events</h2>
+                <h2>Historical Pathogen Records</h2>
+                <button type="button" className="prototype-pest-table-action" onClick={downloadHistoryReport}>Generate Report</button>
               </div>
 
               <div className="prototype-pest-history-table">
                 <div className="prototype-pest-history-head">
-                  <span>Date</span>
-                  <span>Pathogen</span>
-                  <span>Severity</span>
-                  <span>Action Taken</span>
+                  <span>Detection Date</span>
+                  <span>Confirmed Pathogen</span>
+                  <span>Severity Index</span>
+                  <span>Intervention Method</span>
                 </div>
 
                 {historyLog.map((row) => (
@@ -501,37 +572,53 @@ export function PestsPage() {
                   </div>
                 ))}
               </div>
+            </article>
 
-              <div className="prototype-pest-regional-box">
-                <div className="prototype-pest-regional-head">
-                  <CloudLightning size={16} />
-                  <strong>Regional outbreak tracking</strong>
-                </div>
-                <p>
-                  {riskModel.regionalOutbreak.activeClusters} nearby hotspots in {riskModel.regionalOutbreak.hotspot}. Trend:{" "}
-                  {riskModel.regionalOutbreak.spreadTrend}.
-                </p>
+            <article className="prototype-panel prototype-pest-activity-card">
+              <div className="prototype-pest-card-head">
+                <h2>Security &amp; Activity Log</h2>
               </div>
 
-              <button type="button" className="prototype-pest-history-link">View Full Archive -&gt;</button>
-            </article>
-          </div>
-
-          <div className="prototype-pest-alert-row">
-            {riskModel.alerts.map((alert) => (
-              <article key={alert.title} className="prototype-pest-warning-banner">
-                <AlertTriangle size={16} />
-                <div>
-                  <strong>{alert.title}</strong>
-                  <p>{alert.message}</p>
+              <div className="prototype-pest-activity-list">
+                <div className="prototype-pest-activity-item">
+                  <i className="live" />
+                  <div>
+                    <strong>Today, 09:42 AM</strong>
+                    <p>
+                      Node alert triggered on <em>{selectedFarm.name}</em> after humidity crossed{" "}
+                      {riskModel.humidity}% with heightened canopy moisture pressure.
+                    </p>
+                  </div>
                 </div>
-              </article>
-            ))}
+
+                <div className="prototype-pest-activity-item">
+                  <i className="review" />
+                  <div>
+                    <strong>Today, 07:15 AM</strong>
+                    <p>
+                      Diagnostic model aligned with <em>{riskModel.library.title}</em>. Treatment
+                      guidance refreshed for the active plot.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="prototype-pest-regional-box">
+                  <div className="prototype-pest-regional-head">
+                    <CloudLightning size={16} />
+                    <strong>Regional outbreak tracking</strong>
+                  </div>
+                  <p>
+                    {riskModel.regionalOutbreak.activeClusters} nearby hotspots in {riskModel.regionalOutbreak.hotspot}. Trend:{" "}
+                    {riskModel.regionalOutbreak.spreadTrend}.
+                  </p>
+                </div>
+              </div>
+            </article>
           </div>
 
           <div className="prototype-pest-library-head">
             <div>
-              <h2>Common Pests &amp; Diseases Library</h2>
+              <h2>Pathogen Intelligence Library</h2>
               <p>Image-backed knowledge base with IPM options and symptom cues</p>
             </div>
             <div className="prototype-pest-library-search">
@@ -589,3 +676,4 @@ export function PestsPage() {
     </section>
   );
 }
+

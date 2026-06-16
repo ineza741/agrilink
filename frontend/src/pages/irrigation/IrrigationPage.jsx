@@ -12,7 +12,6 @@ import {
   Wallet,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { FarmerPrototypeTopbar } from "../../components/common/FarmerPrototypeTopbar";
 import { useFarmerData } from "../../context/FarmerDataContext";
 
 const IRRIGATION_STORAGE_KEY = "agri-feed-irrigation-module-v1";
@@ -287,13 +286,6 @@ export function IrrigationPage() {
 
   return (
     <section className="management-page prototype-irrigation-page">
-      <FarmerPrototypeTopbar
-        brand="AgriSmart DSS"
-        items={["Dashboard", "Crops", "Irrigation & Fertilizer", "Weather", "Reports"]}
-        active="Irrigation & Fertilizer"
-        placeholder="Search farm data..."
-      />
-
       <div className="page-title-block prototype-irrigation-title">
         <h1>Irrigation &amp; Fertilizer Planning</h1>
         <p>

@@ -29,7 +29,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useFarmerData } from "../../context/FarmerDataContext";
-import { FarmerPrototypeTopbar } from "../../components/common/FarmerPrototypeTopbar";
+import { downloadCsvFile, downloadJsonFile, downloadTextFile } from "../../utils/actions";
 
 const FEEDBACK_STORAGE_KEY = "agri-feed-recommendation-feedback-v1";
 const ADMIN_CONTENT_STORAGE_KEY = "agri-feed-admin-content-v1";
@@ -326,13 +326,6 @@ function FarmerRecommendationsView() {
 
   return (
     <section className="management-page prototype-recommendations-page">
-      <FarmerPrototypeTopbar
-        brand="AgriLogic AI"
-        items={["Dashboard", "Recommendations", "Analytics", "Field Data"]}
-        active="Recommendations"
-        placeholder="Search fields, nutrients, or data..."
-      />
-
       <div className="page-title-block prototype-recommendations-title">
         <h1>Academic-Led Recommendations</h1>
         <p>
@@ -385,7 +378,19 @@ function FarmerRecommendationsView() {
           </div>
         </div>
 
-        <button type="button" className="recommendation-export-button">
+        <button
+          type="button"
+          className="recommendation-export-button"
+          onClick={() =>
+            downloadJsonFile("recommendations-dataset.json", {
+              farm: selectedFarm,
+              season: dataset.season,
+              stage: dataset.stage,
+              generatedAt: new Date().toISOString(),
+              recommendations: allRecommendations,
+            })
+          }
+        >
           <Download size={15} />
           <span>Export Dataset</span>
         </button>
@@ -549,6 +554,7 @@ function FarmerRecommendationsView() {
 function AdminContentManagementView() {
   const stored = useMemo(() => loadAdminContentState(), []);
   const [activeTab, setActiveTab] = useState(stored.activeTab || "Crops");
+  const [page, setPage] = useState(1);
   const [entries, setEntries] = useState(
     stored.entries || {
       Crops: cropRows,
@@ -587,6 +593,7 @@ function AdminContentManagementView() {
     stored.modifications || recentModifications
   );
   const [entryName, setEntryName] = useState("");
+  const itemsPerPage = 4;
 
   useEffect(() => {
     saveAdminContentState({
@@ -675,6 +682,44 @@ function AdminContentManagementView() {
   };
 
   const visibleEntries = entries[activeTab] || [];
+  const totalPages = Math.max(1, Math.ceil(visibleEntries.length / itemsPerPage));
+  const pagedEntries = visibleEntries.slice((page - 1) * itemsPerPage, page * itemsPerPage);
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  const exportCurrentTab = () => {
+    downloadCsvFile(`admin-content-${activeTab.toLowerCase().replace(/\s+/g, "-")}.csv`, [
+      ["Entry Name", "Growth Cycle", "Climate/Coverage Zone", "Status"],
+      ...visibleEntries.map((row) => [row.crop, row.cycle, row.zone, row.status]),
+    ]);
+  };
+
+  const testLogic = () => {
+    addModification(`Logic test run for ${triggerParameter}`, "System Validation · just now");
+  };
+
+  const syncGuidelines = () => {
+    addModification("Fertilizer standards synchronized", "System Sync · just now");
+  };
+
+  const exportAuditTrail = () => {
+    downloadJsonFile("admin-audit-trail.json", modifications);
+  };
+
+  const exportDocumentation = () => {
+    downloadTextFile(
+      "content-management-documentation.txt",
+      `AgriSupport Content Management\n\nCurrent tab: ${activeTab}\nTrigger parameter: ${triggerParameter}\nSeverity: ${severity}\n\nRecommendation Content:\n${recommendationContent || "No recommendation content entered yet."}\n\nJSON Logic:\n${jsonLogic}`
+    );
+  };
 
   return (
     <section className="management-page prototype-admin-content-page">
@@ -685,7 +730,7 @@ function AdminContentManagementView() {
         </div>
 
         <div className="prototype-admin-content-actions">
-          <button type="button" className="prototype-admin-secondary-button">
+          <button type="button" className="prototype-admin-secondary-button" onClick={exportCurrentTab}>
             <FileDown size={15} />
             <span>Export Data</span>
           </button>
@@ -734,7 +779,7 @@ function AdminContentManagementView() {
                   <span>Actions</span>
                 </div>
 
-                {visibleEntries.map((row) => (
+                {pagedEntries.map((row) => (
                   <div key={row.crop} className="prototype-admin-content-row">
                     <strong>{row.crop}</strong>
                     <span>{row.cycle}</span>
@@ -751,13 +796,28 @@ function AdminContentManagementView() {
               </div>
 
               <div className="prototype-admin-content-pagination">
-                <button type="button">Previous</button>
+                <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page === 1}>
+                  Previous
+                </button>
                 <div>
-                  <button type="button" className="active">1</button>
-                  <button type="button">2</button>
-                  <button type="button">3</button>
+                  {Array.from({ length: totalPages }, (_, index) => (
+                    <button
+                      key={`content-page-${index + 1}`}
+                      type="button"
+                      className={page === index + 1 ? "active" : ""}
+                      onClick={() => setPage(index + 1)}
+                    >
+                      {index + 1}
+                    </button>
+                  ))}
                 </div>
-                <button type="button">Next</button>
+                <button
+                  type="button"
+                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                  disabled={page === totalPages}
+                >
+                  Next
+                </button>
               </div>
             </article>
 
@@ -818,7 +878,7 @@ function AdminContentManagementView() {
               </label>
 
               <div className="prototype-admin-logic-actions">
-                <button type="button" className="prototype-admin-secondary-button">Test Logic</button>
+                <button type="button" className="prototype-admin-secondary-button" onClick={testLogic}>Test Logic</button>
                 <button type="button" className="prototype-admin-primary-button" onClick={saveLogic}>Save Recommendation</button>
               </div>
             </article>
@@ -839,7 +899,7 @@ function AdminContentManagementView() {
                   </div>
                 ))}
               </div>
-              <button type="button" className="prototype-admin-primary-button full">
+              <button type="button" className="prototype-admin-primary-button full" onClick={syncGuidelines}>
                 <Sparkles size={15} />
                 <span>Sync Guidelines Now</span>
               </button>
@@ -851,20 +911,20 @@ function AdminContentManagementView() {
                 <h3>Recent Modifications</h3>
               </div>
               <div className="prototype-admin-recent-list">
-                {recentModifications.map((item) => (
+                {modifications.map((item) => (
                   <div key={item.title}>
                     <strong>{item.title}</strong>
                     <span>{item.meta}</span>
                   </div>
                 ))}
               </div>
-              <button type="button" className="prototype-admin-text-link">View Full Audit Trail</button>
+              <button type="button" className="prototype-admin-text-link" onClick={exportAuditTrail}>View Full Audit Trail</button>
             </article>
 
             <article className="prototype-admin-help-card">
               <h3>Need Help?</h3>
               <p>Access the documentation for managing the AI-decision engine and knowledge graphs.</p>
-              <button type="button">Documentation</button>
+              <button type="button" onClick={exportDocumentation}>Documentation</button>
               <BookOpen size={58} />
             </article>
           </aside>
@@ -887,3 +947,4 @@ export function RecommendationsPage() {
   const { user } = useAuth();
   return user?.role === "admin" ? <AdminContentManagementView /> : <FarmerRecommendationsView />;
 }
+
