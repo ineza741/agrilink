@@ -3,6 +3,15 @@ const STORAGE_KEYS = {
   currentUser: "agri-feed-current-user",
 };
 
+const DEFAULT_REGION = "Gatenga Sector, Kicukiro District";
+const DEFAULT_CREATED_AT = "2026-06-18T08:00:00.000Z";
+
+function normalizeRegion(region) {
+  if (!region || region === "Unassigned Region") return DEFAULT_REGION;
+  if (region === "Northern Highlands") return DEFAULT_REGION;
+  return region;
+}
+
 const defaultUsers = [
   {
     id: "user-admin-1",
@@ -19,20 +28,98 @@ const defaultUsers = [
     password: "Farmer123!",
     role: "farmer",
     contact: "+250 788 555 101",
-    region: "Northern Highlands",
+    region: "Gatenga Sector, Kicukiro District",
     experienceLevel: "Intermediate",
     createdAt: "2026-06-02T09:30:00.000Z",
   },
+  {
+    id: "user-farmer-2",
+    name: "Aline Mukamana",
+    email: "aline@agrifeed.com",
+    password: "Farmer123!",
+    role: "farmer",
+    contact: "+250 788 410 220",
+    region: "Nyamata Sector, Bugesera District",
+    experienceLevel: "Advanced",
+    createdAt: "2026-06-14T07:40:00.000Z",
+  },
+  {
+    id: "user-farmer-3",
+    name: "Claude Ndayisaba",
+    email: "claude@agrifeed.com",
+    password: "Farmer123!",
+    role: "farmer",
+    contact: "+250 788 502 118",
+    region: "Musanze District",
+    experienceLevel: "Intermediate",
+    createdAt: "2026-06-15T10:15:00.000Z",
+  },
+  {
+    id: "user-farmer-4",
+    name: "Jeanne Uwase",
+    email: "jeanne@agrifeed.com",
+    password: "Farmer123!",
+    role: "farmer",
+    contact: "+250 788 630 447",
+    region: "Rwamagana District",
+    experienceLevel: "Beginner",
+    createdAt: "2026-06-16T13:20:00.000Z",
+  },
+  {
+    id: "user-farmer-5",
+    name: "Eric Habimana",
+    email: "eric@agrifeed.com",
+    password: "Farmer123!",
+    role: "farmer",
+    contact: "+250 788 700 984",
+    region: "Huye District",
+    experienceLevel: "Advanced",
+    createdAt: "2026-06-17T08:25:00.000Z",
+  },
 ];
+
+function normalizeUserRecord(user) {
+  return {
+    ...user,
+    region: normalizeRegion(user.region),
+    createdAt:
+      user.createdAt && !Number.isNaN(new Date(user.createdAt).getTime())
+        ? user.createdAt
+        : DEFAULT_CREATED_AT,
+    experienceLevel: user.experienceLevel || "Intermediate",
+  };
+}
+
+function mergeDemoUsers(savedUsers = []) {
+  const nextUsers = [...savedUsers];
+
+  defaultUsers.forEach((demoUser) => {
+    const existingIndex = nextUsers.findIndex((user) => user.id === demoUser.id);
+    if (existingIndex === -1) {
+      nextUsers.push(demoUser);
+      return;
+    }
+
+    nextUsers[existingIndex] = normalizeUserRecord({
+      ...demoUser,
+      ...nextUsers[existingIndex],
+    });
+  });
+
+  return nextUsers.map(normalizeUserRecord);
+}
 
 function readUsers() {
   const saved = localStorage.getItem(STORAGE_KEYS.users);
   if (saved) {
-    return JSON.parse(saved);
+    const mergedUsers = mergeDemoUsers(JSON.parse(saved));
+    localStorage.setItem(STORAGE_KEYS.users, JSON.stringify(mergedUsers));
+    return mergedUsers;
   }
 
-  localStorage.setItem(STORAGE_KEYS.users, JSON.stringify(defaultUsers));
-  return defaultUsers;
+  const seededUsers = mergeDemoUsers(defaultUsers);
+  localStorage.setItem(STORAGE_KEYS.users, JSON.stringify(seededUsers));
+  return seededUsers;
 }
 
 function saveUsers(users) {
@@ -40,11 +127,12 @@ function saveUsers(users) {
 }
 
 function createUserRecord(payload) {
-  return {
+  return normalizeUserRecord({
     id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     createdAt: new Date().toISOString(),
+    region: DEFAULT_REGION,
     ...payload,
-  };
+  });
 }
 
 export const authService = {

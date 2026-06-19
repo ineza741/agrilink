@@ -6,6 +6,8 @@ import {
   Sprout,
   Waves,
 } from "lucide-react";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const recommendationStats = [
   { title: "Recommended Crop", value: "Irish Potato", tone: "green", icon: Sprout },
@@ -41,12 +43,18 @@ const guidanceNotes = [
 ];
 
 export function AiRecommendationPage() {
+  const navigate = useNavigate();
+  const [accepted, setAccepted] = useState([]);
+  const [statusMessage, setStatusMessage] = useState("");
+
   return (
     <section className="management-page">
       <div className="page-title-block">
         <h1>AI Recommendation</h1>
         <p>Review the system's suggested crop, irrigation, and field action decisions.</p>
       </div>
+
+      {statusMessage ? <div className="community-inline-notice">{statusMessage}</div> : null}
 
       <div className="management-toolbar">
         <div className="toolbar-search">
@@ -76,7 +84,11 @@ export function AiRecommendationPage() {
         <article className="prototype-panel management-table-panel">
           <div className="panel-toolbar">
             <h2>Recommended Actions</h2>
-            <button type="button" className="text-link-button primary">
+            <button
+              type="button"
+              className="text-link-button primary"
+              onClick={() => setStatusMessage("Guidance export queued for the reporting module.")}
+            >
               Export Guidance
             </button>
           </div>
@@ -93,11 +105,24 @@ export function AiRecommendationPage() {
                 </div>
 
                 <div className="content-item-actions">
-                  <button type="button" className="details-button">
+                  <button
+                    type="button"
+                    className="details-button"
+                    onClick={() => setStatusMessage(`Reviewing: ${item.title}`)}
+                  >
                     Review
                   </button>
-                  <button type="button" className="approve-button">
-                    Accept
+                  <button
+                    type="button"
+                    className="approve-button"
+                    onClick={() => {
+                      setAccepted((current) =>
+                        current.includes(item.title) ? current : [...current, item.title]
+                      );
+                      setStatusMessage(`Accepted action: ${item.title}`);
+                    }}
+                  >
+                    {accepted.includes(item.title) ? "Accepted" : "Accept"}
                   </button>
                 </div>
               </article>
@@ -135,7 +160,11 @@ export function AiRecommendationPage() {
             </div>
           </div>
 
-          <button type="button" className="toolbar-button primary full-width">
+          <button
+            type="button"
+            className="toolbar-button primary full-width"
+            onClick={() => navigate("/recommendations")}
+          >
             Generate Full Advisory
           </button>
         </aside>

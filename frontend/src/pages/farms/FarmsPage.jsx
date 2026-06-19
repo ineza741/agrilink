@@ -1,13 +1,136 @@
-import { Download, Map, MapPin, PlusCircle, Search, Users, Waves } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Download,
+  Eye,
+  FileSpreadsheet,
+  FileText,
+  Mail,
+  Map,
+  MapPin,
+  Phone,
+  PlusCircle,
+  RotateCcw,
+  Search,
+  ShieldCheck,
+  Tractor,
+  Upload,
+  Users,
+  Waves,
+  X,
+  XCircle,
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useFarmerData } from "../../context/FarmerDataContext";
 
+const DEMO_MODE = true;
+const RWANDA_REGIONS = [
+  "Gatenga Sector, Kicukiro District",
+  "Nyamata Sector, Bugesera District",
+  "Musanze District",
+  "Rwamagana District",
+  "Huye District",
+  "Rubavu District",
+];
+
 function formatStatus(status) {
   if (status === "verified") return "Verified";
-  if (status === "inactive") return "Inactive";
+  if (status === "rejected") return "Rejected";
+  if (status === "deactivated" || status === "inactive") return "Deactivated";
   return "Pending";
+}
+
+function getStatusTone(status) {
+  if (status === "verified") return "green";
+  if (status === "rejected") return "red";
+  if (status === "deactivated" || status === "inactive") return "slate";
+  return "amber";
+}
+
+function formatReadableDate(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) {
+    return "18 Jun 2026";
+  }
+
+  return date.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function downloadTextFile(filename, content, mimeType = "text/plain;charset=utf-8") {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+function parseCsvRegistry(text) {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (!lines.length) {
+    return { rows: [], errors: ["No CSV rows found."] };
+  }
+
+  const firstRow = lines[0].toLowerCase();
+  const hasHeader = firstRow.includes("name") && firstRow.includes("email");
+  const dataLines = hasHeader ? lines.slice(1) : lines;
+  const errors = [];
+
+  const rows = dataLines.map((line, index) => {
+    const [
+      name = "",
+      email = "",
+      phone = "",
+      region = "",
+      district = "",
+      sector = "",
+      primaryCrop = "",
+      experienceLevel = "",
+    ] = line.split(",").map((part) => part.trim());
+
+    const fullRegion =
+      region && district && sector
+        ? `${sector}, ${district}`
+        : region || district || sector || "Gatenga Sector, Kicukiro District";
+
+    const missingFields = [];
+    if (!name) missingFields.push("Name");
+    if (!email) missingFields.push("Email");
+    if (!phone) missingFields.push("Phone");
+    if (!primaryCrop) missingFields.push("Primary Crop");
+
+    if (missingFields.length) {
+      errors.push(`Row ${index + 1}: missing ${missingFields.join(", ")}.`);
+    }
+
+    return {
+      id: `preview-${index + 1}`,
+      fullName: name,
+      email,
+      contact: phone,
+      region: fullRegion,
+      district: district || fullRegion,
+      sector: sector || fullRegion,
+      primaryCrop: primaryCrop || "Maize",
+      experienceLevel: experienceLevel || "Intermediate",
+      missingFields,
+    };
+  });
+
+  return { rows, errors };
 }
 
 function FarmerFarmsView() {
@@ -173,24 +296,60 @@ function FarmerFarmsView() {
 }
 
 function AdminFarmsView() {
-  const { adminFarmerRows, approveProfile, deactivateProfile, bulkOnboardFarmers } = useFarmerData();
+  const navigate = useNavigate();
+  const fileInputRef = useRef(null);
+  const {
+    adminFarmerRows,
+    data,
+    getFarmsByOwner,
+    approveProfile,
+    rejectProfile,
+    deactivateProfile,
+    reactivateProfile,
+    bulkOnboardFarmers,
+  } = useFarmerData();
+
   const [query, setQuery] = useState("");
   const [regionFilter, setRegionFilter] = useState("all");
   const [bulkText, setBulkText] = useState("");
   const [bulkStatus, setBulkStatus] = useState("");
   const [page, setPage] = useState(1);
-  const itemsPerPage = 4;
+  const [profileModalFarmer, setProfileModalFarmer] = useState(null);
+  const [previewRows, setPreviewRows] = useState([]);
+  const [previewErrors, setPreviewErrors] = useState([]);
+  const itemsPerPage = 5;
 
-  const regions = useMemo(
-    () => ["all", ...new Set(adminFarmerRows.map((row) => row.region).filter(Boolean))],
-    [adminFarmerRows]
-  );
+  const adminRecords = useMemo(() => {
+    return adminFarmerRows.map((row) => {
+      const farms = getFarmsByOwner(row.userId);
+      const primaryFarm = farms[0];
+      return {
+        ...row,
+        contact: row.profile?.contact || "Not provided",
+        email: row.profile?.email || "Not provided",
+        experienceLevel: row.profile?.experienceLevel || "Intermediate",
+        primaryCrop: primaryFarm?.primaryCrop || "Mixed farming",
+        farms,
+        joinedLabel: formatReadableDate(row.joined),
+      };
+    });
+  }, [adminFarmerRows, getFarmsByOwner]);
+
+  const regions = useMemo(() => ["all", ...RWANDA_REGIONS], []);
 
   const visibleRows = useMemo(() => {
-    return adminFarmerRows.filter((row) => {
+    return adminRecords.filter((row) => {
       const matchesQuery =
         !query.trim() ||
-        [row.name, row.id, row.region, row.profile.email]
+        [
+          row.name,
+          row.id,
+          row.region,
+          row.email,
+          row.contact,
+          row.primaryCrop,
+          row.experienceLevel,
+        ]
           .join(" ")
           .toLowerCase()
           .includes(query.trim().toLowerCase());
@@ -198,9 +357,9 @@ function AdminFarmsView() {
       const matchesRegion = regionFilter === "all" || row.region === regionFilter;
       return matchesQuery && matchesRegion;
     });
-  }, [adminFarmerRows, query, regionFilter]);
+  }, [adminRecords, query, regionFilter]);
 
-    useEffect(() => {
+  useEffect(() => {
     setPage(1);
   }, [query, regionFilter]);
 
@@ -212,182 +371,190 @@ function AdminFarmsView() {
       setPage(totalPages);
     }
   }, [page, totalPages]);
-  const adminSummary = useMemo(() => {
-    const active = adminFarmerRows.filter((row) => row.status === "verified").length;
-    const pending = adminFarmerRows.filter((row) => row.status === "pending").length;
-    const topRegion = [...adminFarmerRows]
-      .sort((a, b) => b.farmCount - a.farmCount)[0]
-      ?.region;
+
+  const summaryCards = useMemo(() => {
+    const totalFarmers = adminRecords.length;
+    const verifiedFarmers = adminRecords.filter((row) => row.status === "verified").length;
+    const pendingFarmers = adminRecords.filter((row) => row.status === "pending").length;
+    const deactivatedFarmers = adminRecords.filter(
+      (row) => row.status === "deactivated" || row.status === "rejected"
+    ).length;
+    const totalFarms = data.farms.length;
+    const regionCounts = adminRecords.reduce((accumulator, row) => {
+      accumulator[row.region] = (accumulator[row.region] || 0) + row.farmCount;
+      return accumulator;
+    }, {});
+    const topRegion =
+      Object.entries(regionCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "Gatenga Sector, Kicukiro District";
 
     return [
-      { label: "Total Active", value: `${active}`, tone: "green", icon: Users },
-      { label: "Pending Approval", value: `${pending}`, tone: "amber", icon: PlusCircle },
-      { label: "Top Region", value: topRegion || "Unassigned", tone: "blue", icon: Map },
+      { label: "Total Farmers", value: totalFarmers, tone: "blue", icon: Users },
+      { label: "Verified Farmers", value: verifiedFarmers, tone: "green", icon: ShieldCheck },
+      { label: "Pending Approval", value: pendingFarmers, tone: "amber", icon: AlertTriangle },
+      { label: "Deactivated Farmers", value: deactivatedFarmers, tone: "slate", icon: XCircle },
+      { label: "Total Farms", value: totalFarms, tone: "blue", icon: Tractor },
+      { label: "Top Region", value: topRegion, tone: "green", icon: Map },
     ];
-  }, [adminFarmerRows]);
+  }, [adminRecords, data.farms.length]);
+
+  const buildPreview = (csvText) => {
+    const parsed = parseCsvRegistry(csvText);
+    setPreviewRows(parsed.rows);
+    setPreviewErrors(parsed.errors);
+    setBulkStatus(
+      parsed.rows.length
+        ? `Preview ready for ${parsed.rows.length} farmer record(s).`
+        : "No valid preview rows found yet."
+    );
+  };
+
+  const handleCsvUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const text = await file.text();
+    setBulkText(text);
+    buildPreview(text);
+  };
+
+  const handleBulkPreview = () => {
+    buildPreview(bulkText);
+  };
 
   const handleBulkOnboard = () => {
-    const rows = bulkText
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line, index) => {
-        const [fullName, email, region, crop] = line.split(",").map((part) => part?.trim());
-        return {
-          fullName: fullName || `Cooperative Farmer ${index + 1}`,
-          email: email || `farmer${Date.now()}${index}@agrifeed.local`,
-          region: region || "Northern Highlands",
-          contact: `+250 788 000 ${String(index + 1).padStart(3, "0")}`,
-          experienceLevel: "Intermediate",
-          cooperativeName: "Admin Bulk Onboarding Batch",
-          farmName: `${fullName || `Farmer ${index + 1}`}'s Plot`,
-          plotLabel: "Main Plot",
-          sizeHectares: 4 + index,
-          landType: "Loamy",
-          irrigationType: "Drip Irrigation",
-          primaryCrop: crop || "Maize",
-          history: [],
-        };
-      });
+    const validRows = previewRows.filter((row) => row.missingFields.length === 0);
 
-    if (!rows.length) {
-      setBulkStatus("Add at least one farmer line to onboard.");
+    if (!validRows.length) {
+      setBulkStatus("No valid farmers ready for import. Fix the preview errors first.");
       return;
     }
 
-    try {
-      const created = bulkOnboardFarmers(rows, "AgriFeed Admin");
-      setBulkStatus(`${created.length} farmer account(s) onboarded successfully.`);
-      setBulkText("");
-    } catch (error) {
-      setBulkStatus(error.message || "Bulk onboarding failed.");
-    }
+    const created = bulkOnboardFarmers(
+      validRows.map((row, index) => ({
+        fullName: row.fullName,
+        email: row.email,
+        contact: row.contact,
+        region: row.region,
+        experienceLevel: row.experienceLevel,
+        cooperativeName: "Local Demo Registry Import",
+        farmName: `${row.fullName}'s Plot`,
+        plotLabel: "Main Plot",
+        sizeHectares: 2 + index,
+        landType: "Loamy",
+        irrigationType: "Drip Irrigation",
+        primaryCrop: row.primaryCrop,
+        history: [],
+      })),
+      "AgriFeed Admin"
+    );
+
+    setBulkStatus(`Imported ${created.length} farmer record(s) into Local Demo Registry Data.`);
+    setBulkText("");
+    setPreviewRows([]);
+    setPreviewErrors([]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  const exportRows = visibleRows.map((row) => ({
+    farmerName: row.name,
+    farmerId: row.id,
+    contact: row.contact,
+    email: row.email,
+    region: row.region,
+    farms: row.farmCount,
+    primaryCrop: row.primaryCrop,
+    completeness: `${row.completeness}%`,
+    status: formatStatus(row.status),
+    joined: row.joinedLabel,
+  }));
+
+  const handleExportCsv = () => {
+    const header = [
+      "Farmer Name",
+      "Farmer ID",
+      "Contact",
+      "Email",
+      "Region",
+      "Number of Farms",
+      "Primary Crop",
+      "Profile Completeness",
+      "Verification Status",
+      "Joined Date",
+    ];
+    const rows = exportRows.map((row) =>
+      [
+        row.farmerName,
+        row.farmerId,
+        row.contact,
+        row.email,
+        row.region,
+        row.farms,
+        row.primaryCrop,
+        row.completeness,
+        row.status,
+        row.joined,
+      ].join(",")
+    );
+    downloadTextFile("farmer-registry-demo.csv", [header.join(","), ...rows].join("\n"), "text/csv;charset=utf-8");
+    setBulkStatus("Exported Local Demo Registry Data as CSV.");
+  };
+
+  const handleExportExcel = () => {
+    const lines = exportRows.map(
+      (row) =>
+        `${row.farmerName}\t${row.farmerId}\t${row.contact}\t${row.email}\t${row.region}\t${row.farms}\t${row.primaryCrop}\t${row.completeness}\t${row.status}\t${row.joined}`
+    );
+    downloadTextFile(
+      "farmer-registry-demo.xls",
+      ["Farmer Name\tFarmer ID\tContact\tEmail\tRegion\tNumber of Farms\tPrimary Crop\tProfile Completeness\tVerification Status\tJoined Date", ...lines].join("\n"),
+      "application/vnd.ms-excel;charset=utf-8"
+    );
+    setBulkStatus("Exported demo farmer registry in Excel-compatible format.");
+  };
+
+  const handleExportReport = () => {
+    const report = [
+      "AgriSupport Farmer Management Report",
+      "Mode: Local Demo Registry Data",
+      `Generated: ${formatReadableDate(new Date().toISOString())}`,
+      "",
+      `Total Farmers: ${summaryCards[0].value}`,
+      `Verified Farmers: ${summaryCards[1].value}`,
+      `Pending Approval: ${summaryCards[2].value}`,
+      `Deactivated Farmers: ${summaryCards[3].value}`,
+      `Total Farms: ${summaryCards[4].value}`,
+      `Top Region: ${summaryCards[5].value}`,
+      "",
+      "Visible Farmer Records",
+      ...exportRows.map(
+        (row) =>
+          `- ${row.farmerName} | ${row.region} | ${row.primaryCrop} | ${row.status} | ${row.joined}`
+      ),
+    ].join("\n");
+    downloadTextFile("agrisupport-ngo-government-report.txt", report);
+    setBulkStatus("Exported NGO/Government summary report.");
+  };
+
+  const selectedFarmerFarms = profileModalFarmer ? getFarmsByOwner(profileModalFarmer.userId) : [];
+
   return (
-    <section className="management-page prototype-admin-farmers-page">
+    <section className="management-page prototype-admin-farmers-page prototype-admin-farmers-page-v2">
       <div className="prototype-admin-farmers-title">
         <h1>Farmer Management</h1>
-        <p>Manage registrations, multi-farm records, verification flow, and centralized farm mapping data.</p>
+        <p>
+          Centralized farmer and farm database for verification, multi-farm support, bulk onboarding,
+          and extension-officer decision workflow.
+        </p>
       </div>
 
-      <div className="prototype-admin-farmers-filters">
-        <label className="prototype-admin-farmers-search">
-          <Search size={17} />
-          <input
-            type="text"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search farmers by name, ID, or email..."
-          />
-        </label>
-        <label className="prototype-admin-farmers-region real-select">
-          <MapPin size={17} />
-          <select value={regionFilter} onChange={(event) => setRegionFilter(event.target.value)}>
-            {regions.map((region) => (
-              <option key={region} value={region}>
-                {region === "all" ? "Filter by Region" : region}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className="prototype-admin-registry-banner">
+        <span className="status-pill tone-blue">DEMO_MODE</span>
+        <strong>Local Demo Registry Data</strong>
+        <small>Frontend-only farmer records, approvals, and farm assets stored in localStorage.</small>
       </div>
 
-      <div className="prototype-admin-farmers-tools">
-        <article className="prototype-panel prototype-admin-farmers-bulk-card">
-          <div className="panel-toolbar">
-            <h2>Bulk Farmer Onboarding</h2>
-            <button type="button" className="text-link-button primary" onClick={handleBulkOnboard}>
-              Run Batch
-            </button>
-          </div>
-          <p className="profile-section-copy">
-            Add one farmer per line: <code>Name, Email, Region, Primary Crop</code>
-          </p>
-          <textarea
-            value={bulkText}
-            onChange={(event) => setBulkText(event.target.value)}
-            placeholder="Aline Mukamana, aline@example.com, Northern Highlands, Maize"
-            rows="5"
-            className="prototype-admin-bulk-textarea"
-          />
-          {bulkStatus ? <span className="prototype-admin-bulk-status">{bulkStatus}</span> : null}
-        </article>
-
-        <article className="prototype-panel prototype-admin-farmers-bulk-card compact">
-          <div className="panel-toolbar">
-            <h2>Export Ready</h2>
-            <Download size={16} color="#1ea4ff" />
-          </div>
-          <p className="profile-section-copy">
-            Farmer registry data is prepared for government and NGO reporting exports from the System Reports module.
-          </p>
-        </article>
-      </div>
-
-      <article className="prototype-panel prototype-admin-farmers-table-card">
-        <div className="prototype-admin-farmers-table">
-          <div className="prototype-admin-farmers-head richer">
-            <span>Farmer Details</span>
-            <span>Region</span>
-            <span>Status</span>
-            <span>Joined Date</span>
-            <span>Actions</span>
-          </div>
-
-          {pagedRows.map((farmer) => (
-            <div key={farmer.userId} className="prototype-admin-farmers-row richer">
-              <div className="prototype-admin-farmer-cell">
-                <div className="prototype-admin-farmer-badge">{farmer.initials}</div>
-                <div>
-                  <strong>{farmer.name}</strong>
-                  <span>
-                    {farmer.id} · {farmer.farmCount} farms · {farmer.completeness}% complete
-                  </span>
-                </div>
-              </div>
-              <span>{farmer.region}</span>
-              <span
-                className={
-                  farmer.status === "verified"
-                    ? "prototype-admin-farmer-status active"
-                    : farmer.status === "inactive"
-                      ? "prototype-admin-farmer-status inactive"
-                      : "prototype-admin-farmer-status pending"
-                }
-              >
-                {formatStatus(farmer.status)}
-              </span>
-              <span>{new Date(farmer.joined).toLocaleDateString()}</span>
-              <div className="prototype-admin-farmer-actions">
-                <button type="button" className="link" onClick={() => setBulkStatus(`Viewing summary for ${farmer.name}.`)}>
-                  View Profile
-                </button>
-                {farmer.status === "pending" ? (
-                  <button type="button" className="approve" onClick={() => approveProfile(farmer.userId, "AgriFeed Admin")}>
-                    Approve
-                  </button>
-                ) : (
-                  <button type="button" className="danger" onClick={() => deactivateProfile(farmer.userId)}>
-                    Deactivate
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="prototype-admin-farmers-footer">
-          <span>Showing {pagedRows.length ? (page - 1) * itemsPerPage + 1 : 0}-{Math.min(page * itemsPerPage, visibleRows.length)} of {visibleRows.length} filtered farmers</span>
-          <div className="prototype-admin-farmers-pager">
-            <button type="button">‹</button>
-            <button type="button">›</button>
-          </div>
-        </div>
-      </article>
-
-      <div className="prototype-admin-farmers-summary-grid">
-        {adminSummary.map((item) => {
+      <div className="prototype-admin-farmers-summary-grid prototype-admin-farmers-summary-grid-v2">
+        {summaryCards.map((item) => {
           const Icon = item.icon;
           return (
             <article key={item.label} className="prototype-panel prototype-admin-farmers-summary-card">
@@ -403,9 +570,345 @@ function AdminFarmsView() {
         })}
       </div>
 
+      <div className="prototype-admin-farmers-filters">
+        <label className="prototype-admin-farmers-search">
+          <Search size={17} />
+          <input
+            type="text"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search farmers by name, ID, contact, crop, or email..."
+          />
+        </label>
+        <label className="prototype-admin-farmers-region real-select">
+          <MapPin size={17} />
+          <select value={regionFilter} onChange={(event) => setRegionFilter(event.target.value)}>
+            {regions.map((region) => (
+              <option key={region} value={region}>
+                {region === "all" ? "Filter by Rwanda region" : region}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="prototype-admin-farmers-tools">
+        <article className="prototype-panel prototype-admin-farmers-bulk-card prototype-admin-bulk-card-v2">
+          <div className="panel-toolbar">
+            <h2>Bulk Farmer Onboarding</h2>
+            <div className="prototype-admin-inline-actions">
+              <button type="button" className="details-button" onClick={handleBulkPreview}>
+                Preview Import
+              </button>
+              <button type="button" className="approve-button" onClick={handleBulkOnboard}>
+                Save Farmers
+              </button>
+            </div>
+          </div>
+          <p className="profile-section-copy">
+            Expected CSV format: <code>Name, Email, Phone, Region, District, Sector, Primary Crop, Experience Level</code>
+          </p>
+
+          <div className="prototype-admin-bulk-inputs">
+            <textarea
+              value={bulkText}
+              onChange={(event) => setBulkText(event.target.value)}
+              placeholder="Name, Email, Phone, Region, District, Sector, Primary Crop, Experience Level"
+              rows="6"
+              className="prototype-admin-bulk-textarea"
+            />
+            <div className="prototype-admin-bulk-upload-panel">
+              <button
+                type="button"
+                className="prototype-admin-secondary-button full"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload size={15} />
+                <span>Upload CSV File</span>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="visually-hidden"
+                onChange={handleCsvUpload}
+              />
+              <div className="prototype-admin-bulk-format">
+                <strong>Validation checks</strong>
+                <span>Missing fields are flagged before import.</span>
+              </div>
+            </div>
+          </div>
+
+          {bulkStatus ? <span className="prototype-admin-bulk-status">{bulkStatus}</span> : null}
+
+          {!!previewRows.length && (
+            <div className="prototype-admin-import-preview">
+              <div className="prototype-admin-import-preview-head">
+                <strong>Import Preview</strong>
+                <span>{previewRows.length} row(s)</span>
+              </div>
+              <div className="prototype-admin-import-preview-table">
+                {previewRows.slice(0, 5).map((row) => (
+                  <div key={row.id} className="prototype-admin-import-preview-row">
+                    <span>{row.fullName || "Missing name"}</span>
+                    <span>{row.region}</span>
+                    <span>{row.primaryCrop}</span>
+                    <small>{row.missingFields.length ? `Missing: ${row.missingFields.join(", ")}` : "Ready"}</small>
+                  </div>
+                ))}
+              </div>
+              {!!previewErrors.length && (
+                <div className="prototype-admin-import-errors">
+                  {previewErrors.map((error) => (
+                    <p key={error}>{error}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </article>
+
+        <article className="prototype-panel prototype-admin-farmers-bulk-card compact prototype-admin-export-card">
+          <div className="panel-toolbar">
+            <h2>Data Export</h2>
+            <Download size={16} color="#1ea4ff" />
+          </div>
+          <p className="profile-section-copy">
+            Export filtered farmer and farm records for extension coordination, NGO reporting, and academic review.
+          </p>
+          <div className="prototype-admin-export-actions">
+            <button type="button" className="prototype-admin-secondary-button full" onClick={handleExportCsv}>
+              <FileText size={15} />
+              <span>Export CSV</span>
+            </button>
+            <button type="button" className="prototype-admin-secondary-button full" onClick={handleExportExcel}>
+              <FileSpreadsheet size={15} />
+              <span>Export Excel</span>
+            </button>
+            <button type="button" className="prototype-admin-secondary-button full" onClick={handleExportReport}>
+              <Download size={15} />
+              <span>Export NGO/Government Report</span>
+            </button>
+          </div>
+        </article>
+      </div>
+
+      <article className="prototype-panel prototype-admin-farmers-table-card prototype-admin-farmers-table-card-v2">
+        <div className="prototype-admin-farmers-table">
+          <div className="prototype-admin-farmers-head prototype-admin-farmers-head-v2">
+            <span>Farmer Name</span>
+            <span>Farmer ID</span>
+            <span>Contact</span>
+            <span>Region / District / Sector</span>
+            <span>Number of Farms</span>
+            <span>Primary Crop</span>
+            <span>Profile Completeness</span>
+            <span>Verification Status</span>
+            <span>Joined Date</span>
+            <span>Actions</span>
+          </div>
+
+          {pagedRows.map((farmer) => (
+            <div key={farmer.userId} className="prototype-admin-farmers-row prototype-admin-farmers-row-v2">
+              <div className="prototype-admin-farmer-cell">
+                <div className="prototype-admin-farmer-badge">{farmer.initials}</div>
+                <div>
+                  <strong>{farmer.name}</strong>
+                  <span>{farmer.experienceLevel}</span>
+                </div>
+              </div>
+              <span>{farmer.id}</span>
+              <div className="prototype-admin-contact-cell">
+                <span><Phone size={13} /> {farmer.contact}</span>
+                <small><Mail size={13} /> {farmer.email}</small>
+              </div>
+              <span>{farmer.region}</span>
+              <div className="prototype-admin-farms-count">
+                <strong>{farmer.farmCount}</strong>
+                <div className="prototype-admin-farms-inline-actions">
+                  <button
+                    type="button"
+                    className="prototype-admin-action-button farm-link-button"
+                    onClick={() => setProfileModalFarmer(farmer)}
+                  >
+                    View farms
+                  </button>
+                  <button
+                    type="button"
+                    className="prototype-admin-action-button farm-link-button"
+                    onClick={() => navigate("/farms/new")}
+                  >
+                    Add farm
+                  </button>
+                </div>
+              </div>
+              <span>{farmer.primaryCrop}</span>
+              <span>{farmer.completeness}%</span>
+              <span className={`status-pill tone-${getStatusTone(farmer.status)}`}>
+                {formatStatus(farmer.status)}
+              </span>
+              <span>{farmer.joinedLabel}</span>
+              <div className="prototype-admin-farmer-actions prototype-admin-farmer-actions-v2">
+                <button
+                  type="button"
+                  className="prototype-admin-action-button action-view"
+                  onClick={() => setProfileModalFarmer(farmer)}
+                >
+                  <Eye size={14} />
+                  <span>View Profile</span>
+                </button>
+                {farmer.status !== "verified" && farmer.status !== "deactivated" ? (
+                  <button
+                    type="button"
+                    className="prototype-admin-action-button action-approve"
+                    onClick={() => {
+                      approveProfile(farmer.userId, "AgriFeed Admin");
+                      setBulkStatus(`Approved ${farmer.name}.`);
+                    }}
+                  >
+                    Approve
+                  </button>
+                ) : null}
+                {farmer.status === "pending" ? (
+                  <button
+                    type="button"
+                    className="prototype-admin-action-button action-reject"
+                    onClick={() => {
+                      rejectProfile(farmer.userId, "AgriFeed Admin");
+                      setBulkStatus(`Rejected ${farmer.name}.`);
+                    }}
+                  >
+                    Reject
+                  </button>
+                ) : null}
+                {farmer.status !== "deactivated" ? (
+                  <button
+                    type="button"
+                    className="prototype-admin-action-button action-deactivate"
+                    onClick={() => {
+                      deactivateProfile(farmer.userId);
+                      setBulkStatus(`Deactivated ${farmer.name}.`);
+                    }}
+                  >
+                    Deactivate
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="prototype-admin-action-button action-reactivate"
+                    onClick={() => {
+                      reactivateProfile(farmer.userId);
+                      setBulkStatus(`Reactivated ${farmer.name}.`);
+                    }}
+                  >
+                    <RotateCcw size={14} />
+                    <span>Reactivate</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="prototype-admin-farmers-footer">
+          <span>
+            Showing {pagedRows.length ? (page - 1) * itemsPerPage + 1 : 0}-{Math.min(page * itemsPerPage, visibleRows.length)} of {visibleRows.length} filtered farmers
+          </span>
+          <div className="prototype-admin-farmers-pager">
+            <button
+              type="button"
+              className="prototype-admin-pager-button"
+              disabled={page === 1}
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+            >
+              Previous
+            </button>
+            <span className="prototype-admin-pager-indicator">Page {page} of {totalPages}</span>
+            <button
+              type="button"
+              className="prototype-admin-pager-button"
+              disabled={page === totalPages}
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      </article>
+
       <footer className="prototype-admin-farmers-bottom">
-        <span>© 2026 AgriFeed farmer registry. Verification and approval workflow stored in the local module database.</span>
+        <span>© 2026 AgriSupport farmer registry. Workflow, approvals, and onboarding records are stored as Local Demo Registry Data.</span>
       </footer>
+
+      {profileModalFarmer ? (
+        <div className="recommendation-modal-backdrop" onClick={() => setProfileModalFarmer(null)}>
+          <div
+            className="recommendation-feedback-modal prototype-admin-profile-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="prototype-admin-profile-modal-head">
+              <div>
+                <h3>{profileModalFarmer.name}</h3>
+                <span className={`status-pill tone-${getStatusTone(profileModalFarmer.status)}`}>
+                  {formatStatus(profileModalFarmer.status)}
+                </span>
+              </div>
+              <button type="button" className="icon-button plain" onClick={() => setProfileModalFarmer(null)}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="prototype-admin-profile-modal-grid">
+              <div className="prototype-admin-profile-facts">
+                <p><Phone size={15} /> <span>{profileModalFarmer.contact}</span></p>
+                <p><Mail size={15} /> <span>{profileModalFarmer.email}</span></p>
+                <p><MapPin size={15} /> <span>{profileModalFarmer.region}</span></p>
+                <p><Users size={15} /> <span>{profileModalFarmer.experienceLevel}</span></p>
+                <p><ShieldCheck size={15} /> <span>{profileModalFarmer.completeness}% profile completeness</span></p>
+              </div>
+
+              <div className="prototype-admin-profile-farms">
+                <strong>Registered farms</strong>
+                {selectedFarmerFarms.length ? (
+                  selectedFarmerFarms.map((farm) => (
+                    <div key={farm.id} className="prototype-admin-profile-farm-card">
+                      <div className="prototype-admin-profile-farm-top">
+                        <strong>{farm.name}</strong>
+                        <span>{farm.sizeHectares} ha</span>
+                      </div>
+                      <span>{farm.primaryCrop} · {farm.landType}</span>
+                      <small>{farm.region}</small>
+                    </div>
+                  ))
+                ) : (
+                  <p>No farms registered yet.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="prototype-admin-profile-documents">
+              <strong>Verification documents / photos</strong>
+              <div className="prototype-admin-profile-doc-list">
+                {selectedFarmerFarms.map((farm) => (
+                  <span key={`${farm.id}-doc`}>
+                    {farm.photoName ? `${farm.photoName}` : `${farm.name} - no uploaded photo yet`}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="recommendation-modal-actions">
+              <button type="button" className="details-button" onClick={() => setProfileModalFarmer(null)}>
+                Close
+              </button>
+              <button type="button" className="approve-button" onClick={() => navigate("/profile")}>
+                Open Farmer Profile Layout
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -414,5 +917,3 @@ export function FarmsPage() {
   const { user } = useAuth();
   return user?.role === "admin" ? <AdminFarmsView /> : <FarmerFarmsView />;
 }
-
-

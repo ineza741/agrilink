@@ -27,8 +27,8 @@ const farmerSearchPlaceholders = {
   "/irrigation-fertilizer": "Search farm data...",
   "/analytics": "Search analytics...",
   "/notifications": "Search alerts...",
-  "/community": "Search knowledge base...",
-  "/regional-monitoring": "Search regions or sectors...",
+  "/community": "Search community knowledge...",
+  "/regional-monitoring": "Search districts, alerts, or advisories...",
   "/settings": "Search settings...",
 };
 

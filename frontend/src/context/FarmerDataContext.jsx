@@ -3,6 +3,21 @@ import { useAuth } from "./AuthContext";
 import { authService } from "../services/auth";
 
 const STORAGE_KEY = "agri-feed-farmer-module-v1";
+const DEFAULT_REGION = "Gatenga Sector, Kicukiro District";
+
+const PROFILE_STATUS_BY_USER = {
+  "user-farmer-1": "pending",
+  "user-farmer-2": "verified",
+  "user-farmer-3": "pending",
+  "user-farmer-4": "pending",
+  "user-farmer-5": "verified",
+};
+
+function normalizeRegion(region) {
+  if (!region || region === "Unassigned Region") return DEFAULT_REGION;
+  if (region === "Northern Highlands") return DEFAULT_REGION;
+  return region;
+}
 
 const defaultFarmHistory = [
   {
@@ -64,7 +79,7 @@ function createFarmRecord(ownerId, farm, overrides = {}) {
     ownerId,
     name: farm.name || "New Farm",
     plotLabel: farm.plotLabel || "Main Plot",
-    region: farm.region || "Unassigned Region",
+    region: normalizeRegion(farm.region),
     sizeHectares: Number(farm.sizeHectares || 0),
     landType: farm.landType || "",
     irrigationType: farm.irrigationType || "",
@@ -96,21 +111,78 @@ function createFarmRecord(ownerId, farm, overrides = {}) {
 }
 
 function buildProfileFromUser(user) {
+  const verificationStatus =
+    PROFILE_STATUS_BY_USER[user.id] || (user.role === "admin" ? "verified" : "pending");
+
   return {
     userId: user.id,
     fullName: user.name || "",
     email: user.email || "",
     contact: user.contact || "",
-    region: user.region || "",
+    region: normalizeRegion(user.region || ""),
     experienceLevel: user.experienceLevel || "",
     farmerType: user.farmerType || "Individual Farmer",
     cooperativeName: user.cooperativeName || "",
     notes: user.notes || "",
-    verificationStatus: user.role === "admin" ? "verified" : "pending",
-    verifiedBy: user.role === "admin" ? "System" : "",
+    verificationStatus,
+    verifiedBy: verificationStatus === "verified" ? "AgriFeed Admin" : "",
     submittedAt: user.createdAt || new Date().toISOString(),
-    approvedAt: user.role === "admin" ? user.createdAt || new Date().toISOString() : "",
+    approvedAt: verificationStatus === "verified" ? user.createdAt || new Date().toISOString() : "",
   };
+}
+
+function deriveAdminStatus(profile, farms) {
+  if (profile?.verificationStatus === "deactivated" || profile?.verificationStatus === "inactive") {
+    return "deactivated";
+  }
+
+  if (profile?.verificationStatus === "rejected") {
+    return "rejected";
+  }
+
+  if (
+    profile?.verificationStatus === "verified" ||
+    farms.some((farm) => farm.verificationStatus === "verified")
+  ) {
+    return "verified";
+  }
+
+  return "pending";
+}
+
+function normalizeStoredData(data, users) {
+  const normalizedProfiles = { ...data.profiles };
+  Object.keys(normalizedProfiles).forEach((userId) => {
+    normalizedProfiles[userId] = {
+      ...normalizedProfiles[userId],
+      region: normalizeRegion(normalizedProfiles[userId]?.region),
+      verificationStatus:
+        normalizedProfiles[userId]?.verificationStatus || PROFILE_STATUS_BY_USER[userId] || "pending",
+    };
+  });
+
+  const normalizedFarms = data.farms.map((farm) => ({
+    ...farm,
+    region: normalizeRegion(farm.region),
+    location: {
+      ...farm.location,
+      label:
+        farm.location?.label === "Sector 4B - Main orchard"
+          ? "Musanze central orchard block"
+          : farm.location?.label === "Pilot research strip"
+            ? "Rwamagana pilot research strip"
+            : farm.location?.label || "",
+    },
+  }));
+
+  return ensureProfiles(
+    {
+      ...data,
+      profiles: normalizedProfiles,
+      farms: normalizedFarms,
+    },
+    users
+  );
 }
 
 function createSeedData(users) {
@@ -129,18 +201,18 @@ function createSeedData(users) {
           {
             name: "North Valley Orchard",
             plotLabel: "Plot A",
-            region: "Northern Highlands",
+            region: "Musanze District",
             sizeHectares: 120,
             landType: "Loamy",
             irrigationType: "Drip Irrigation",
             primaryCrop: "Almonds",
             cooperativeName: "Highland Growers Cooperative",
             location: {
-              lat: -1.9403,
-              lng: 29.8739,
+              lat: -1.4996,
+              lng: 29.6344,
               mapX: 42,
               mapY: 37,
-              label: "Sector 4B - Main orchard",
+              label: "Musanze central orchard block",
             },
             photoName: "north-valley-orchard.jpg",
             verificationStatus: "verified",
@@ -153,18 +225,18 @@ function createSeedData(users) {
           {
             name: "Fresno Experimental Plot",
             plotLabel: "Plot B",
-            region: "Northern Highlands",
+            region: "Rwamagana District",
             sizeHectares: 15,
             landType: "Sandy Loam",
             irrigationType: "IoT Enabled",
             primaryCrop: "Hybrid Corn",
             cooperativeName: "Highland Growers Cooperative",
             location: {
-              lat: -1.9328,
-              lng: 29.8611,
+              lat: -1.9487,
+              lng: 30.4347,
               mapX: 61,
               mapY: 68,
-              label: "Pilot research strip",
+              label: "Rwamagana pilot research strip",
             },
             photoName: "fresno-experimental-plot.jpg",
             verificationStatus: "pending",
@@ -225,6 +297,162 @@ function ensureRodrigueSeedFarm(data, users) {
   };
 }
 
+function ensureDemoRegionalFarms(data, users) {
+  const seedFarms = [
+    {
+      ownerId: "user-farmer-2",
+      id: "farm-seed-nyamata",
+      createdAt: "2026-06-14T09:05:00.000Z",
+      farm: {
+        name: "Nyamata Irrigation Block",
+        plotLabel: "Plot A",
+        region: "Nyamata Sector, Bugesera District",
+        sizeHectares: 18,
+        landType: "Sandy Clay",
+        irrigationType: "Sprinkler Irrigation",
+        primaryCrop: "Maize",
+        cooperativeName: "Bugesera Grain Farmers",
+        verificationStatus: "pending",
+        location: {
+          lat: -2.1514,
+          lng: 30.1044,
+          mapX: 54,
+          mapY: 63,
+          label: "Nyamata irrigation command area",
+        },
+        history: [
+          {
+            id: "history-nyamata-1",
+            crop: "Maize",
+            season: "2025 B",
+            yield: "5.6 t/ha",
+            challenges: "Water deficit during tasseling",
+          },
+        ],
+      },
+    },
+    {
+      ownerId: "user-farmer-3",
+      id: "farm-seed-musanze",
+      createdAt: "2026-06-15T10:20:00.000Z",
+      farm: {
+        name: "Musanze Potato Terrace",
+        plotLabel: "Field North",
+        region: "Musanze District",
+        sizeHectares: 9,
+        landType: "Volcanic Loam",
+        irrigationType: "Rainfed + Supplemental",
+        primaryCrop: "Irish Potato",
+        cooperativeName: "Musanze Highlands Union",
+        verificationStatus: "verified",
+        location: {
+          lat: -1.5011,
+          lng: 29.6338,
+          mapX: 43,
+          mapY: 29,
+          label: "Musanze potato terraces",
+        },
+        history: [
+          {
+            id: "history-musanze-1",
+            crop: "Irish Potato",
+            season: "2025 A",
+            yield: "17.8 t/ha",
+            challenges: "Late blight pressure after prolonged mist",
+          },
+        ],
+      },
+    },
+    {
+      ownerId: "user-farmer-4",
+      id: "farm-seed-rwamagana",
+      createdAt: "2026-06-16T12:40:00.000Z",
+      farm: {
+        name: "Rwamagana Banana Grove",
+        plotLabel: "Block East",
+        region: "Rwamagana District",
+        sizeHectares: 6.2,
+        landType: "Clay Loam",
+        irrigationType: "Manual + Tank Storage",
+        primaryCrop: "Bananas",
+        cooperativeName: "Eastern Fruit Growers",
+        verificationStatus: "pending",
+        location: {
+          lat: -1.9506,
+          lng: 30.4342,
+          mapX: 63,
+          mapY: 57,
+          label: "Rwamagana banana grove",
+        },
+        history: [
+          {
+            id: "history-rwamagana-1",
+            crop: "Bananas",
+            season: "2025",
+            yield: "22.4 t/ha",
+            challenges: "Low potassium in lower plot",
+          },
+        ],
+      },
+    },
+    {
+      ownerId: "user-farmer-5",
+      id: "farm-seed-huye",
+      createdAt: "2026-06-17T08:55:00.000Z",
+      farm: {
+        name: "Huye Coffee Learning Plot",
+        plotLabel: "Station Demo",
+        region: "Huye District",
+        sizeHectares: 4.7,
+        landType: "Well Drained Loam",
+        irrigationType: "Drip Irrigation",
+        primaryCrop: "Coffee",
+        cooperativeName: "Southern Hills Coffee Network",
+        verificationStatus: "verified",
+        location: {
+          lat: -2.5967,
+          lng: 29.7394,
+          mapX: 47,
+          mapY: 76,
+          label: "Huye coffee demo slope",
+        },
+        history: [
+          {
+            id: "history-huye-1",
+            crop: "Coffee",
+            season: "2025",
+            yield: "2.1 t/ha clean coffee",
+            challenges: "Berry disease scouting and shade pruning",
+          },
+        ],
+      },
+    },
+  ];
+
+  const validOwnerIds = new Set(users.filter((user) => user.role === "farmer").map((user) => user.id));
+  const existingFarmIds = new Set(data.farms.map((farm) => farm.id));
+  const missingSeedFarms = seedFarms.filter(
+    (entry) => validOwnerIds.has(entry.ownerId) && !existingFarmIds.has(entry.id)
+  );
+
+  if (!missingSeedFarms.length) {
+    return data;
+  }
+
+  return {
+    ...data,
+    farms: [
+      ...data.farms,
+      ...missingSeedFarms.map((entry) =>
+        createFarmRecord(entry.ownerId, entry.farm, {
+          id: entry.id,
+          createdAt: entry.createdAt,
+        })
+      ),
+    ],
+  };
+}
+
 function ensureProfiles(data, users) {
   const nextProfiles = { ...data.profiles };
   let changed = false;
@@ -251,18 +479,21 @@ function loadFarmerData() {
   const saved = localStorage.getItem(STORAGE_KEY);
 
   if (!saved) {
-    const seeded = createSeedData(users);
+    const seeded = ensureDemoRegionalFarms(createSeedData(users), users);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
     return seeded;
   }
 
   try {
     const parsed = JSON.parse(saved);
-    const hydrated = ensureRodrigueSeedFarm(ensureProfiles(parsed, users), users);
+    const hydrated = ensureDemoRegionalFarms(
+      ensureRodrigueSeedFarm(normalizeStoredData(parsed, users), users),
+      users
+    );
     localStorage.setItem(STORAGE_KEY, JSON.stringify(hydrated));
     return hydrated;
   } catch {
-    const seeded = createSeedData(users);
+    const seeded = ensureDemoRegionalFarms(createSeedData(users), users);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
     return seeded;
   }
@@ -301,7 +532,9 @@ export function FarmerDataProvider({ children }) {
 
   useEffect(() => {
     const users = authService.bootstrap();
-    setData((current) => ensureRodrigueSeedFarm(ensureProfiles(current, users), users));
+    setData((current) =>
+      ensureDemoRegionalFarms(ensureRodrigueSeedFarm(normalizeStoredData(current, users), users), users)
+    );
   }, [user?.id]);
 
   const value = useMemo(() => {
@@ -336,8 +569,8 @@ export function FarmerDataProvider({ children }) {
               .toUpperCase(),
             name: profile.fullName || farmerUser.name,
             id: `#FRM-${farmerUser.id.slice(-5).toUpperCase()}`,
-            region: profile.region || "Unassigned Region",
-            status: profile.verificationStatus,
+            region: normalizeRegion(profile.region) || DEFAULT_REGION,
+            status: deriveAdminStatus(profile, farms),
             joined: farmerUser.createdAt,
             farmCount: farms.length,
             completeness: computeProfileCompleteness(profile, farms),
@@ -450,7 +683,7 @@ export function FarmerDataProvider({ children }) {
               password: record.password || "Farmer123!",
               role: "farmer",
               contact: record.contact || "",
-              region: record.region || "Unassigned Region",
+              region: record.region || DEFAULT_REGION,
               experienceLevel: record.experienceLevel || "Beginner",
               farmerType: record.farmerType || "Cooperative Member",
               cooperativeName: record.cooperativeName || "",
@@ -467,7 +700,7 @@ export function FarmerDataProvider({ children }) {
             const farmRecord = createFarmRecord(userRecord.id, {
               name: record.farmName || `${record.fullName}'s Plot`,
               plotLabel: record.plotLabel || "Main Plot",
-              region: record.region || "Unassigned Region",
+              region: record.region || DEFAULT_REGION,
               sizeHectares: record.sizeHectares || 0,
               landType: record.landType || "",
               irrigationType: record.irrigationType || "",
@@ -541,6 +774,29 @@ export function FarmerDataProvider({ children }) {
           ),
         }));
       },
+      rejectProfile: (userId, rejectedBy = "Administrator") => {
+        setData((current) => ({
+          ...current,
+          profiles: {
+            ...current.profiles,
+            [userId]: {
+              ...current.profiles[userId],
+              verificationStatus: "rejected",
+              verifiedBy: rejectedBy,
+              approvedAt: "",
+            },
+          },
+          farms: current.farms.map((farm) =>
+            farm.ownerId === userId
+              ? {
+                  ...farm,
+                  verificationStatus: "pending",
+                  updatedAt: new Date().toISOString(),
+                }
+              : farm
+          ),
+        }));
+      },
       deactivateProfile: (userId) => {
         setData((current) => ({
           ...current,
@@ -548,7 +804,20 @@ export function FarmerDataProvider({ children }) {
             ...current.profiles,
             [userId]: {
               ...current.profiles[userId],
-              verificationStatus: "inactive",
+              verificationStatus: "deactivated",
+            },
+          },
+        }));
+      },
+      reactivateProfile: (userId) => {
+        setData((current) => ({
+          ...current,
+          profiles: {
+            ...current.profiles,
+            [userId]: {
+              ...current.profiles[userId],
+              verificationStatus: "pending",
+              submittedAt: new Date().toISOString(),
             },
           },
         }));
@@ -561,7 +830,7 @@ export function FarmerDataProvider({ children }) {
             const profile = data.profiles[farmerUser.id] || buildProfileFromUser(farmerUser);
             const farms = data.farms.filter((farm) => farm.ownerId === farmerUser.id);
             return {
-              region: profile.region || "Unassigned Region",
+              region: profile.region || DEFAULT_REGION,
               farmerId: farmerUser.id,
               farmCount: farms.length,
               verifiedFarmCount: farms.filter((farm) => farm.verificationStatus === "verified").length,
