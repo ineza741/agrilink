@@ -8,16 +8,22 @@ import {
   Database,
   Download,
   FileCheck2,
+  Mail,
+  MapPin,
   MapPinned,
+  Phone,
   ShieldCheck,
   Tractor,
   UserCheck,
   Users,
+  X,
   XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 import { useFarmerData } from "../../context/FarmerDataContext";
+import { isBackendSessionActive, phase1BackendService } from "../../services/phase1Backend";
 
 const DEMO_MODE = true;
 const ADMIN_WORKFLOW_KEY = "agrifeed-admin-workflow-v1";
@@ -126,6 +132,21 @@ function formatReadableDate(value) {
   });
 }
 
+function formatReadableDateTime(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) {
+    return "18 Jun 2026, 08:00";
+  }
+
+  return date.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function formatCompactNumber(value) {
   if (value >= 1000) {
     return new Intl.NumberFormat("en", {
@@ -155,43 +176,75 @@ function getVerificationTone(rate) {
 
 export function DashboardPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const {
     adminFarmerRows,
+    adminDashboardSummary,
     data,
     getRegionalSummary,
+    getFarmsByOwner,
+    loadFarmerProfileDetails,
     approveProfile,
     deactivateProfile,
   } = useFarmerData();
 
   const [statusMessage, setStatusMessage] = useState("");
   const [workflowState, setWorkflowState] = useState(loadWorkflowState);
+  const [profileModalFarmer, setProfileModalFarmer] = useState(null);
+  const [profileModalLoading, setProfileModalLoading] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(ADMIN_WORKFLOW_KEY, JSON.stringify(workflowState));
   }, [workflowState]);
 
   const regionalSummary = useMemo(() => {
+    if (Array.isArray(adminDashboardSummary?.regionBreakdown) && adminDashboardSummary.regionBreakdown.length) {
+      return adminDashboardSummary.regionBreakdown
+        .map((region) => ({
+          ...region,
+          activeAlerts: computeRegionAlertCount(region.region),
+          verificationRate: region.farmers
+            ? Math.round(((region.verifiedFarmers || 0) / region.farmers) * 100)
+            : 0,
+        }))
+        .sort((a, b) => b.farmers - a.farmers);
+    }
+
     return getRegionalSummary()
       .map((region) => ({
         ...region,
         activeAlerts: computeRegionAlertCount(region.region),
       }))
       .sort((a, b) => b.farmers - a.farmers);
-  }, [getRegionalSummary]);
+  }, [adminDashboardSummary?.regionBreakdown, getRegionalSummary]);
 
-  const totalFarmers = adminFarmerRows.length;
-  const totalFarms = data.farms.length;
-  const pendingApprovals = adminFarmerRows.filter((row) => row.status === "pending").length;
-  const verifiedProfiles = adminFarmerRows.filter((row) => row.status === "verified").length;
-  const activeRegionalAlerts = regionalSummary.reduce((sum, region) => sum + region.activeAlerts, 0);
+  const totalFarmers = adminDashboardSummary?.totalFarmers ?? adminFarmerRows.length;
+  const totalFarms = adminDashboardSummary?.totalFarms ?? data.farms.length;
+  const pendingApprovals =
+    adminDashboardSummary?.pendingFarmers ??
+    adminFarmerRows.filter((row) => row.status === "pending").length;
+  const verifiedProfiles =
+    adminDashboardSummary?.verifiedFarmers ??
+    adminFarmerRows.filter((row) => row.status === "verified").length;
+  const activeRegionalAlerts =
+    adminDashboardSummary?.liveRegionalAlerts ??
+    regionalSummary.reduce((sum, region) => sum + region.activeAlerts, 0);
   const systemActivity = totalFarmers * 18 + totalFarms * 9 + verifiedProfiles * 4;
+  const verificationRate =
+    adminDashboardSummary?.verificationRate ??
+    (totalFarmers ? Math.round((verifiedProfiles / totalFarmers) * 100) : 0);
+  const multiFarmFarmers =
+    adminDashboardSummary?.multiFarmFarmers ??
+    adminFarmerRows.filter((row) => (row.farmCount || 0) > 1).length;
+  const topRegionLabel =
+    adminDashboardSummary?.topRegion || regionalSummary[0]?.region || "Gatenga Sector, Kicukiro District";
 
   const dashboardStats = [
     {
       key: "farmers",
       title: "Total Farmers",
       value: totalFarmers.toLocaleString(),
-      badge: `${regionalSummary.length} active regions`,
+      badge: topRegionLabel,
       tone: "blue",
     },
     {
@@ -205,7 +258,7 @@ export function DashboardPage() {
       key: "farms",
       title: "Total Farms",
       value: totalFarms.toLocaleString(),
-      badge: "Registered plots",
+      badge: `${multiFarmFarmers} multi-farm farmers`,
       tone: "green",
     },
     {
@@ -226,12 +279,20 @@ export function DashboardPage() {
       key: "verified",
       title: "Verified Profiles",
       value: verifiedProfiles.toLocaleString(),
-      badge: `${totalFarmers ? Math.round((verifiedProfiles / totalFarmers) * 100) : 0}% verified`,
+      badge: `${verificationRate}% verified`,
       tone: "green",
     },
   ];
 
   const recentSignups = useMemo(() => {
+    if (Array.isArray(adminDashboardSummary?.recentSignups) && adminDashboardSummary.recentSignups.length) {
+      return adminDashboardSummary.recentSignups.map((item) => ({
+        ...item,
+        signupDate: formatReadableDate(item.signupDate),
+        verificationStatus: item.verificationStatus || "pending",
+      }));
+    }
+
     return [...adminFarmerRows]
       .sort((a, b) => new Date(b.joined).getTime() - new Date(a.joined).getTime())
       .slice(0, 5)
@@ -243,10 +304,26 @@ export function DashboardPage() {
         experience: row.profile?.experienceLevel || "Intermediate",
         signupDate: formatReadableDate(row.joined),
         verificationStatus: row.status,
+        latestActivityAt: row.latestActivityAt || row.joined,
+        farmCount: row.farmCount || 0,
+        contact: row.contact || row.profile?.contact || "Not provided",
+        email: row.email || row.profile?.email || "Not provided",
+        completeness: row.completeness || row.profile?.profileCompleteness || 0,
+        totalFarmSize: row.totalFarmSize || 0,
+        totalFarmSizeUnit: row.totalFarmSizeUnit || "hectares",
       }));
-  }, [adminFarmerRows]);
+  }, [adminDashboardSummary?.recentSignups, adminFarmerRows]);
 
   const workflowItems = useMemo(() => {
+    if (Array.isArray(adminDashboardSummary?.workflow) && adminDashboardSummary.workflow.length) {
+      return adminDashboardSummary.workflow.map((item) => ({
+        ...item,
+        id: item.id || item.workflowKey,
+        count: item.openCount || 0,
+        state: workflowState[item.id || item.workflowKey] || item.status || "pending",
+      }));
+    }
+
     return workflowSeed.map((item) => {
       let count = 1;
 
@@ -262,13 +339,48 @@ export function DashboardPage() {
         state: workflowState[item.id] || "pending",
       };
     });
-  }, [activeRegionalAlerts, pendingApprovals, regionalSummary, totalFarms, workflowState]);
+  }, [activeRegionalAlerts, adminDashboardSummary?.workflow, pendingApprovals, regionalSummary, totalFarms, workflowState]);
 
   const topRegions = regionalSummary.slice(0, 5);
+  const selectedFarmerFarms = profileModalFarmer ? getFarmsByOwner(profileModalFarmer.userId) : [];
 
-  const handleWorkflowState = (id, nextState) => {
+  const handleWorkflowState = async (id, nextState, title = "workflow") => {
     setWorkflowState((current) => ({ ...current, [id]: nextState }));
-    setStatusMessage(`Updated ${workflowSeed.find((item) => item.id === id)?.title || "workflow"} to ${nextState}.`);
+
+    if (["admin", "extensionofficer"].includes(user?.role) && isBackendSessionActive()) {
+      try {
+        await phase1BackendService.admin.updateWorkflow(id, { status: nextState });
+      } catch {
+        // Keep local workflow state if backend persistence is temporarily unavailable.
+      }
+    }
+
+    setStatusMessage(`Updated ${title} to ${nextState}.`);
+  };
+
+  const handleOpenProfile = async (farmer) => {
+    setProfileModalFarmer(farmer);
+    setProfileModalLoading(true);
+
+    try {
+      const hydrated = await loadFarmerProfileDetails(farmer.userId);
+      if (hydrated?.row) {
+        setProfileModalFarmer((current) => (current?.userId === farmer.userId ? {
+          ...current,
+          ...hydrated.row,
+          contact: hydrated.row.contact || current?.contact || "Not provided",
+          email: hydrated.row.email || current?.email || "Not provided",
+          completeness: hydrated.row.completeness || current?.completeness || 0,
+          totalFarmSize: hydrated.row.totalFarmSize || current?.totalFarmSize || 0,
+          totalFarmSizeUnit: hydrated.row.totalFarmSizeUnit || current?.totalFarmSizeUnit || "hectares",
+          latestActivityAt: hydrated.row.latestActivityAt || current?.latestActivityAt || current?.joined,
+        } : current));
+      }
+    } catch {
+      // Keep dashboard modal usable with current local/demo data if backend detail loading is unavailable.
+    } finally {
+      setProfileModalLoading(false);
+    }
   };
 
   return (
@@ -305,6 +417,14 @@ export function DashboardPage() {
             </article>
           );
         })}
+      </div>
+
+      <div className="prototype-admin-registry-banner">
+        <span className="status-pill tone-green">{verificationRate}% verified</span>
+        <strong>{topRegionLabel}</strong>
+        <small>
+          {multiFarmFarmers} multi-farm farmers tracked across the current registry.
+        </small>
       </div>
 
       <div className="prototype-main-grid prototype-extension-main-grid prototype-admin-overview-grid">
@@ -368,14 +488,14 @@ export function DashboardPage() {
                   <button
                     type="button"
                     className="details-button"
-                    onClick={() => handleWorkflowState(item.id, "in-review")}
+                    onClick={() => handleWorkflowState(item.id, "in-review", item.title)}
                   >
                     Review
                   </button>
                   <button
                     type="button"
                     className="approve-button"
-                    onClick={() => handleWorkflowState(item.id, "completed")}
+                    onClick={() => handleWorkflowState(item.id, "completed", item.title)}
                   >
                     Mark Done
                   </button>
@@ -415,7 +535,7 @@ export function DashboardPage() {
                   <strong>{item.name}</strong>
                 </div>
                 <span>{item.location}</span>
-                <span>{item.experience}</span>
+                <span>{item.experience} · {item.farmCount} farm{item.farmCount === 1 ? "" : "s"}</span>
                 <span>{item.signupDate}</span>
                 <span className={`status-pill tone-${item.verificationStatus === "verified" ? "green" : item.verificationStatus === "pending" ? "amber" : "red"}`}>
                   {item.verificationStatus}
@@ -444,7 +564,8 @@ export function DashboardPage() {
                   <button
                     type="button"
                     className="details-button"
-                    onClick={() => navigate("/farms")}
+                    title={`Latest activity ${formatReadableDateTime(item.latestActivityAt)}`}
+                    onClick={() => handleOpenProfile(item)}
                   >
                     View Details
                   </button>
@@ -461,7 +582,7 @@ export function DashboardPage() {
           </div>
 
           <div className="prototype-admin-monitoring-list">
-            {monitoringSeed.map((item) => {
+            {(adminDashboardSummary?.monitoring || monitoringSeed).map((item) => {
               const Icon = item.icon;
               return (
                 <div key={item.id} className="prototype-admin-monitoring-item">
@@ -504,6 +625,91 @@ export function DashboardPage() {
           </div>
         </aside>
       </div>
+
+      {profileModalFarmer ? (
+        <div className="recommendation-modal-backdrop" onClick={() => setProfileModalFarmer(null)}>
+          <div
+            className="recommendation-feedback-modal prototype-admin-profile-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="prototype-admin-profile-modal-head">
+              <div>
+                <h3>{profileModalFarmer.name}</h3>
+                <span
+                  className={`status-pill tone-${
+                    profileModalFarmer.verificationStatus === "verified"
+                      ? "green"
+                      : profileModalFarmer.verificationStatus === "pending"
+                        ? "amber"
+                        : "red"
+                  }`}
+                >
+                  {profileModalFarmer.verificationStatus}
+                </span>
+              </div>
+              <button type="button" className="icon-button plain" onClick={() => setProfileModalFarmer(null)}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="prototype-admin-profile-modal-grid">
+              <div className="prototype-admin-profile-facts">
+                <p><Phone size={15} /> <span>{profileModalFarmer.contact}</span></p>
+                <p><Mail size={15} /> <span>{profileModalFarmer.email}</span></p>
+                <p><MapPin size={15} /> <span>{profileModalFarmer.location}</span></p>
+                <p><Users size={15} /> <span>{profileModalFarmer.experience}</span></p>
+                <p><ShieldCheck size={15} /> <span>{profileModalFarmer.completeness}% profile completeness</span></p>
+                <p><Tractor size={15} /> <span>{profileModalFarmer.farmCount || selectedFarmerFarms.length} registered farm(s)</span></p>
+                <p><CheckCircle2 size={15} /> <span>{Number(profileModalFarmer.totalFarmSize || 0).toFixed(1)} {profileModalFarmer.totalFarmSizeUnit || "hectares"} total area</span></p>
+                <p><Activity size={15} /> <span>Latest activity: {formatReadableDateTime(profileModalFarmer.latestActivityAt)}</span></p>
+              </div>
+
+              <div className="prototype-admin-profile-farms">
+                <strong>Registered farms</strong>
+                {profileModalLoading ? <p>Loading farmer profile details...</p> : null}
+                {selectedFarmerFarms.length ? (
+                  selectedFarmerFarms.map((farm) => (
+                    <div key={farm.id} className="prototype-admin-profile-farm-card">
+                      <div className="prototype-admin-profile-farm-top">
+                        <strong>{farm.name}</strong>
+                        <span>{farm.sizeHectares} ha</span>
+                      </div>
+                      <span>{farm.primaryCrop} · {farm.landType}</span>
+                      <small>{farm.region}</small>
+                    </div>
+                  ))
+                ) : (
+                  <p>No farms registered yet.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="prototype-admin-profile-documents">
+              <strong>Verification documents / photos</strong>
+              <div className="prototype-admin-profile-doc-list">
+                {selectedFarmerFarms.length ? (
+                  selectedFarmerFarms.map((farm) => (
+                    <span key={`${farm.id}-doc`}>
+                      {farm.photoName ? farm.photoName : `${farm.name} - no uploaded photo yet`}
+                    </span>
+                  ))
+                ) : (
+                  <span>No farm uploads available yet.</span>
+                )}
+              </div>
+            </div>
+
+            <div className="recommendation-modal-actions">
+              <button type="button" className="details-button" onClick={() => setProfileModalFarmer(null)}>
+                Close
+              </button>
+              <button type="button" className="approve-button" onClick={() => navigate("/farms")}>
+                Open Farmer Management
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

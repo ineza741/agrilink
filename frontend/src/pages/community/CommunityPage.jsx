@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
+import { isBackendSessionActive, phase1BackendService } from "../../services/phase1Backend";
 
 const COMMUNITY_STORAGE_KEY = "agri-feed-community-module-v2";
 const DEMO_MODE = true;
@@ -235,28 +236,33 @@ const initialData = {
   submittedPractices: [],
 };
 
+function normalizeCommunityState(saved) {
+  if (!saved) return initialData;
+
+  return {
+    ...initialData,
+    ...saved,
+    stats: { ...initialData.stats, ...(saved.stats || {}) },
+    impactMetrics: { ...initialData.impactMetrics, ...(saved.impactMetrics || {}) },
+    discussions: Array.isArray(saved.discussions) ? saved.discussions : initialData.discussions,
+    questions: Array.isArray(saved.questions) ? saved.questions : initialData.questions,
+    stories: Array.isArray(saved.stories) ? saved.stories : initialData.stories,
+    events: Array.isArray(saved.events) ? saved.events : initialData.events,
+    experts: Array.isArray(saved.experts) ? saved.experts : initialData.experts,
+    trendingTopics: Array.isArray(saved.trendingTopics) ? saved.trendingTopics : initialData.trendingTopics,
+    practices: Array.isArray(saved.practices) ? saved.practices : initialData.practices,
+    resources: Array.isArray(saved.resources) ? saved.resources : initialData.resources,
+    contributors: Array.isArray(saved.contributors) ? saved.contributors : initialData.contributors,
+    activityFeed: Array.isArray(saved.activityFeed) ? saved.activityFeed : initialData.activityFeed,
+    joinedEvents: Array.isArray(saved.joinedEvents) ? saved.joinedEvents : [],
+    submittedPractices: Array.isArray(saved.submittedPractices) ? saved.submittedPractices : [],
+  };
+}
+
 function loadCommunityState() {
   try {
     const saved = JSON.parse(localStorage.getItem(COMMUNITY_STORAGE_KEY) || "null");
-    if (!saved) return initialData;
-    return {
-      ...initialData,
-      ...saved,
-      stats: { ...initialData.stats, ...(saved.stats || {}) },
-      impactMetrics: { ...initialData.impactMetrics, ...(saved.impactMetrics || {}) },
-      discussions: Array.isArray(saved.discussions) ? saved.discussions : initialData.discussions,
-      questions: Array.isArray(saved.questions) ? saved.questions : initialData.questions,
-      stories: Array.isArray(saved.stories) ? saved.stories : initialData.stories,
-      events: Array.isArray(saved.events) ? saved.events : initialData.events,
-      experts: Array.isArray(saved.experts) ? saved.experts : initialData.experts,
-      trendingTopics: Array.isArray(saved.trendingTopics) ? saved.trendingTopics : initialData.trendingTopics,
-      practices: Array.isArray(saved.practices) ? saved.practices : initialData.practices,
-      resources: Array.isArray(saved.resources) ? saved.resources : initialData.resources,
-      contributors: Array.isArray(saved.contributors) ? saved.contributors : initialData.contributors,
-      activityFeed: Array.isArray(saved.activityFeed) ? saved.activityFeed : initialData.activityFeed,
-      joinedEvents: Array.isArray(saved.joinedEvents) ? saved.joinedEvents : [],
-      submittedPractices: Array.isArray(saved.submittedPractices) ? saved.submittedPractices : [],
-    };
+    return normalizeCommunityState(saved);
   } catch {
     return initialData;
   }
@@ -269,6 +275,8 @@ function saveCommunityState(state) {
 export function CommunityPage() {
   const { user } = useAuth();
   const [state, setState] = useState(() => loadCommunityState());
+  const [communityMode, setCommunityMode] = useState(isBackendSessionActive() ? "backend" : "demo");
+  const [isSyncing, setIsSyncing] = useState(false);
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState({
     crop: "All",
@@ -293,6 +301,39 @@ export function CommunityPage() {
   useEffect(() => {
     saveCommunityState(state);
   }, [state]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function syncCommunityDashboard() {
+      if (!isBackendSessionActive()) return;
+
+      setIsSyncing(true);
+      try {
+        const dashboard = await phase1BackendService.community.dashboard();
+        if (!isMounted || !dashboard) return;
+        setState(normalizeCommunityState(dashboard));
+        setCommunityMode("backend");
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.warn("Community backend sync failed, continuing with demo/local data.", error);
+        }
+        if (isMounted) {
+          setCommunityMode("demo");
+        }
+      } finally {
+        if (isMounted) {
+          setIsSyncing(false);
+        }
+      }
+    }
+
+    syncCommunityDashboard();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!message) return;
@@ -363,9 +404,29 @@ export function CommunityPage() {
     [state.impactMetrics]
   );
 
-  const submitQuestion = () => {
+  const submitQuestion = async () => {
     const trimmed = expertQuestion.trim();
     if (!trimmed) return;
+
+    if (isBackendSessionActive()) {
+      try {
+        const result = await phase1BackendService.community.submitQuestion({
+          question: trimmed,
+          expert: selectedExpert,
+        });
+        if (result?.dashboard) {
+          setState(normalizeCommunityState(result.dashboard));
+          setCommunityMode("backend");
+          setExpertQuestion("");
+          setMessage("Your expert question has been submitted to the advisory queue.");
+          return;
+        }
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.warn("Community question backend submit failed, using local fallback.", error);
+        }
+      }
+    }
 
     setState((current) => ({
       ...current,
@@ -398,7 +459,23 @@ export function CommunityPage() {
     setMessage("Your expert question has been submitted to the advisory queue.");
   };
 
-  const markAccepted = (questionId) => {
+  const markAccepted = async (questionId) => {
+    if (isBackendSessionActive()) {
+      try {
+        const result = await phase1BackendService.community.acceptQuestion(questionId);
+        if (result?.dashboard) {
+          setState(normalizeCommunityState(result.dashboard));
+          setCommunityMode("backend");
+          setMessage("Expert answer marked as accepted.");
+          return;
+        }
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.warn("Community question acceptance failed, using local fallback.", error);
+        }
+      }
+    }
+
     setState((current) => ({
       ...current,
       questions: current.questions.map((item) =>
@@ -408,7 +485,24 @@ export function CommunityPage() {
     setMessage("Expert answer marked as accepted.");
   };
 
-  const registerEvent = (eventId) => {
+  const registerEvent = async (eventId) => {
+    if (isBackendSessionActive()) {
+      try {
+        const result = await phase1BackendService.community.registerEvent(eventId);
+        if (result?.dashboard) {
+          setState(normalizeCommunityState(result.dashboard));
+          setCommunityMode("backend");
+          const target = result.dashboard.events?.find((item) => item.id === eventId);
+          setMessage(target ? `Registered for ${target.title}.` : "Event registration recorded.");
+          return;
+        }
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.warn("Community event registration failed, using local fallback.", error);
+        }
+      }
+    }
+
     setState((current) => ({
       ...current,
       joinedEvents: current.joinedEvents.includes(eventId) ? current.joinedEvents : [...current.joinedEvents, eventId],
@@ -418,10 +512,33 @@ export function CommunityPage() {
     setMessage(target ? `Registered for ${target.title}.` : "Event registration recorded.");
   };
 
-  const submitPractice = () => {
+  const submitPractice = async () => {
     const title = practiceTitle.trim();
     const body = practiceBody.trim();
     if (!title || !body) return;
+
+    if (isBackendSessionActive()) {
+      try {
+        const result = await phase1BackendService.community.submitPractice({
+          title,
+          body,
+          focus: practiceFocus,
+        });
+        if (result?.dashboard) {
+          setState(normalizeCommunityState(result.dashboard));
+          setCommunityMode("backend");
+          setPracticeTitle("");
+          setPracticeBody("");
+          setPracticeFocus("Climate-Smart Farming");
+          setMessage("Practice submitted for community and expert validation.");
+          return;
+        }
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.warn("Community practice submission failed, using local fallback.", error);
+        }
+      }
+    }
 
     setState((current) => ({
       ...current,
@@ -473,9 +590,10 @@ export function CommunityPage() {
       </div>
 
       <div className="regional-source-row">
-        <span className="regional-source-badge local">Local Data</span>
-        <span className="regional-source-badge demo">Demo Knowledge Data</span>
+        <span className="regional-source-badge local">{communityMode === "backend" ? "Backend Community Data" : "Local Data"}</span>
+        <span className="regional-source-badge demo">{communityMode === "backend" ? "Demo + Persistent Knowledge Data" : "Demo Knowledge Data"}</span>
         {DEMO_MODE ? <span className="regional-source-badge">DEMO_MODE</span> : null}
+        {isSyncing ? <span className="regional-source-badge">Syncing...</span> : null}
       </div>
 
       {message ? (

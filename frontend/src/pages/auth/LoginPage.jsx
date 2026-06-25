@@ -22,8 +22,8 @@ export function LoginPage() {
 
   const demoCredentials = useMemo(
     () => ({
-      farmer: { email: "farmer@agrifeed.com", password: "Farmer123!" },
-      admin: { email: "admin@agrifeed.com", password: "Admin123!" },
+      farmer: { email: "farmer@agrisupport.rw", password: "Farmer@123" },
+      admin: { email: "admin@agrisupport.rw", password: "Admin@123" },
     }),
     []
   );
@@ -56,8 +56,8 @@ export function LoginPage() {
         password: form.password,
       });
 
-      if (form.role === "admin" && user.role !== "admin") {
-        throw new Error("Use the administrator demo account for this role.");
+      if (form.role === "admin" && !["admin", "extensionofficer"].includes(user.role)) {
+        throw new Error("Use the administrator or extension officer account for this role.");
       }
 
       if (form.role === "farmer" && user.role !== "farmer") {

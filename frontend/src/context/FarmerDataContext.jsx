@@ -1,6 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useAuth } from "./AuthContext";
 import { authService } from "../services/auth";
+import {
+  isBackendSessionActive,
+  mapBackendProfileToFrontendProfile,
+  phase1BackendService,
+} from "../services/phase1Backend";
 
 const STORAGE_KEY = "agri-feed-farmer-module-v1";
 const DEFAULT_REGION = "Gatenga Sector, Kicukiro District";
@@ -112,7 +117,7 @@ function createFarmRecord(ownerId, farm, overrides = {}) {
 
 function buildProfileFromUser(user) {
   const verificationStatus =
-    PROFILE_STATUS_BY_USER[user.id] || (user.role === "admin" ? "verified" : "pending");
+    PROFILE_STATUS_BY_USER[user.id] || (["admin", "extensionofficer"].includes(user.role) ? "verified" : "pending");
 
   return {
     userId: user.id,
@@ -520,11 +525,71 @@ function computeProfileCompleteness(profile, farms) {
   return Math.round((checks.filter(Boolean).length / checks.length) * 100);
 }
 
+function mergeBackendProfileIntoData(current, userId, profile) {
+  if (!profile) {
+    return current;
+  }
+
+  return {
+    ...current,
+    profiles: {
+      ...current.profiles,
+      [userId]: {
+        ...(current.profiles[userId] || {}),
+        ...profile,
+      },
+    },
+  };
+}
+
+function mergeBackendFarmsIntoData(current, userId, backendFarms) {
+  if (!Array.isArray(backendFarms)) {
+    return current;
+  }
+
+  const existingOwnerFarms = current.farms.filter((farm) => farm.ownerId === userId);
+  const backendFarmIds = new Set(backendFarms.map((farm) => farm.id));
+  const localOnlyFarms = existingOwnerFarms.filter((farm) => !backendFarmIds.has(farm.id));
+  const otherOwnerFarms = current.farms.filter((farm) => farm.ownerId !== userId);
+
+  return {
+    ...current,
+    farms: [...otherOwnerFarms, ...backendFarms, ...localOnlyFarms],
+  };
+}
+
+function mergeBackendRegistryIntoData(current, records) {
+  if (!Array.isArray(records) || !records.length) {
+    return current;
+  }
+
+  const nextProfiles = { ...current.profiles };
+  const nextFarms = current.farms.filter(
+    (farm) => !records.some((record) => record.userId === farm.ownerId)
+  );
+
+  records.forEach((record) => {
+    nextProfiles[record.userId] = {
+      ...(nextProfiles[record.userId] || {}),
+      ...record.profile,
+    };
+    nextFarms.push(...record.farms);
+  });
+
+  return {
+    ...current,
+    profiles: nextProfiles,
+    farms: nextFarms,
+  };
+}
+
 const FarmerDataContext = createContext(null);
 
 export function FarmerDataProvider({ children }) {
   const { user, updateCurrentUser } = useAuth();
   const [data, setData] = useState(() => loadFarmerData());
+  const [backendAdminRows, setBackendAdminRows] = useState([]);
+  const [backendAdminSummary, setBackendAdminSummary] = useState(null);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -537,46 +602,197 @@ export function FarmerDataProvider({ children }) {
     );
   }, [user?.id]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function syncBackendFarmerData() {
+      if (!user || user.role !== "farmer" || !isBackendSessionActive()) {
+        return;
+      }
+
+      try {
+        const currentOwnerFarms = data.farms.filter((farm) => farm.ownerId === user.id);
+        const [backendProfile, backendFarms] = await Promise.all([
+          phase1BackendService.farmers.me(),
+          phase1BackendService.farms.my(user.id, currentOwnerFarms),
+        ]);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setData((current) =>
+          mergeBackendFarmsIntoData(
+            mergeBackendProfileIntoData(current, user.id, backendProfile),
+            user.id,
+            backendFarms
+          )
+        );
+
+        const userProfile = mapBackendProfileToFrontendProfile({
+          user: {
+            id: user.id,
+            fullName: backendProfile.fullName || user.name,
+            email: backendProfile.email || user.email,
+            phone: backendProfile.contact || user.contact,
+          },
+          ...backendProfile,
+        });
+
+        await updateCurrentUser({
+          name: userProfile.fullName,
+          fullName: userProfile.fullName,
+          contact: userProfile.contact,
+          region: userProfile.region,
+          district: backendProfile.district || user.district,
+          sector: backendProfile.sector || user.sector,
+          experienceLevel: userProfile.experienceLevel,
+          primaryCrop: backendProfile.primaryCrop || user.primaryCrop,
+          verificationStatus: backendProfile.verificationStatus || user.verificationStatus,
+          profileCompleteness: backendProfile.profileCompleteness || user.profileCompleteness || 0,
+        });
+      } catch {
+        // Keep frontend-only local data active when the Phase 1 backend is unavailable.
+      }
+    }
+
+    syncBackendFarmerData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function syncBackendAdminData() {
+      if (!user || !["admin", "extensionofficer"].includes(user.role) || !isBackendSessionActive()) {
+        if (isMounted) {
+          setBackendAdminRows([]);
+          setBackendAdminSummary(null);
+        }
+        return;
+      }
+
+      try {
+        const [records, summary] = await Promise.all([
+          phase1BackendService.farmers.list(),
+          phase1BackendService.admin.dashboardSummary(),
+        ]);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setBackendAdminRows(records.map((record) => record.row));
+        setBackendAdminSummary(summary);
+        setData((current) => mergeBackendRegistryIntoData(current, records));
+      } catch {
+        if (isMounted) {
+          setBackendAdminRows([]);
+          setBackendAdminSummary(null);
+        }
+      }
+    }
+
+    syncBackendAdminData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id, user?.role]);
+
   const value = useMemo(() => {
     const currentProfile = user?.role === "farmer" ? data.profiles[user.id] : null;
     const currentFarms =
       user?.role === "farmer" ? data.farms.filter((farm) => farm.ownerId === user.id) : [];
+    const localAdminFarmerRows = authService
+      .bootstrap()
+      .filter((item) => item.role === "farmer")
+      .map((farmerUser) => {
+        const profile = data.profiles[farmerUser.id] || buildProfileFromUser(farmerUser);
+        const farms = data.farms.filter((farm) => farm.ownerId === farmerUser.id);
+        return {
+          userId: farmerUser.id,
+          initials: (profile.fullName || farmerUser.name || "UF")
+            .split(" ")
+            .map((part) => part[0])
+            .slice(0, 2)
+            .join("")
+            .toUpperCase(),
+          name: profile.fullName || farmerUser.name,
+          id: `#FRM-${farmerUser.id.slice(-5).toUpperCase()}`,
+          region: normalizeRegion(profile.region) || DEFAULT_REGION,
+          status: deriveAdminStatus(profile, farms),
+          joined: farmerUser.createdAt,
+          farmCount: farms.length,
+          completeness: computeProfileCompleteness(profile, farms),
+          profile,
+        };
+      });
+    const effectiveAdminFarmerRows =
+      ["admin", "extensionofficer"].includes(user?.role) && backendAdminRows.length
+        ? backendAdminRows
+        : localAdminFarmerRows;
 
     return {
       data,
+      adminDashboardSummary: backendAdminSummary,
       currentProfile,
       currentFarms,
       getProfileByUserId: (userId) => data.profiles[userId] || null,
       getFarmsByOwner: (ownerId) => data.farms.filter((farm) => farm.ownerId === ownerId),
+      loadFarmerProfileDetails: async (userId) => {
+        const localProfile = data.profiles[userId] || null;
+        const localFarms = data.farms.filter((farm) => farm.ownerId === userId);
+        const localRecord = {
+          userId,
+          profile: localProfile,
+          farms: localFarms,
+          row:
+            effectiveAdminFarmerRows.find((row) => row.userId === userId) ||
+            (localProfile
+              ? {
+                  userId,
+                  name: localProfile.fullName,
+                  region: localProfile.region,
+                  status: localProfile.verificationStatus,
+                  farmCount: localFarms.length,
+                  completeness: computeProfileCompleteness(localProfile, localFarms),
+                  profile: localProfile,
+                }
+              : null),
+        };
+
+        if (!["admin", "extensionofficer"].includes(user?.role) || !isBackendSessionActive()) {
+          return localRecord;
+        }
+
+        try {
+          const backendProfileId = data.profiles[userId]?.backendProfileId;
+          if (!backendProfileId) {
+            return localRecord;
+          }
+
+          const backendRecord = await phase1BackendService.farmers.getById(backendProfileId);
+          setData((current) => mergeBackendRegistryIntoData(current, [backendRecord]));
+          setBackendAdminRows((current) => {
+            const nextRows = current.filter((row) => row.userId !== userId);
+            nextRows.push(backendRecord.row);
+            return nextRows;
+          });
+          return backendRecord;
+        } catch {
+          return localRecord;
+        }
+      },
       getProfileCompleteness: (userId) =>
         computeProfileCompleteness(
           data.profiles[userId],
           data.farms.filter((farm) => farm.ownerId === userId)
         ),
-      adminFarmerRows: authService
-        .bootstrap()
-        .filter((item) => item.role === "farmer")
-        .map((farmerUser) => {
-          const profile = data.profiles[farmerUser.id] || buildProfileFromUser(farmerUser);
-          const farms = data.farms.filter((farm) => farm.ownerId === farmerUser.id);
-          return {
-            userId: farmerUser.id,
-            initials: (profile.fullName || farmerUser.name || "UF")
-              .split(" ")
-              .map((part) => part[0])
-              .slice(0, 2)
-              .join("")
-              .toUpperCase(),
-            name: profile.fullName || farmerUser.name,
-            id: `#FRM-${farmerUser.id.slice(-5).toUpperCase()}`,
-            region: normalizeRegion(profile.region) || DEFAULT_REGION,
-            status: deriveAdminStatus(profile, farms),
-            joined: farmerUser.createdAt,
-            farmCount: farms.length,
-            completeness: computeProfileCompleteness(profile, farms),
-            profile,
-          };
-        }),
+      adminFarmerRows: effectiveAdminFarmerRows,
       updateProfile: async (userId, updates) => {
         setData((current) => {
           const existingProfile = current.profiles[userId] || {};
@@ -592,9 +808,21 @@ export function FarmerDataProvider({ children }) {
           };
         });
 
+        const existingProfile = data.profiles[userId] || {};
+
+        if (user?.id === userId && isBackendSessionActive()) {
+          try {
+            const backendProfile = await phase1BackendService.farmers.updateMe(updates, existingProfile);
+            setData((current) => mergeBackendProfileIntoData(current, userId, backendProfile));
+          } catch {
+            // Keep local profile data for frontend demo mode when backend update is unavailable.
+          }
+        }
+
         if (user?.id === userId) {
           const authUpdates = {};
           if (updates.fullName) authUpdates.name = updates.fullName;
+          if (updates.fullName) authUpdates.fullName = updates.fullName;
           if (updates.email) authUpdates.email = updates.email;
           if (updates.contact) authUpdates.contact = updates.contact;
           if (updates.region) authUpdates.region = updates.region;
@@ -605,7 +833,8 @@ export function FarmerDataProvider({ children }) {
           }
         }
       },
-      saveFarm: (ownerId, farmInput) => {
+      saveFarm: async (ownerId, farmInput) => {
+        let localFarmId = farmInput.id;
         let savedFarmId = farmInput.id;
 
         setData((current) => {
@@ -619,6 +848,7 @@ export function FarmerDataProvider({ children }) {
                 })
               : createFarmRecord(ownerId, farmInput);
 
+          localFarmId = nextFarm.id;
           savedFarmId = nextFarm.id;
 
           return {
@@ -629,7 +859,148 @@ export function FarmerDataProvider({ children }) {
           };
         });
 
+        if (user?.id === ownerId && user.role === "farmer" && isBackendSessionActive()) {
+          try {
+            const existingFarm =
+              data.farms.find((farm) => farm.id === localFarmId) ||
+              data.farms.find((farm) => farm.id === savedFarmId) ||
+              farmInput;
+            const syncedFarm = farmInput.id
+              ? await phase1BackendService.farms.update(ownerId, farmInput.id, farmInput, existingFarm)
+              : await phase1BackendService.farms.create(ownerId, farmInput, existingFarm);
+
+            let refreshedHistory = syncedFarm.history || [];
+            const historyRows = Array.isArray(farmInput.history) ? farmInput.history : [];
+            if (historyRows.length) {
+              const existingHistory = await phase1BackendService.cropHistory.listByFarm(syncedFarm.id);
+              await Promise.all(existingHistory.map((entry) => phase1BackendService.cropHistory.remove(entry.id)));
+              await Promise.all(
+                historyRows
+                  .filter((row) => row?.crop)
+                  .map((row) =>
+                    phase1BackendService.cropHistory.create(syncedFarm.id, {
+                      ...row,
+                      cropName: row.crop,
+                    })
+                  )
+              );
+              refreshedHistory = await phase1BackendService.cropHistory.listByFarm(syncedFarm.id);
+            }
+
+            savedFarmId = syncedFarm.id;
+            setData((current) => {
+              const nextFarms = current.farms
+                .filter((farm) => farm.id !== localFarmId)
+                .map((farm) =>
+                  farm.id === savedFarmId
+                    ? {
+                        ...syncedFarm,
+                        history: refreshedHistory,
+                      }
+                    : farm
+                );
+
+              if (!nextFarms.some((farm) => farm.id === syncedFarm.id)) {
+                nextFarms.push({
+                  ...syncedFarm,
+                  history: refreshedHistory,
+                });
+              }
+
+              return {
+                ...current,
+                farms: nextFarms,
+              };
+            });
+          } catch {
+            // Keep locally saved farm record when backend save is not available.
+          }
+        }
+
         return savedFarmId;
+      },
+      syncFarmCropHistory: async (farmId, historyRows = []) => {
+        const farm = data.farms.find((item) => item.id === farmId);
+
+        if (!farm) {
+          return [];
+        }
+
+        const sanitizedRows = historyRows
+          .filter((row) => row?.crop || row?.cropName)
+          .map((row) => ({
+            ...row,
+            crop: row.crop || row.cropName || "",
+            season: row.season || `${new Date().getFullYear()}`,
+            year:
+              row.year ||
+              Number(String(row.season || "").split(" ").pop()) ||
+              new Date().getFullYear(),
+            yieldAmount:
+              row.yieldAmount !== undefined && row.yieldAmount !== null
+                ? row.yieldAmount
+                : Number.parseFloat(String(row.yield || "").replace(/[^0-9.]/g, "")) || null,
+            yieldUnit:
+              row.yieldUnit ||
+              (String(row.yield || "").replace(/[0-9.\s]/g, "").trim() || "t/ha"),
+            notes: row.notes || row.yield || "",
+          }));
+
+        setData((current) => ({
+          ...current,
+          farms: current.farms.map((item) =>
+            item.id === farmId
+              ? {
+                  ...item,
+                  history: sanitizedRows.map((row, index) => ({
+                    id: row.id || `history-${Date.now()}-${index}`,
+                    crop: row.crop,
+                    season: row.season,
+                    yield:
+                      row.yield ||
+                      (row.yieldAmount !== null && row.yieldAmount !== undefined
+                        ? `${row.yieldAmount} ${row.yieldUnit || ""}`.trim()
+                        : ""),
+                    challenges: row.challenges || "",
+                    year: row.year,
+                    yieldAmount: row.yieldAmount,
+                    yieldUnit: row.yieldUnit,
+                    notes: row.notes || "",
+                  })),
+                }
+              : item
+          ),
+        }));
+
+        if (!isBackendSessionActive() || user?.role !== "farmer") {
+          return sanitizedRows;
+        }
+
+        try {
+          const existingHistory = await phase1BackendService.cropHistory.listByFarm(farmId);
+          await Promise.all(existingHistory.map((entry) => phase1BackendService.cropHistory.remove(entry.id)));
+          await Promise.all(
+            sanitizedRows.map((row) => phase1BackendService.cropHistory.create(farmId, row))
+          );
+          const refreshedHistory = await phase1BackendService.cropHistory.listByFarm(farmId);
+
+          setData((current) => ({
+            ...current,
+            farms: current.farms.map((item) =>
+              item.id === farmId
+                ? {
+                    ...item,
+                    history: refreshedHistory,
+                    updatedAt: new Date().toISOString(),
+                  }
+                : item
+            ),
+          }));
+
+          return refreshedHistory;
+        } catch {
+          return sanitizedRows;
+        }
       },
       saveBulkRegistration: (ownerId, payload) => {
         const batchId = `bulk-${Date.now()}`;
@@ -668,7 +1039,7 @@ export function FarmerDataProvider({ children }) {
 
         return createdFarms.map((farm) => farm.id);
       },
-      bulkOnboardFarmers: (records, approvedBy = "Administrator") => {
+      bulkOnboardFarmers: async (records, approvedBy = "Administrator") => {
         const createdUsers = [];
 
         setData((current) => {
@@ -736,6 +1107,75 @@ export function FarmerDataProvider({ children }) {
           };
         });
 
+        if (["admin", "extensionofficer"].includes(user?.role) && isBackendSessionActive()) {
+          try {
+            const backendRecords = [];
+
+            for (const [index, record] of records.entries()) {
+              const registration = await phase1BackendService.auth.registerFarmerForAdmin({
+                fullName: record.fullName,
+                email: record.email,
+                contact: record.contact,
+                phone: record.contact,
+                region: record.region,
+                experienceLevel: record.experienceLevel,
+                primaryCrop: record.primaryCrop,
+                password: record.password || "Farmer@123",
+              });
+
+              if (!registration?.user?.id || !registration?.token) {
+                continue;
+              }
+
+              const starterFarm = await phase1BackendService.farms.createWithToken(
+                registration.user.id,
+                {
+                  name: record.farmName || `${record.fullName}'s Plot`,
+                  plotLabel: record.plotLabel || "Main Plot",
+                  sizeHectares: record.sizeHectares || 2 + index,
+                  landType: record.landType || "Loamy",
+                  region: record.region || DEFAULT_REGION,
+                  irrigationType: record.irrigationType || "Drip Irrigation",
+                  primaryCrop: record.primaryCrop || "Maize",
+                  soilType: record.landType || "Loamy",
+                  cropStage: record.cropStage || "Vegetative",
+                  ownershipType: record.plotLabel || "Farmer managed",
+                  location: {
+                    lat: Number(record.location?.lat || -1.9983),
+                    lng: Number(record.location?.lng || 30.1038),
+                    label: record.location?.label || record.region || DEFAULT_REGION,
+                  },
+                  history: Array.isArray(record.history) ? record.history : [],
+                },
+                registration.token
+              );
+
+              const backendRecord = await phase1BackendService.farmers.getById(
+                registration.user.farmerProfileId
+              );
+
+              backendRecords.push({
+                ...backendRecord,
+                farms: backendRecord.farms?.length ? backendRecord.farms : [starterFarm],
+              });
+            }
+
+            if (backendRecords.length) {
+              const summary = await phase1BackendService.admin.dashboardSummary();
+              setBackendAdminSummary(summary);
+              setBackendAdminRows((current) => {
+                const nextRows = current.filter(
+                  (row) => !backendRecords.some((record) => record.userId === row.userId)
+                );
+                return [...nextRows, ...backendRecords.map((record) => record.row)];
+              });
+              setData((current) => mergeBackendRegistryIntoData(current, backendRecords));
+            }
+          } catch {
+            // Keep local bulk onboarding records when backend workflow is unavailable.
+          }
+        }
+
         return createdUsers;
       },
       submitProfileForApproval: (userId) => {
@@ -751,7 +1191,7 @@ export function FarmerDataProvider({ children }) {
           },
         }));
       },
-      approveProfile: (userId, approvedBy = "Administrator") => {
+      approveProfile: async (userId, approvedBy = "Administrator") => {
         setData((current) => ({
           ...current,
           profiles: {
@@ -773,8 +1213,24 @@ export function FarmerDataProvider({ children }) {
               : farm
           ),
         }));
+
+        if (["admin", "extensionofficer"].includes(user?.role) && isBackendSessionActive()) {
+          try {
+            const updated = await phase1BackendService.farmers.approve(
+              data.profiles[userId]?.backendProfileId || userId
+            );
+            const summary = await phase1BackendService.admin.dashboardSummary();
+            setBackendAdminRows((current) =>
+              current.map((row) => (row.userId === userId ? updated.row : row))
+            );
+            setBackendAdminSummary(summary);
+            setData((current) => mergeBackendRegistryIntoData(current, [updated]));
+          } catch {
+            // Keep local approval result in demo mode fallback.
+          }
+        }
       },
-      rejectProfile: (userId, rejectedBy = "Administrator") => {
+      rejectProfile: async (userId, rejectedBy = "Administrator") => {
         setData((current) => ({
           ...current,
           profiles: {
@@ -796,8 +1252,25 @@ export function FarmerDataProvider({ children }) {
               : farm
           ),
         }));
+
+        if (["admin", "extensionofficer"].includes(user?.role) && isBackendSessionActive()) {
+          try {
+            const updated = await phase1BackendService.farmers.reject(
+              data.profiles[userId]?.backendProfileId || userId,
+              `${rejectedBy} rejected this farmer profile.`
+            );
+            const summary = await phase1BackendService.admin.dashboardSummary();
+            setBackendAdminRows((current) =>
+              current.map((row) => (row.userId === userId ? updated.row : row))
+            );
+            setBackendAdminSummary(summary);
+            setData((current) => mergeBackendRegistryIntoData(current, [updated]));
+          } catch {
+            // Keep local rejection result in demo mode fallback.
+          }
+        }
       },
-      deactivateProfile: (userId) => {
+      deactivateProfile: async (userId) => {
         setData((current) => ({
           ...current,
           profiles: {
@@ -808,8 +1281,24 @@ export function FarmerDataProvider({ children }) {
             },
           },
         }));
+
+        if (["admin", "extensionofficer"].includes(user?.role) && isBackendSessionActive()) {
+          try {
+            const updated = await phase1BackendService.farmers.deactivate(
+              data.profiles[userId]?.backendProfileId || userId
+            );
+            const summary = await phase1BackendService.admin.dashboardSummary();
+            setBackendAdminRows((current) =>
+              current.map((row) => (row.userId === userId ? updated.row : row))
+            );
+            setBackendAdminSummary(summary);
+            setData((current) => mergeBackendRegistryIntoData(current, [updated]));
+          } catch {
+            // Keep local deactivation result in demo mode fallback.
+          }
+        }
       },
-      reactivateProfile: (userId) => {
+      reactivateProfile: async (userId) => {
         setData((current) => ({
           ...current,
           profiles: {
@@ -821,21 +1310,33 @@ export function FarmerDataProvider({ children }) {
             },
           },
         }));
+
+        if (["admin", "extensionofficer"].includes(user?.role) && isBackendSessionActive()) {
+          try {
+            const updated = await phase1BackendService.farmers.reactivate(
+              data.profiles[userId]?.backendProfileId || userId
+            );
+            const summary = await phase1BackendService.admin.dashboardSummary();
+            setBackendAdminRows((current) =>
+              current.map((row) => (row.userId === userId ? updated.row : row))
+            );
+            setBackendAdminSummary(summary);
+            setData((current) => mergeBackendRegistryIntoData(current, [updated]));
+          } catch {
+            // Keep local reactivation result in demo mode fallback.
+          }
+        }
       },
       getRegionalSummary: () => {
-        const rows = authService
-          .bootstrap()
-          .filter((item) => item.role === "farmer")
-          .map((farmerUser) => {
-            const profile = data.profiles[farmerUser.id] || buildProfileFromUser(farmerUser);
-            const farms = data.farms.filter((farm) => farm.ownerId === farmerUser.id);
-            return {
-              region: profile.region || DEFAULT_REGION,
-              farmerId: farmerUser.id,
-              farmCount: farms.length,
-              verifiedFarmCount: farms.filter((farm) => farm.verificationStatus === "verified").length,
-            };
-          });
+        const rows = effectiveAdminFarmerRows.map((row) => {
+          const farms = data.farms.filter((farm) => farm.ownerId === row.userId);
+          return {
+            region: row.region || DEFAULT_REGION,
+            farmerId: row.userId,
+            farmCount: farms.length || row.farmCount || 0,
+            verifiedFarmCount: farms.filter((farm) => farm.verificationStatus === "verified").length,
+          };
+        });
 
         const regionMap = new Map();
         rows.forEach((row) => {
@@ -857,7 +1358,7 @@ export function FarmerDataProvider({ children }) {
         }));
       },
     };
-  }, [data, updateCurrentUser, user]);
+  }, [backendAdminRows, backendAdminSummary, data, updateCurrentUser, user]);
 
   return <FarmerDataContext.Provider value={value}>{children}</FarmerDataContext.Provider>;
 }

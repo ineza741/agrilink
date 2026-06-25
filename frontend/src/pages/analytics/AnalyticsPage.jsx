@@ -19,10 +19,13 @@ import {
   TrendingUp,
   UsersRound,
   Wallet,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import IconActionButton from "../../components/common/IconActionButton";
 import { useAuth } from "../../context/AuthContext";
 import { useFarmerData } from "../../context/FarmerDataContext";
+import { isBackendSessionActive, phase1BackendService } from "../../services/phase1Backend";
 import { copyText, downloadCsvFile, downloadJsonFile, downloadTextFile } from "../../utils/actions";
 
 const statCards = [
@@ -53,6 +56,7 @@ const methodologyCards = [
 ];
 
 const ANALYTICS_STORAGE_KEY = "agri-feed-analytics-module-v1";
+const ADMIN_REPORTS_STORAGE_KEY = "agri-feed-admin-reports-module-v2";
 const DEMO_MODE = true;
 
 const reportTemplates = [
@@ -65,7 +69,72 @@ const reportTemplates = [
   "Market Intelligence Report",
 ];
 
+const adminReportTemplates = [
+  "Government Report",
+  "NGO Impact Report",
+  "Farmer Performance Report",
+  "Research Dataset",
+  "Market Intelligence Report",
+  "Pest Outbreak Analysis",
+];
+
 const chartFilters = ["Monthly", "Quarterly", "Seasonal", "Annual"];
+
+const complianceStandards = ["MINAGRI", "RAB", "FAO", "NGO"];
+
+const adminSummaryCards = [
+  { title: "National Yield Coverage", value: "184,200 t", note: "Demo aggregated output", icon: Leaf },
+  { title: "Farmer Adoption", value: "4,860", note: "Active demo farmers", icon: UsersRound },
+  { title: "District Coverage", value: "18", note: "Across Rwanda demo zones", icon: Map },
+  { title: "AI Advisory Accuracy", value: "92.8%", note: "Validated recommendation quality", icon: ShieldCheck },
+];
+
+const sustainabilityDashboard = [
+  { label: "Sustainability Score", value: 81, note: "National demo sustainability index" },
+  { label: "Water Use Efficiency", value: 74, note: "Efficient use across irrigated plots" },
+  { label: "Carbon Footprint", value: 63, note: "Lower is better; converted to score" },
+  { label: "Climate Resilience Index", value: 78, note: "Ability to adapt to rainfall variability" },
+];
+
+const aiRecommendationAnalytics = [
+  { label: "Recommendations Issued", value: "12,480" },
+  { label: "Accepted", value: "8,965" },
+  { label: "Rejected", value: "2,114" },
+  { label: "Success Rate", value: "71.8%" },
+  { label: "Average Confidence", value: "86.4%" },
+];
+
+const comparativeAnalyticsSeed = [
+  { label: "Region vs Region", left: "Bugesera: 4.8 t/ha", right: "Musanze: 5.4 t/ha", trend: "Increasing" },
+  { label: "Crop vs Crop", left: "Maize ROI: 24%", right: "Beans ROI: 19%", trend: "Stable" },
+  { label: "Yield Comparison", left: "District avg: 5.1 t/ha", right: "Platform avg: 5.6 t/ha", trend: "Increasing" },
+  { label: "ROI Comparison", left: "Smallholder: 18%", right: "Cooperative: 27%", trend: "Increasing" },
+];
+
+const farmerAdoptionSeed = [
+  { label: "Registered Farmers", value: "6,420" },
+  { label: "Verified Farmers", value: "5,108" },
+  { label: "Active Farmers", value: "4,860" },
+  { label: "Dormant Farmers", value: "462" },
+];
+
+const geographicCoverageSeed = [
+  { label: "District Coverage", value: "18 districts", note: "Demo operational footprint" },
+  { label: "Sector Coverage", value: "64 sectors", note: "Extension support available" },
+  { label: "Farmer Density", value: "357 farmers / district", note: "Average active farmer density" },
+];
+
+const pestDiseaseAnalyticsSeed = [
+  { label: "Top Pest Risks", value: "Fall Armyworm, Aphids, Late Blight" },
+  { label: "Outbreak Frequency", value: "2.6 outbreak events / month" },
+  { label: "Treatment Success Rate", value: "77%" },
+];
+
+const weatherImpactAnalyticsSeed = [
+  { label: "Rainfall vs Yield", value: "Positive correlation in long-rain season", note: "Yield improves above 18 mm weekly rainfall" },
+  { label: "Temperature vs Yield", value: "Heat pressure reduces maize productivity", note: "Risk rises above 31°C max temp" },
+  { label: "Drought Impact", value: "11% average projected yield loss", note: "Highest in Bugesera dry-window farms" },
+];
 
 const reportTemplateDescriptions = {
   "Operations Summary": "Summarizes field productivity, operational efficiency, and recent farm activities for the selected period.",
@@ -76,6 +145,28 @@ const reportTemplateDescriptions = {
   "Irrigation Report": "Reviews water efficiency, irrigation-linked performance, and likely scheduling impact on yields.",
   "Market Intelligence Report": "Connects farm performance with market opportunity, price direction, and selling readiness.",
 };
+
+const analyticsIconMap = {
+  Activity,
+  AlertTriangle,
+  BarChart3,
+  Clock3,
+  Droplets,
+  Leaf,
+  Map,
+  ShieldCheck,
+  ShoppingCart,
+  Sparkles,
+  Sprout,
+  TrendingDown,
+  TrendingUp,
+  UsersRound,
+  Wallet,
+};
+
+function resolveAnalyticsIcon(iconName, fallback = BarChart3) {
+  return analyticsIconMap[iconName] || fallback;
+}
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
@@ -238,18 +329,240 @@ function buildAnalyticsData({ farm, cropType, dateRange, reportTemplate, chartFi
 }
 
 function AdminAnalyticsView() {
+  const { user } = useAuth();
+  const stored = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem(ADMIN_REPORTS_STORAGE_KEY) || "{}");
+    } catch {
+      return {};
+    }
+  }, []);
   const [selectedMethodology, setSelectedMethodology] = useState(
     methodologyCards.find((item) => item.active)?.title || methodologyCards[0].title
   );
   const [exportSelection, setExportSelection] = useState(exportChecks);
+  const [selectedTemplate, setSelectedTemplate] = useState(stored.selectedTemplate || adminReportTemplates[0]);
+  const [selectedCompliance, setSelectedCompliance] = useState(stored.selectedCompliance || "MINAGRI");
+  const [selectedComparison, setSelectedComparison] = useState(stored.selectedComparison || "Region vs Region");
+  const [selectedExportFormat, setSelectedExportFormat] = useState(stored.selectedExportFormat || "CSV");
+  const [recentExports, setRecentExports] = useState(
+    stored.recentExports || [
+      { name: "national_yield_q3.pdf", type: "PDF", time: "2m ago" },
+      { name: "ngo-impact-rubavu.csv", type: "CSV", time: "18m ago" },
+    ]
+  );
+  const [backendDashboard, setBackendDashboard] = useState(null);
+  const [backendHistory, setBackendHistory] = useState([]);
+  const [isBackendLoading, setIsBackendLoading] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
-  const exportReportBundle = (format) => {
+  useEffect(() => {
+    localStorage.setItem(
+      ADMIN_REPORTS_STORAGE_KEY,
+      JSON.stringify({
+        selectedTemplate,
+        selectedCompliance,
+        selectedComparison,
+        selectedExportFormat,
+        recentExports,
+      })
+    );
+  }, [recentExports, selectedCompliance, selectedComparison, selectedExportFormat, selectedTemplate]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadBackendAnalytics() {
+      if (!isBackendSessionActive() || !["admin", "extensionofficer"].includes(user?.role)) {
+        return;
+      }
+
+      setIsBackendLoading(true);
+      try {
+        const [dashboard, history] = await Promise.all([
+          phase1BackendService.analytics.adminDashboard({
+            reportTemplate: selectedTemplate,
+            methodology: selectedMethodology,
+            selectedComparison,
+            selectedCompliance,
+            selectedExportFormat,
+          }),
+          phase1BackendService.analytics.adminHistory(),
+        ]);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setBackendDashboard(dashboard || null);
+        setBackendHistory(Array.isArray(history) ? history : []);
+        if (Array.isArray(history) && history.length) {
+          setRecentExports(
+            history.slice(0, 6).map((entry) => ({
+              name: entry.fileName || `${entry.reportTemplate}.${entry.exportFormat}`,
+              type: String(entry.exportFormat || "").toUpperCase(),
+              time: entry.timeLabel || "Just now",
+            })),
+          );
+        }
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+        setBackendDashboard(null);
+        setBackendHistory([]);
+      } finally {
+        if (isMounted) {
+          setIsBackendLoading(false);
+        }
+      }
+    }
+
+    loadBackendAnalytics();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedComparison, selectedCompliance, selectedExportFormat, selectedMethodology, selectedTemplate, user?.role]);
+
+  const executiveSummary = useMemo(() => {
+    if (backendDashboard?.executiveSummary) {
+      return backendDashboard.executiveSummary;
+    }
+    return `AI Executive Summary: ${selectedTemplate} shows ${adminSummaryCards[1].value} active farmers across ${geographicCoverageSeed[0].value}. Sustainability score is ${sustainabilityDashboard[0].value}/100, AI recommendation success rate is ${aiRecommendationAnalytics[3].value}, and the dominant pest pressure remains ${pestDiseaseAnalyticsSeed[0].value}. Recommended action: strengthen drought-response irrigation planning in Bugesera and scale verified advisory adoption in Musanze and Kicukiro.`;
+  }, [backendDashboard, selectedTemplate]);
+
+  const dashboardSummaryCards = backendDashboard?.summaryCards || adminSummaryCards;
+  const dashboardSustainability = backendDashboard?.sustainabilityDashboard || sustainabilityDashboard;
+  const dashboardAiAnalytics =
+    backendDashboard?.aiRecommendationAnalytics || aiRecommendationAnalytics;
+  const dashboardComparative = backendDashboard?.comparativeAnalytics || comparativeAnalyticsSeed;
+  const dashboardFarmerAdoption = backendDashboard?.farmerAdoption || farmerAdoptionSeed;
+  const dashboardGeographicCoverage =
+    backendDashboard?.geographicCoverage || geographicCoverageSeed;
+  const dashboardPestAnalytics =
+    backendDashboard?.pestDiseaseAnalytics || pestDiseaseAnalyticsSeed;
+  const dashboardWeatherImpact =
+    backendDashboard?.weatherImpactAnalytics || weatherImpactAnalyticsSeed;
+  const dashboardSourceLabels =
+    backendDashboard?.sourceLabels ||
+    [
+      isBackendSessionActive() && ["admin", "extensionofficer"].includes(user?.role)
+        ? "Backend Analytics"
+        : "Demo Analytics",
+      "Local Data",
+      backendHistory.length ? "Persisted Export History" : "Export Ready",
+    ];
+  const recentExportItems = useMemo(() => {
+    if (backendHistory.length) {
+      return backendHistory.slice(0, 6).map((entry) => ({
+        name: entry.fileName || `${entry.reportTemplate}.${entry.exportFormat}`,
+        type: String(entry.exportFormat || "").toUpperCase(),
+        time: entry.timeLabel || "Just now",
+        template: entry.reportTemplate || "System Report",
+        compliance: entry.compliance || "N/A",
+        createdAt: entry.dateLabel || "N/A",
+      }));
+    }
+
+    if (Array.isArray(backendDashboard?.recentExports) && backendDashboard.recentExports.length) {
+      return backendDashboard.recentExports.slice(0, 6).map((entry) => ({
+        name: entry.name,
+        type: entry.type,
+        time: entry.time,
+        template: selectedTemplate,
+        compliance: selectedCompliance,
+        createdAt: entry.time,
+      }));
+    }
+
+    return recentExports.slice(0, 6).map((entry) => ({
+      ...entry,
+      template: selectedTemplate,
+      compliance: selectedCompliance,
+      createdAt: entry.time,
+    }));
+  }, [backendDashboard?.recentExports, backendHistory, recentExports, selectedCompliance, selectedTemplate]);
+  const reportHistoryRows = useMemo(() => {
+    if (backendHistory.length) {
+      return backendHistory.map((entry) => ({
+        id: entry.id,
+        fileName: entry.fileName || `${entry.reportTemplate}.${entry.exportFormat}`,
+        template: entry.reportTemplate || "System Report",
+        format: String(entry.exportFormat || "").toUpperCase(),
+        compliance: entry.compliance || "N/A",
+        createdAt: entry.dateLabel || entry.timeLabel || "Just now",
+      }));
+    }
+
+    return recentExportItems.map((entry, index) => ({
+      id: `${entry.name}-${index}`,
+      fileName: entry.name,
+      template: entry.template,
+      format: entry.type,
+      compliance: entry.compliance,
+      createdAt: entry.createdAt,
+    }));
+  }, [backendHistory, recentExportItems]);
+
+  const exportReportBundle = async (format) => {
     const payload = {
       generatedAt: new Date().toISOString(),
       methodology: selectedMethodology,
+      reportTemplate: selectedTemplate,
+      complianceStandard: selectedCompliance,
+      selectedExportFormat: format,
       includedDataPoints: exportSelection.filter((item) => item.checked).map((item) => item.label),
-      metrics: statCards,
+      metrics: dashboardSummaryCards,
+      sustainabilityDashboard: dashboardSustainability,
+      aiRecommendationAnalytics: dashboardAiAnalytics,
+      comparativeAnalytics: dashboardComparative,
+      farmerAdoption: dashboardFarmerAdoption,
+      geographicCoverage: dashboardGeographicCoverage,
+      pestDiseaseAnalytics: dashboardPestAnalytics,
+      weatherImpactAnalytics: dashboardWeatherImpact,
+      executiveSummary,
+      demoMode: DEMO_MODE && !backendDashboard,
     };
+
+    setSelectedExportFormat(format.toUpperCase());
+    if (isBackendSessionActive() && ["admin", "extensionofficer"].includes(user?.role)) {
+      try {
+        const exportRecord = await phase1BackendService.analytics.exportAdmin({
+          format,
+          reportTemplate: selectedTemplate,
+          methodology: selectedMethodology,
+          selectedComparison,
+          selectedCompliance,
+        });
+
+        if (exportRecord) {
+          setBackendHistory((current) => [exportRecord, ...current].slice(0, 20));
+          setRecentExports((current) => [
+            {
+              name:
+                exportRecord.fileName ||
+                `${selectedTemplate.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.${format}`,
+              type: String(exportRecord.exportFormat || format).toUpperCase(),
+              time: exportRecord.timeLabel || "Just now",
+            },
+            ...current.slice(0, 4),
+          ]);
+          payload.backendExport = exportRecord;
+        }
+      } catch {
+        // Keep frontend-only export behavior when backend export persistence is unavailable.
+      }
+    } else {
+      setRecentExports((current) => [
+        {
+          name: `${selectedTemplate.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.${format === "powerbi" ? "pbix.txt" : format === "gis" ? "geojson" : format === "dataset" ? "json" : format === "excel" ? "csv" : format === "json" ? "json" : "txt"}`,
+          type: format.toUpperCase(),
+          time: "Just now",
+        },
+        ...current.slice(0, 4),
+      ]);
+    }
 
     if (format === "json") {
       downloadJsonFile("system-reports-export.json", payload);
@@ -259,14 +572,39 @@ function AdminAnalyticsView() {
     if (format === "excel") {
       downloadCsvFile("system-reports-export.csv", [
         ["Metric", "Value", "Note"],
-        ...statCards.map((card) => [card.title, card.value, card.note]),
+        ...dashboardSummaryCards.map((card) => [card.title, card.value, card.note]),
       ]);
+      return;
+    }
+
+    if (format === "gis") {
+      downloadJsonFile("regional-coverage.geojson", {
+        type: "FeatureCollection",
+        features: [
+          { type: "Feature", properties: { district: "Kicukiro District", farmerDensity: "420 farmers / district" }, geometry: { type: "Point", coordinates: [30.101, -1.97] } },
+          { type: "Feature", properties: { district: "Bugesera District", farmerDensity: "335 farmers / district" }, geometry: { type: "Point", coordinates: [30.218, -2.09] } },
+          { type: "Feature", properties: { district: "Musanze District", farmerDensity: "388 farmers / district" }, geometry: { type: "Point", coordinates: [29.634, -1.501] } },
+        ],
+      });
+      return;
+    }
+
+    if (format === "powerbi") {
+      downloadTextFile(
+        "power-bi-export-instructions.txt",
+        `Power BI Export Bundle\n\nTemplate: ${selectedTemplate}\nCompliance: ${selectedCompliance}\nMethodology: ${selectedMethodology}\n\nExecutive Summary:\n${executiveSummary}\n\nUse the exported CSV/JSON bundle as the Power BI import source for this frontend-only demo.`
+      );
+      return;
+    }
+
+    if (format === "dataset") {
+      downloadJsonFile("research-dataset.json", payload);
       return;
     }
 
     downloadTextFile(
       "system-reports-export.txt",
-      `System-Wide Reports & Export\nGenerated: ${payload.generatedAt}\nMethodology: ${selectedMethodology}\n\nIncluded:\n- ${payload.includedDataPoints.join("\n- ")}`
+      `System-Wide Reports & Export\nGenerated: ${payload.generatedAt}\nMethodology: ${selectedMethodology}\nTemplate: ${selectedTemplate}\nCompliance: ${selectedCompliance}\n\nExecutive Summary:\n${executiveSummary}\n\nIncluded:\n- ${payload.includedDataPoints.join("\n- ")}`
     );
   };
 
@@ -276,13 +614,40 @@ function AdminAnalyticsView() {
         <div className="page-title-block prototype-admin-reports-title">
           <h1>System-Wide Reports &amp; Export</h1>
           <p>Aggregated platform intelligence and government compliance reporting tools.</p>
+          <div className="prototype-analytics-source-strip">
+            {dashboardSourceLabels.map((label, index) => (
+              <span
+                key={label}
+                className={`prototype-source-pill ${index === 0 ? "green" : index === 1 ? "blue" : "amber"}`}
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+          <div className="prototype-admin-report-status">
+            <div className="prototype-admin-report-status-card">
+              <span>Active Compliance</span>
+              <strong>{selectedCompliance}</strong>
+              <small>{backendDashboard ? "Backend-aligned reporting profile" : "Frontend demo reporting profile"}</small>
+            </div>
+            <div className="prototype-admin-report-status-card">
+              <span>Export History</span>
+              <strong>{reportHistoryRows.length}</strong>
+              <small>{backendHistory.length ? "Persisted backend export records" : "Local recent export activity"}</small>
+            </div>
+            <div className="prototype-admin-report-status-card">
+              <span>Last Refresh</span>
+              <strong>{backendDashboard?.generatedAt ? new Date(backendDashboard.generatedAt).toLocaleString("en-GB") : "Demo session"}</strong>
+              <small>{isBackendLoading ? "Refreshing backend intelligence..." : "Reporting data ready"}</small>
+            </div>
+          </div>
         </div>
 
         <div className="prototype-admin-reports-actions">
           <button
             type="button"
             className="prototype-admin-secondary-button"
-            onClick={() => downloadJsonFile("system-report-history.json", statCards)}
+            onClick={() => setIsHistoryOpen(true)}
           >
             <Clock3 size={15} />
             <span>View History</span>
@@ -293,18 +658,18 @@ function AdminAnalyticsView() {
             onClick={() =>
               downloadTextFile(
                 "ai-insight-summary.txt",
-                `AI Insight Summary\n\nTop adoption rate: ${statCards[1].value}\nAdvisory accuracy: ${statCards[3].value}\nActive regions: ${statCards[2].value}`
+                `AI Insight Summary\n\n${executiveSummary}\n\nAI recommendation acceptance: ${dashboardAiAnalytics[1].value}\nAverage confidence: ${dashboardAiAnalytics[4].value}\nDistrict coverage: ${dashboardGeographicCoverage[0].value}`
               )
             }
           >
             <Sparkles size={15} />
-            <span>Generate AI Insight</span>
+            <span>Generate AI Summary</span>
           </button>
         </div>
 
         <div className="prototype-admin-stat-grid">
-          {statCards.map((card) => {
-            const Icon = card.icon;
+          {dashboardSummaryCards.map((card) => {
+            const Icon = typeof card.icon === "string" ? resolveAnalyticsIcon(card.icon, Leaf) : card.icon;
             return (
               <article key={card.title} className="prototype-admin-stat-card">
                 <div className="prototype-admin-stat-head">
@@ -324,7 +689,7 @@ function AdminAnalyticsView() {
           <div className="prototype-admin-report-main">
             <article className="prototype-panel prototype-admin-generator-card">
               <div className="prototype-admin-section-head">
-                <h2>Generate Government Report</h2>
+                <h2>Generate Reports &amp; Data Export</h2>
               </div>
 
               <div className="prototype-admin-form-grid">
@@ -338,11 +703,47 @@ function AdminAnalyticsView() {
                 </label>
 
                 <label>
+                  <span>Report Template</span>
+                  <select value={selectedTemplate} onChange={(event) => setSelectedTemplate(event.target.value)}>
+                    {adminReportTemplates.map((template) => (
+                      <option key={template} value={template}>
+                        {template}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
                   <span>Region Scope</span>
                   <select defaultValue="All National Regions">
                     <option>All National Regions</option>
-                    <option>Northern Regions</option>
-                    <option>Eastern Regions</option>
+                    <option>Kigali Coverage</option>
+                    <option>Eastern Province</option>
+                    <option>Northern Province</option>
+                    <option>Southern Province</option>
+                    <option>Western Province</option>
+                  </select>
+                </label>
+
+                <label>
+                  <span>Compliance Reporting</span>
+                  <select value={selectedCompliance} onChange={(event) => setSelectedCompliance(event.target.value)}>
+                    {complianceStandards.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  <span>Comparative View</span>
+                  <select value={selectedComparison} onChange={(event) => setSelectedComparison(event.target.value)}>
+                    {dashboardComparative.map((item) => (
+                      <option key={item.label} value={item.label}>
+                        {item.label}
+                      </option>
+                    ))}
                   </select>
                 </label>
               </div>
@@ -365,14 +766,14 @@ function AdminAnalyticsView() {
               </div>
 
               <div className="prototype-admin-generator-footer">
-                <span>Compliant with ISO 31030:2021 Reporting Standards</span>
+                <span>{DEMO_MODE ? "Demo Mode · LocalStorage reporting workflow" : "Connected reporting workflow"}</span>
                 <button
                   type="button"
                   className="prototype-admin-dark-button"
                   onClick={() =>
                     downloadTextFile(
                       "government-report-preview.txt",
-                      `Government Report Preview\n\nMethodology: ${selectedMethodology}\nMetrics:\n- ${statCards.map((card) => `${card.title}: ${card.value} (${card.note})`).join("\n- ")}`
+                      `${selectedTemplate} Preview\n\nMethodology: ${selectedMethodology}\nCompliance: ${selectedCompliance}\n\nExecutive Summary:\n${executiveSummary}\n\nMetrics:\n- ${dashboardSummaryCards.map((card) => `${card.title}: ${card.value} (${card.note})`).join("\n- ")}`
                     )
                   }
                 >
@@ -380,6 +781,165 @@ function AdminAnalyticsView() {
                 </button>
               </div>
             </article>
+
+            <article className="prototype-panel prototype-admin-chart-card">
+              <h2>AI Executive Summary Generator</h2>
+              {isBackendLoading ? (
+                <div className="prototype-empty-state-card functional">
+                  <strong>Refreshing backend reporting intelligence...</strong>
+                  <p>Loading the latest cross-module metrics for this admin reporting view.</p>
+                </div>
+              ) : null}
+              <div className="prototype-empty-state-card functional">
+                <strong>{selectedTemplate}</strong>
+                <p>{executiveSummary}</p>
+              </div>
+            </article>
+
+            <div className="prototype-farm-analytics-summary-grid reports-admin-summary-grid">
+              <article className="prototype-panel prototype-farm-analytics-summary-card">
+                <div className="prototype-farm-analytics-card-head">
+                  <div>
+                    <h2>Sustainability Dashboard</h2>
+                    <p>National demo sustainability intelligence</p>
+                  </div>
+                  <div className="prototype-farm-analytics-compare-badge">Demo Scorecard</div>
+                </div>
+                <div className="analytics-sustainability-list">
+                  {dashboardSustainability.map((item) => (
+                    <div key={item.label} className="analytics-sustainability-row">
+                      <div className="analytics-sustainability-head">
+                        <span>{item.label}</span>
+                        <strong>{item.value}/100</strong>
+                      </div>
+                      <div className="irrigation-resource-track">
+                        <div className="irrigation-resource-fill" style={{ width: `${item.value}%` }} />
+                      </div>
+                      <small>{item.note}</small>
+                    </div>
+                  ))}
+                </div>
+              </article>
+
+              <article className="prototype-panel prototype-farm-analytics-summary-card">
+                <div className="prototype-farm-analytics-card-head">
+                  <div>
+                    <h2>AI Recommendation Analytics</h2>
+                    <p>Recommendation quality and adoption performance</p>
+                  </div>
+                  <div className="prototype-farm-analytics-compare-badge">AI Ops</div>
+                </div>
+                <div className="analytics-benchmark-list">
+                  {dashboardAiAnalytics.map((item) => (
+                    <div key={item.label} className="analytics-benchmark-row">
+                      <div>
+                        <strong>{item.label}</strong>
+                        <span>Demo reporting metric</span>
+                      </div>
+                      <small className="increasing">{item.value}</small>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            </div>
+
+            <div className="prototype-farm-analytics-summary-grid reports-admin-summary-grid">
+              <article className="prototype-panel prototype-farm-analytics-summary-card">
+                <h2>Comparative Analytics</h2>
+                <div className="analytics-benchmark-list">
+                  {dashboardComparative.map((item) => (
+                    <div key={item.label} className="analytics-benchmark-row">
+                      <div>
+                        <strong>{item.label}</strong>
+                        <span>{item.left} vs {item.right}</span>
+                      </div>
+                      <small className={item.trend.toLowerCase()}>{item.trend}</small>
+                    </div>
+                  ))}
+                </div>
+              </article>
+
+              <article className="prototype-panel prototype-farm-analytics-summary-card">
+                <h2>Farmer Adoption Analytics</h2>
+                <div className="analytics-revenue-breakdown">
+                  {dashboardFarmerAdoption.map((item) => (
+                    <div key={item.label} className="analytics-revenue-row">
+                      <div>
+                        <strong>{item.label}</strong>
+                        <span>Platform adoption metric</span>
+                      </div>
+                      <small>{item.value}</small>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            </div>
+
+            <div className="prototype-farm-analytics-summary-grid reports-admin-summary-grid">
+              <article className="prototype-panel prototype-farm-analytics-summary-card">
+                <h2>Geographic Coverage Dashboard</h2>
+                <div className="analytics-revenue-breakdown">
+                  {dashboardGeographicCoverage.map((item) => (
+                    <div key={item.label} className="analytics-revenue-row">
+                      <div>
+                        <strong>{item.label}</strong>
+                        <span>{item.note}</span>
+                      </div>
+                      <small>{item.value}</small>
+                    </div>
+                  ))}
+                </div>
+              </article>
+
+              <article className="prototype-panel prototype-farm-analytics-summary-card">
+                <h2>Pest &amp; Disease Analytics</h2>
+                <div className="analytics-revenue-breakdown">
+                  {dashboardPestAnalytics.map((item) => (
+                    <div key={item.label} className="analytics-revenue-row">
+                      <div>
+                        <strong>{item.label}</strong>
+                        <span>Crop protection intelligence</span>
+                      </div>
+                      <small>{item.value}</small>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            </div>
+
+            <div className="prototype-farm-analytics-summary-grid reports-admin-summary-grid">
+              <article className="prototype-panel prototype-farm-analytics-summary-card">
+                <h2>Weather Impact Analytics</h2>
+                <div className="analytics-benchmark-list">
+                  {dashboardWeatherImpact.map((item) => (
+                    <div key={item.label} className="analytics-benchmark-row">
+                      <div>
+                        <strong>{item.label}</strong>
+                        <span>{item.note}</span>
+                      </div>
+                      <small className="stable">{item.value}</small>
+                    </div>
+                  ))}
+                </div>
+              </article>
+
+              <article className="prototype-panel prototype-farm-analytics-summary-card">
+                <h2>Compliance Reporting</h2>
+                <div className="analytics-benchmark-list">
+                  {complianceStandards.map((item) => (
+                    <div key={item} className="analytics-benchmark-row">
+                      <div>
+                        <strong>{item}</strong>
+                        <span>{item === selectedCompliance ? "Active reporting profile" : "Available compliance template"}</span>
+                      </div>
+                      <small className={item === selectedCompliance ? "increasing" : "stable"}>
+                        {item === selectedCompliance ? "Selected" : "Ready"}
+                      </small>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            </div>
 
             <article className="prototype-panel prototype-admin-chart-card">
               <h2>Aggregate Yield Trend Analysis</h2>
@@ -432,14 +992,20 @@ function AdminAnalyticsView() {
             <div className="prototype-admin-export-section">
               <span>Export Format</span>
               <div className="prototype-admin-export-format-list">
-                {exportFormats.map((format) => {
+                {[
+                  ...exportFormats,
+                  { title: "Export to CSV", subtitle: "Tabular reporting package", icon: FileSpreadsheet, tone: "green", mode: "excel" },
+                  { title: "GIS Export", subtitle: "Geographic coverage dataset", icon: Map, tone: "blue", mode: "gis" },
+                  { title: "Power BI Pack", subtitle: "Dashboard integration instructions", icon: BarChart3, tone: "blue", mode: "powerbi" },
+                  { title: "Research Dataset", subtitle: "Academic structured export", icon: FileJson, tone: "blue", mode: "dataset" },
+                ].map((format) => {
                   const Icon = format.icon;
                   return (
                     <button
                       key={format.title}
                       type="button"
                       className="prototype-admin-export-format"
-                      onClick={() => exportReportBundle(format.tone === "red" ? "pdf" : format.tone === "green" ? "excel" : "json")}
+                      onClick={() => exportReportBundle(format.mode || (format.tone === "red" ? "pdf" : format.tone === "green" ? "excel" : "json"))}
                     >
                       <div className={`prototype-admin-export-icon ${format.tone}`}>
                         <Icon size={18} />
@@ -457,19 +1023,85 @@ function AdminAnalyticsView() {
 
             <div className="prototype-admin-recent-export">
               <span>Recent Export</span>
-              <div>
-                <strong>national_yield_q3.pdf</strong>
-                <small>2m ago</small>
-              </div>
+              {recentExportItems.map((item) => (
+                <div key={`${item.name}-${item.time}`}>
+                  <strong>{item.name}</strong>
+                  <small>{item.type} · {item.time}</small>
+                </div>
+              ))}
             </div>
           </aside>
         </div>
       </div>
+      {isHistoryOpen ? (
+        <div className="prototype-soil-history-modal-backdrop" role="presentation" onClick={() => setIsHistoryOpen(false)}>
+          <div
+            className="prototype-soil-history-modal prototype-reports-history-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Reports export history"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="prototype-soil-history-modal-head">
+              <div>
+                <h2>Reports &amp; Export History</h2>
+                <p>
+                  {backendHistory.length
+                    ? "Backend-persisted analytics exports and compliance reporting activity."
+                    : "Recent report exports captured in the current demo session."}
+                </p>
+              </div>
+              <div className="prototype-soil-history-modal-actions">
+                <button
+                  type="button"
+                  className="prototype-admin-secondary-button"
+                  onClick={() =>
+                    downloadJsonFile("system-report-history.json", backendHistory.length ? backendHistory : recentExportItems)
+                  }
+                >
+                  <Download size={15} />
+                  <span>Export History</span>
+                </button>
+                <button type="button" className="prototype-soil-history-close" onClick={() => setIsHistoryOpen(false)} aria-label="Close history">
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div className="prototype-soil-history-table prototype-reports-history-table">
+              <div className="prototype-reports-history-head">
+                <span>File</span>
+                <span>Template</span>
+                <span>Format</span>
+                <span>Compliance</span>
+                <span>Created</span>
+              </div>
+              {reportHistoryRows.length ? (
+                reportHistoryRows.map((entry) => (
+                  <div key={entry.id} className="prototype-reports-history-row">
+                    <strong>{entry.fileName}</strong>
+                    <span>{entry.template}</span>
+                    <span>{entry.format}</span>
+                    <span>{entry.compliance}</span>
+                    <span>{entry.createdAt}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="prototype-empty-state-card functional">
+                  <strong>No export history yet.</strong>
+                  <p>Generate a report bundle to start building the reporting audit trail.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
 
 function FarmerAnalyticsView() {
+  const { user } = useAuth();
   const { currentFarms } = useFarmerData();
   const farms = currentFarms.length ? currentFarms : [createDefaultFarm()];
   const stored = useMemo(() => loadStoredState(), []);
@@ -481,6 +1113,9 @@ function FarmerAnalyticsView() {
   const [chartFilter, setChartFilter] = useState(stored.chartFilter || "Seasonal");
   const [shareReady, setShareReady] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [backendDashboard, setBackendDashboard] = useState(null);
+  const [backendHistory, setBackendHistory] = useState([]);
+  const [backendError, setBackendError] = useState("");
 
   useEffect(() => {
     saveStoredState({ dateRange, cropType, activityFilter, reportTemplate, chartFilter });
@@ -491,6 +1126,56 @@ function FarmerAnalyticsView() {
     const timeoutId = window.setTimeout(() => setIsLoading(false), 260);
     return () => window.clearTimeout(timeoutId);
   }, [activityFilter, chartFilter, cropType, dateRange, reportTemplate, selectedFarmId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadBackendAnalytics() {
+      if (!selectedFarmId || !isBackendSessionActive() || user?.role !== "farmer") {
+        return;
+      }
+
+      setIsLoading(true);
+      setBackendError("");
+
+      try {
+        const [dashboard, history] = await Promise.all([
+          phase1BackendService.analytics.farmDashboard(selectedFarmId, {
+            dateRange,
+            cropType,
+            activityFilter,
+            reportTemplate,
+            chartFilter,
+          }),
+          phase1BackendService.analytics.farmHistory(selectedFarmId),
+        ]);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setBackendDashboard(dashboard || null);
+        setBackendHistory(Array.isArray(history) ? history : []);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+        setBackendDashboard(null);
+        setBackendHistory([]);
+        setBackendError("Demo analytics mode active.");
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadBackendAnalytics();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activityFilter, chartFilter, cropType, dateRange, reportTemplate, selectedFarmId, user?.role]);
 
   useEffect(() => {
     if (!farms.some((farm) => farm.id === selectedFarmId)) {
@@ -504,8 +1189,10 @@ function FarmerAnalyticsView() {
   );
 
   const analytics = useMemo(
-    () => buildAnalyticsData({ farm: selectedFarm, cropType, dateRange, reportTemplate, chartFilter }),
-    [chartFilter, cropType, dateRange, reportTemplate, selectedFarm]
+    () =>
+      backendDashboard?.analytics ||
+      buildAnalyticsData({ farm: selectedFarm, cropType, dateRange, reportTemplate, chartFilter }),
+    [backendDashboard, chartFilter, cropType, dateRange, reportTemplate, selectedFarm]
   );
 
   const farmerMetricCards = [
@@ -550,9 +1237,30 @@ function FarmerAnalyticsView() {
           activityFilter === "Verified" ? row.status === "Verified" : row.status !== "Verified"
         );
   const activeTemplateDescription =
-    reportTemplateDescriptions[reportTemplate] || "Template-specific reporting view for the selected farm.";
+    backendDashboard?.activeTemplateDescription ||
+    reportTemplateDescriptions[reportTemplate] ||
+    "Template-specific reporting view for the selected farm.";
 
-  const exportFarmerAnalytics = (format) => {
+  const exportFarmerAnalytics = async (format) => {
+    if (isBackendSessionActive() && user?.role === "farmer" && selectedFarm?.id) {
+      try {
+        const exportRecord = await phase1BackendService.analytics.exportFarm(selectedFarm.id, {
+          format,
+          dateRange,
+          cropType,
+          activityFilter,
+          reportTemplate,
+          chartFilter,
+        });
+
+        if (exportRecord) {
+          setBackendHistory((current) => [exportRecord, ...current].slice(0, 20));
+        }
+      } catch {
+        // Keep frontend-only export flow active when backend persistence is unavailable.
+      }
+    }
+
     if (format === "excel") {
       downloadCsvFile("farm-analytics.csv", [
         ["Period", "Yield", "Revenue", "Score", "Status"],
@@ -568,65 +1276,78 @@ function FarmerAnalyticsView() {
 
     downloadTextFile(
       `${format === "report" ? "farm-report" : "farm-analytics-share"}.txt`,
-      `Farm Analytics\nFarm: ${selectedFarm.name}\nTemplate: ${analytics.reportTemplateLabel}\nMode: ${DEMO_MODE ? "Demo Analytics" : "Live Analytics"}\nYield: ${analytics.yieldTons} t\nRevenue: ${formatRwf(analytics.revenue)}\nCosts: ${formatRwf(analytics.costs)}\nROI: ${analytics.roi}%`
+      `Farm Analytics\nFarm: ${selectedFarm.name}\nTemplate: ${analytics.reportTemplateLabel}\nMode: ${backendDashboard ? "Backend Analytics" : DEMO_MODE ? "Demo Analytics" : "Live Analytics"}\nYield: ${analytics.yieldTons} t\nRevenue: ${formatRwf(analytics.revenue)}\nCosts: ${formatRwf(analytics.costs)}\nROI: ${analytics.roi}%`
     );
   };
 
-  const aiInsights = [
-    {
-      label: "Key Finding",
-      body: `${selectedFarm.primaryCrop || "Primary crop"} performance is ${analytics.yieldTons >= analytics.regionalYield ? "above" : "slightly below"} the regional average for this reporting window.`,
-      icon: Sparkles,
-    },
-    {
-      label: "Yield Improvement",
-      body: `${Math.max(3, Math.round((analytics.yieldTons / Math.max(analytics.previousSeasonYield, 1) - 1) * 100))}% improvement opportunity is possible through tighter irrigation and nutrient timing.`,
-      icon: TrendingUp,
-    },
-    {
-      label: "Cost Reduction",
-      body: `Input optimization can reduce operating pressure by about ${analytics.costReductionOpportunity}% if labor and fertilizer timing are synchronized.`,
-      icon: Wallet,
-    },
-    {
-      label: "Risk Observation",
-      body: `${analytics.riskLevel} operational risk is driven mainly by ${analytics.waterEfficiency < 64 ? "water efficiency" : "seasonal cost pressure"} in this cycle.`,
-      icon: AlertTriangle,
-    },
-  ];
+  const aiInsights =
+    backendDashboard?.aiInsights?.map((item) => ({
+      ...item,
+      icon: resolveAnalyticsIcon(item.icon, Sparkles),
+    })) || [
+      {
+        label: "Key Finding",
+        body: `${selectedFarm.primaryCrop || "Primary crop"} performance is ${analytics.yieldTons >= analytics.regionalYield ? "above" : "slightly below"} the regional average for this reporting window.`,
+        icon: Sparkles,
+      },
+      {
+        label: "Yield Improvement",
+        body: `${Math.max(3, Math.round((analytics.yieldTons / Math.max(analytics.previousSeasonYield, 1) - 1) * 100))}% improvement opportunity is possible through tighter irrigation and nutrient timing.`,
+        icon: TrendingUp,
+      },
+      {
+        label: "Cost Reduction",
+        body: `Input optimization can reduce operating pressure by about ${analytics.costReductionOpportunity}% if labor and fertilizer timing are synchronized.`,
+        icon: Wallet,
+      },
+      {
+        label: "Risk Observation",
+        body: `${analytics.riskLevel} operational risk is driven mainly by ${analytics.waterEfficiency < 64 ? "water efficiency" : "seasonal cost pressure"} in this cycle.`,
+        icon: AlertTriangle,
+      },
+    ];
 
-  const sustainabilityRows = [
-    { label: "Water Efficiency", value: `${analytics.waterEfficiency}%`, percent: analytics.waterEfficiency, icon: Droplets },
-    { label: "Carbon Footprint", value: `${analytics.carbonFootprint} tCO2e`, percent: analytics.carbonScore, icon: Leaf },
-    { label: "Soil Sustainability", value: `${analytics.soilSustainability}%`, percent: analytics.soilSustainability, icon: Sprout },
-    { label: "Input Efficiency", value: `${analytics.inputEfficiency}%`, percent: analytics.inputEfficiency, icon: Activity },
-  ];
+  const sustainabilityRows =
+    backendDashboard?.sustainabilityRows?.map((item) => ({
+      ...item,
+      icon: resolveAnalyticsIcon(item.icon, Leaf),
+    })) || [
+      { label: "Water Efficiency", value: `${analytics.waterEfficiency}%`, percent: analytics.waterEfficiency, icon: Droplets },
+      { label: "Carbon Footprint", value: `${analytics.carbonFootprint} tCO2e`, percent: analytics.carbonScore, icon: Leaf },
+      { label: "Soil Sustainability", value: `${analytics.soilSustainability}%`, percent: analytics.soilSustainability, icon: Sprout },
+      { label: "Input Efficiency", value: `${analytics.inputEfficiency}%`, percent: analytics.inputEfficiency, icon: Activity },
+    ];
 
-  const benchmarkRows = [
-    {
-      label: "Farm vs Regional Average",
-      farm: `${analytics.yieldTons.toLocaleString()} t`,
-      baseline: `${analytics.regionalYield.toLocaleString()} t`,
-      trend: analytics.yieldTons >= analytics.regionalYield ? "Increasing" : "Stable",
-    },
-    {
-      label: "Farm vs District Average",
-      farm: `${analytics.yieldTons.toLocaleString()} t`,
-      baseline: `${analytics.districtAverage.toLocaleString()} t`,
-      trend: analytics.yieldTons >= analytics.districtAverage ? "Increasing" : "Stable",
-    },
-    {
-      label: "Farm vs Previous Season",
-      farm: `${analytics.yieldTons.toLocaleString()} t`,
-      baseline: `${analytics.previousSeasonYield.toLocaleString()} t`,
-      trend: analytics.yieldTons >= analytics.previousSeasonYield ? "Increasing" : "Declining",
-    },
-  ];
+  const benchmarkRows =
+    backendDashboard?.benchmarkRows || [
+      {
+        label: "Farm vs Regional Average",
+        farm: `${analytics.yieldTons.toLocaleString()} t`,
+        baseline: `${analytics.regionalYield.toLocaleString()} t`,
+        trend: analytics.yieldTons >= analytics.regionalYield ? "Increasing" : "Stable",
+      },
+      {
+        label: "Farm vs District Average",
+        farm: `${analytics.yieldTons.toLocaleString()} t`,
+        baseline: `${analytics.districtAverage.toLocaleString()} t`,
+        trend: analytics.yieldTons >= analytics.districtAverage ? "Increasing" : "Stable",
+      },
+      {
+        label: "Farm vs Previous Season",
+        farm: `${analytics.yieldTons.toLocaleString()} t`,
+        baseline: `${analytics.previousSeasonYield.toLocaleString()} t`,
+        trend: analytics.yieldTons >= analytics.previousSeasonYield ? "Increasing" : "Declining",
+      },
+    ];
 
   if (isLoading) {
     return (
       <section className="management-page prototype-farm-analytics-page">
-        <div className="irrigation-state-banner">Loading demo analytics...</div>
+        <div className="irrigation-state-banner">
+          {isBackendSessionActive() && user?.role === "farmer"
+            ? "Loading backend analytics..."
+            : "Loading demo analytics..."}
+        </div>
       </section>
     );
   }
@@ -639,8 +1360,11 @@ function FarmerAnalyticsView() {
       </div>
 
       <div className="regional-source-row">
-        <span className="regional-source-badge demo">Demo Analytics</span>
+        <span className="regional-source-badge demo">
+          {backendDashboard ? "Backend Analytics" : "Demo Analytics"}
+        </span>
         <span className="regional-source-badge local">Local Data</span>
+        {backendError ? <span className="regional-source-badge warning">{backendError}</span> : null}
       </div>
 
       <div className="prototype-farm-analytics-toolbar">
@@ -894,7 +1618,9 @@ function FarmerAnalyticsView() {
               <h3>Active Report Template</h3>
               <p>{reportTemplate}</p>
             </div>
-            <div className="prototype-farm-analytics-compare-badge">Demo Analytics</div>
+            <div className="prototype-farm-analytics-compare-badge">
+              {backendDashboard ? "Backend Analytics" : "Demo Analytics"}
+            </div>
           </div>
           <p className="analytics-template-description">{activeTemplateDescription}</p>
           <div className="analytics-template-actions">
@@ -1027,7 +1753,12 @@ function FarmerAnalyticsView() {
           <button
             type="button"
             className="prototype-farm-report-link"
-            onClick={() => downloadJsonFile("farm-report-archive.json", filteredRows)}
+            onClick={() =>
+              downloadJsonFile(
+                "farm-report-archive.json",
+                backendHistory.length ? backendHistory : filteredRows
+              )
+            }
           >
             View Archive →
           </button>
@@ -1061,20 +1792,22 @@ function FarmerAnalyticsView() {
                   {row.status}
                 </span>
                 <div className="prototype-farm-report-actions">
-                  <button
-                    type="button"
+                  <IconActionButton
                     className="prototype-farm-report-icon-button"
+                    label={`Download text report for ${row.period}`}
+                    title="Download text report"
                     onClick={() => downloadTextFile(`${row.period.replace(/\s+/g, "-").toLowerCase()}-report.txt`, JSON.stringify(row, null, 2))}
                   >
                     <Download size={16} />
-                  </button>
-                  <button
-                    type="button"
+                  </IconActionButton>
+                  <IconActionButton
                     className="prototype-farm-report-icon-button"
+                    label={`Download JSON report for ${row.period}`}
+                    title="Download JSON report"
                     onClick={() => downloadJsonFile(`${row.period.replace(/\s+/g, "-").toLowerCase()}-report.json`, row)}
                   >
                     <MoreVertical size={16} />
-                  </button>
+                  </IconActionButton>
                 </div>
               </div>
             ))}
@@ -1100,5 +1833,5 @@ function FarmerAnalyticsView() {
 
 export function AnalyticsPage() {
   const { user } = useAuth();
-  return user?.role === "admin" ? <AdminAnalyticsView /> : <FarmerAnalyticsView />;
+  return ["admin", "extensionofficer"].includes(user?.role) ? <AdminAnalyticsView /> : <FarmerAnalyticsView />;
 }

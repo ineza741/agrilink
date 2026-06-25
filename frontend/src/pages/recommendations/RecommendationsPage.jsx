@@ -1,4 +1,4 @@
-import {
+﻿import {
   BookOpen,
   BrainCircuit,
   Bug,
@@ -28,6 +28,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useFarmerData } from "../../context/FarmerDataContext";
 import { apiClient } from "../../services/api";
+import { isBackendSessionActive, phase1BackendService } from "../../services/phase1Backend";
 import { downloadCsvFile, downloadJsonFile, downloadTextFile } from "../../utils/actions";
 
 const FEEDBACK_STORAGE_KEY = "agri-feed-recommendation-feedback-v2";
@@ -1417,6 +1418,36 @@ function AdminContentManagementView() {
     modifications,
   ]);
 
+  useEffect(() => {
+    if (!backendAdminMode) return undefined;
+
+    let cancelled = false;
+
+    const loadContentDashboard = async () => {
+      setContentLoading(true);
+      try {
+        const payload = await phase1BackendService.admin.contentManagementDashboard();
+        if (cancelled || !payload) return;
+        applyBackendDashboard(payload);
+      } catch (error) {
+        console.error("Content management backend fallback:", error);
+        if (!cancelled) {
+          setContentMode("demo");
+        }
+      } finally {
+        if (!cancelled) {
+          setContentLoading(false);
+        }
+      }
+    };
+
+    loadContentDashboard();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [backendAdminMode]);
+
   const tabIcons = {
     Crops: Sprout,
     Pests: Bug,
@@ -1746,6 +1777,8 @@ function AdminContentManagementView() {
 }
 
 function AdminContentManagementViewV2() {
+  const { user } = useAuth();
+  const backendAdminMode = isBackendSessionActive() && ["admin", "extensionofficer"].includes(user?.role);
   const stored = useMemo(() => loadAdminContentState(), []);
   const [activeTab, setActiveTab] = useState(stored.activeTab || "Crops");
   const [page, setPage] = useState(1);
@@ -1779,7 +1812,19 @@ function AdminContentManagementViewV2() {
     }
   );
   const [sandboxOutput, setSandboxOutput] = useState(stored.sandboxOutput || null);
+  const [contentMode, setContentMode] = useState(backendAdminMode ? "backend" : "demo");
+  const [contentLoading, setContentLoading] = useState(false);
   const itemsPerPage = 4;
+
+  const applyBackendDashboard = (dashboard) => {
+    if (!dashboard) return;
+    if (dashboard.entries) setEntries(normalizeAdminEntries(dashboard.entries));
+    if (dashboard.modifications) setModifications(dashboard.modifications);
+    if (dashboard.auditTrail) setAuditTrail(dashboard.auditTrail);
+    if (dashboard.latestSandbox?.input) setSandboxInput((current) => ({ ...current, ...dashboard.latestSandbox.input }));
+    if (dashboard.latestSandbox?.output) setSandboxOutput(dashboard.latestSandbox.output);
+    setContentMode(dashboard.mode || "backend");
+  };
 
   useEffect(() => {
     saveAdminContentState({
@@ -1809,6 +1854,36 @@ function AdminContentManagementViewV2() {
     sandboxOutput,
   ]);
 
+  useEffect(() => {
+    if (!backendAdminMode) return undefined;
+
+    let cancelled = false;
+
+    const loadContentDashboard = async () => {
+      setContentLoading(true);
+      try {
+        const payload = await phase1BackendService.admin.contentManagementDashboard();
+        if (cancelled || !payload) return;
+        applyBackendDashboard(payload);
+      } catch (error) {
+        console.error("Content management backend fallback:", error);
+        if (!cancelled) {
+          setContentMode("demo");
+        }
+      } finally {
+        if (!cancelled) {
+          setContentLoading(false);
+        }
+      }
+    };
+
+    loadContentDashboard();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [backendAdminMode]);
+
   const tabIcons = {
     Crops: Sprout,
     Pests: Bug,
@@ -1835,9 +1910,26 @@ function AdminContentManagementViewV2() {
     addAudit(title, module);
   };
 
-  const addEntry = () => {
+  const addEntry = async () => {
     const trimmed = entryName.trim();
     if (!trimmed) return;
+
+    if (backendAdminMode) {
+      try {
+        const payload = await phase1BackendService.admin.createContentEntry({
+          moduleType: activeTab,
+          title: trimmed,
+          language: contentLanguage,
+        });
+        applyBackendDashboard(payload?.dashboard);
+        setEntryName("");
+        return;
+      } catch (error) {
+        console.error("Content entry create fallback:", error);
+        setContentMode("demo");
+      }
+    }
+
     const newEntry = buildDefaultEntry(activeTab, trimmed, contentLanguage);
     setEntries((current) => ({
       ...current,
@@ -1847,7 +1939,18 @@ function AdminContentManagementViewV2() {
     setEntryName("");
   };
 
-  const cycleStatus = (entryId) => {
+  const cycleStatus = async (entryId) => {
+    if (backendAdminMode) {
+      try {
+        const payload = await phase1BackendService.admin.advanceContentEntryStatus(entryId);
+        applyBackendDashboard(payload?.dashboard);
+        return;
+      } catch (error) {
+        console.error("Content status update fallback:", error);
+        setContentMode("demo");
+      }
+    }
+
     const currentEntry = (entries[activeTab] || []).find((row) => row.id === entryId);
     setEntries((current) => ({
       ...current,
@@ -1863,7 +1966,18 @@ function AdminContentManagementViewV2() {
     }
   };
 
-  const removeEntry = (entryId) => {
+  const removeEntry = async (entryId) => {
+    if (backendAdminMode) {
+      try {
+        const payload = await phase1BackendService.admin.archiveContentEntry(entryId);
+        applyBackendDashboard(payload?.dashboard);
+        return;
+      } catch (error) {
+        console.error("Content entry archive fallback:", error);
+        setContentMode("demo");
+      }
+    }
+
     const currentEntry = (entries[activeTab] || []).find((row) => row.id === entryId);
     setEntries((current) => ({
       ...current,
@@ -1949,16 +2063,57 @@ function AdminContentManagementViewV2() {
     };
   }, [sandboxInput]);
 
-  const testLogic = () => {
+  const testLogic = async () => {
+    if (backendAdminMode) {
+      try {
+        const payload = await phase1BackendService.admin.testContentSandbox(sandboxInput);
+        if (payload?.run?.output) {
+          setSandboxOutput(payload.run.output);
+        } else {
+          setSandboxOutput(sandboxComputedOutput);
+        }
+        applyBackendDashboard(payload?.dashboard);
+        return;
+      } catch (error) {
+        console.error("Content sandbox test fallback:", error);
+        setContentMode("demo");
+      }
+    }
+
     setSandboxOutput(sandboxComputedOutput);
     addModification(`Logic test run for ${triggerParameter}`, "System Validation · just now", "Advisory Logic");
   };
 
-  const saveLogic = () => {
+  const saveLogic = async () => {
+    if (backendAdminMode) {
+      try {
+        const payload = await phase1BackendService.admin.saveContentSandbox(sandboxInput);
+        if (payload?.run?.output) {
+          setSandboxOutput(payload.run.output);
+        }
+        applyBackendDashboard(payload?.dashboard);
+        return;
+      } catch (error) {
+        console.error("Content sandbox save fallback:", error);
+        setContentMode("demo");
+      }
+    }
+
     addModification(`Advisory logic saved for ${triggerParameter}`, "System Save · just now", "Advisory Logic");
   };
 
-  const syncGuidelines = () => {
+  const syncGuidelines = async () => {
+    if (backendAdminMode) {
+      try {
+        const payload = await phase1BackendService.admin.syncContentFertilizerStandards();
+        applyBackendDashboard(payload?.dashboard);
+        return;
+      } catch (error) {
+        console.error("Fertilizer sync fallback:", error);
+        setContentMode("demo");
+      }
+    }
+
     addModification("Fertilizer standards synchronized", "System Sync · just now", "Fertilizer Standards");
   };
 
@@ -2354,5 +2509,10 @@ function AdminContentManagementViewV2() {
 
 export function RecommendationsPage() {
   const { user } = useAuth();
-  return user?.role === "admin" ? <AdminContentManagementViewV2 /> : <FarmerRecommendationsView />;
+  return ["admin", "extensionofficer"].includes(user?.role) ? <AdminContentManagementViewV2 /> : <FarmerRecommendationsView />;
 }
+
+
+
+
+

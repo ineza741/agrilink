@@ -31,8 +31,8 @@ export function RegisterPage() {
     event.preventDefault();
     setError("");
 
-    if (form.password.length < 6) {
-      setError("Password must be at least 6 characters long.");
+    if (form.password.length < 8) {
+      setError("Password must be at least 8 characters long.");
       return;
     }
 

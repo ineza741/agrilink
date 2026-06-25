@@ -1,0 +1,817 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                            String                        @id @default(uuid())
+  fullName                      String
+  email                         String                        @unique
+  phone                         String                        @unique
+  passwordHash                  String
+  role                          String                        @default("Farmer")
+  isActive                      Boolean                       @default(true)
+  createdAt                     DateTime                      @default(now())
+  updatedAt                     DateTime                      @updatedAt
+  farmerProfile                 FarmerProfile?
+  auditLogs                     AuditLog[]
+  notificationPreferences       NotificationPreference?
+  notificationAlerts            NotificationAlert[]
+  notificationTemplatesAuthored NotificationTemplate[]        @relation("NotificationTemplateAuthor")
+  analyticsExports              AnalyticsExport[]
+  communityQuestionsAsked       CommunityQuestion[]           @relation("CommunityQuestionAuthor")
+  communityEventRegistrations   CommunityEventRegistration[]  @relation("CommunityEventRegistrationUser")
+  communityPracticeSubmissions  CommunityPracticeSubmission[] @relation("CommunityPracticeSubmitter")
+  communityActivities           CommunityActivity[]           @relation("CommunityActivityActor")
+  regionalAdvisoriesAuthored    RegionalAdvisory[]            @relation("RegionalAdvisoryAuthor")
+  extensionWorkflowUpdates      ExtensionWorkflowItem[]       @relation("ExtensionWorkflowActor")
+  communityFieldReports         CommunityFieldReport[]        @relation("CommunityFieldReportAuthor")
+  contentEntriesCreated         ContentEntry[]                @relation("ContentEntryCreator")
+  contentEntriesUpdated         ContentEntry[]                @relation("ContentEntryUpdater")
+  contentSandboxRuns            ContentSandboxRun[]           @relation("ContentSandboxRunActor")
+
+  @@map("users")
+}
+
+model FarmerProfile {
+  id                  String   @id @default(uuid())
+  userId              String   @unique
+  region              String
+  district            String
+  sector              String
+  experienceLevel     String
+  primaryCrop         String
+  verificationStatus  String   @default("Pending")
+  profileCompleteness Int      @default(0)
+  reviewNotes         String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  farms               Farm[]
+
+  @@map("farmer_profiles")
+}
+
+model Farm {
+  id                        String                     @id @default(uuid())
+  farmerProfileId           String
+  farmName                  String
+  province                  String
+  district                  String
+  sector                    String
+  latitude                  Float
+  longitude                 Float
+  farmSize                  Float
+  farmSizeUnit              String
+  landType                  String
+  soilType                  String?
+  currentCrop               String
+  cropStage                 String
+  ownershipType             String
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  farmerProfile             FarmerProfile              @relation(fields: [farmerProfileId], references: [id], onDelete: Cascade)
+  cropHistories             CropHistory[]
+  soilTests                 SoilTest[]
+  cropSuitabilityResults    CropSuitabilityResult[]
+  fertilizerRecommendations FertilizerRecommendation[]
+  irrigationAdvisories      IrrigationAdvisory[]
+  reminders                 FarmReminder[]
+  marketAnalyses            MarketAnalysis[]
+  marketAlerts              MarketAlert[]
+  pestDiagnoses             PestDiagnosis[]
+  pestActionLogs            PestActionLog[]
+  aiRecommendationRuns      AiRecommendationRun[]
+  aiRecommendationFeedback  AiRecommendationFeedback[]
+  notificationAlerts        NotificationAlert[]
+  analyticsExports          AnalyticsExport[]
+  weatherSnapshots          WeatherSnapshot[]
+  weatherArchiveCaches      WeatherArchiveCache[]
+  communityFieldReports     CommunityFieldReport[]
+
+  @@map("farms")
+}
+
+model AiRecommendationRun {
+  id                 String                     @id @default(uuid())
+  farmId             String
+  sourceMode         String                     @default("backend")
+  cropName           String
+  cropStage          String
+  farmerName         String
+  regionLabel        String
+  weatherSourceLabel String                     @default("Live Weather Data")
+  soilSourceLabel    String                     @default("Local Soil Data")
+  pestSourceLabel    String                     @default("Demo Pest Data")
+  marketSourceLabel  String                     @default("Demo Market Data")
+  summary            Json?
+  signals            Json?
+  recommendations    Json?
+  scheduler          Json?
+  analytics          Json?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  farm               Farm                       @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  feedbackEntries    AiRecommendationFeedback[]
+
+  @@index([farmId, createdAt])
+  @@map("ai_recommendation_runs")
+}
+
+model AiRecommendationFeedback {
+  id               String              @id @default(uuid())
+  runId            String
+  farmId           String
+  recommendationId String
+  actionType       String
+  feedbackStatus   String
+  rejectionReason  String?
+  note             String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  run              AiRecommendationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  farm             Farm                @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([runId, createdAt])
+  @@index([farmId, createdAt])
+  @@map("ai_recommendation_feedback")
+}
+
+model CropHistory {
+  id          String   @id @default(uuid())
+  farmId      String
+  cropName    String
+  season      String
+  year        Int
+  yieldAmount Float?
+  yieldUnit   String?
+  challenges  String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  farm        Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@map("crop_histories")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorUserId String
+  action      String
+  entityType  String
+  entityId    String
+  details     String?
+  createdAt   DateTime @default(now())
+  actor       User     @relation(fields: [actorUserId], references: [id], onDelete: Cascade)
+
+  @@map("audit_logs")
+}
+
+model SoilTest {
+  id                        String                     @id @default(uuid())
+  farmId                    String
+  sourceType                String                     @default("manual")
+  ph                        Float
+  nitrogen                  Float
+  phosphorus                Float
+  potassium                 Float
+  organicMatter             Float
+  texture                   String
+  notes                     String?
+  analysisStatus            String                     @default("Pending")
+  regionContext             String?
+  districtContext           String?
+  sectorContext             String?
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  analyzedAt                DateTime?
+  farm                      Farm                       @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  labReport                 SoilLabReport?
+  suitabilityResults        CropSuitabilityResult[]
+  fertilizerRecommendations FertilizerRecommendation[]
+
+  @@map("soil_tests")
+}
+
+model SoilLabReport {
+  id          String   @id @default(uuid())
+  soilTestId  String   @unique
+  fileName    String
+  fileType    String?
+  storageMode String   @default("demo-local")
+  uploadedAt  DateTime @default(now())
+  soilTest    SoilTest @relation(fields: [soilTestId], references: [id], onDelete: Cascade)
+
+  @@map("soil_lab_reports")
+}
+
+model CropSuitabilityResult {
+  id                    String   @id @default(uuid())
+  soilTestId            String
+  farmId                String
+  cropName              String
+  suitabilityScore      Int
+  suitabilityBand       String
+  recommendationSummary String
+  limitingFactors       Json?
+  createdAt             DateTime @default(now())
+  soilTest              SoilTest @relation(fields: [soilTestId], references: [id], onDelete: Cascade)
+  farm                  Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@map("crop_suitability_results")
+}
+
+model FertilizerRecommendation {
+  id                    String   @id @default(uuid())
+  soilTestId            String
+  farmId                String
+  nitrogenKgHa          Float
+  phosphorusKgHa        Float
+  potassiumKgHa         Float
+  recommendedBlend      String
+  applicationTiming     String
+  budgetNote            String?
+  recommendationSummary String
+  createdAt             DateTime @default(now())
+  soilTest              SoilTest @relation(fields: [soilTestId], references: [id], onDelete: Cascade)
+  farm                  Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@map("fertilizer_recommendations")
+}
+
+model IrrigationAdvisory {
+  id                      String                    @id @default(uuid())
+  farmId                  String
+  sourceMode              String                    @default("backend")
+  cropName                String
+  cropStage               String
+  weatherSourceLabel      String                    @default("Live Weather Data")
+  soilSourceLabel         String                    @default("Local Data")
+  targetYield             Float
+  fertilizerType          String
+  availableBudget         Float
+  soilMoisture            Float
+  sensorMode              String                    @default("manual")
+  referenceEt             Float
+  cropCoefficient         Float
+  cropEt                  Float
+  totalRain               Float
+  effectiveRain           Float
+  waterRequirementPerHa   Float
+  waterRequirementTotal   Float
+  weatherRisk             String
+  soilStatus              Json?
+  currentWeather          Json?
+  fertilizerSummary       Json?
+  costSummary             Json?
+  resourceMonitoring      Json?
+  waterConservationAdvice Json?
+  explanationLabel        String?
+  advisoryNotice          String?
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  farm                    Farm                      @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  scheduleEntries         IrrigationScheduleEntry[]
+  reminders               FarmReminder[]
+
+  @@index([farmId, createdAt])
+  @@map("irrigation_advisories")
+}
+
+model IrrigationScheduleEntry {
+  id                  String             @id @default(uuid())
+  advisoryId          String
+  dateKey             String
+  crop                String
+  growthStage         String
+  waterRequirement    Float
+  recommendedMm       Float
+  rainfallForecast    Float
+  rainfallProbability Int
+  evapotranspiration  Float
+  soilMoisture        Float
+  reason              String
+  scheduled           Boolean            @default(false)
+  status              String             @default("Pending")
+  explanation         String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  advisory            IrrigationAdvisory @relation(fields: [advisoryId], references: [id], onDelete: Cascade)
+
+  @@index([advisoryId, dateKey])
+  @@map("irrigation_schedule_entries")
+}
+
+model FarmReminder {
+  id         String              @id @default(uuid())
+  farmId     String
+  advisoryId String?
+  dateKey    String
+  type       String
+  priority   String              @default("Medium")
+  status     String              @default("Pending")
+  note       String?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+  farm       Farm                @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  advisory   IrrigationAdvisory? @relation(fields: [advisoryId], references: [id], onDelete: SetNull)
+
+  @@index([farmId, dateKey])
+  @@map("farm_reminders")
+}
+
+model WeatherSnapshot {
+  id               String   @id @default(uuid())
+  farmId           String
+  sourceMode       String   @default("backend")
+  sourceLabel      String   @default("Live Weather Data")
+  latitude         Float
+  longitude        Float
+  currentPayload   Json?
+  dailyPayload     Json?
+  forecastDays     Json?
+  alerts           Json?
+  plantingGuidance Json?
+  metrics          Json?
+  warning          String?
+  fetchedAt        DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  farm             Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([farmId, fetchedAt])
+  @@map("weather_snapshots")
+}
+
+model WeatherArchiveCache {
+  id          String   @id @default(uuid())
+  farmId      String
+  rangeKey    String
+  sourceLabel String   @default("Live Weather Data")
+  startDate   String
+  endDate     String
+  series      Json?
+  labels      Json?
+  fetchedAt   DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  farm        Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@unique([farmId, rangeKey, startDate, endDate])
+  @@index([farmId, rangeKey, fetchedAt])
+  @@map("weather_archive_cache")
+}
+
+model MarketAnalysis {
+  id             String   @id @default(uuid())
+  farmId         String
+  cropName       String
+  timeframe      String
+  district       String
+  province       String
+  currentPrice   Float
+  demandForecast Int
+  bestMarketName String?
+  aiDecision     String
+  aiReason       String
+  aiConfidence   Int
+  trendBars      Json?
+  forecasts      Json?
+  markets        Json?
+  logisticsTips  Json?
+  platforms      Json?
+  mapUrl         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  farm           Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([farmId, cropName, timeframe, createdAt])
+  @@map("market_analyses")
+}
+
+model MarketAlert {
+  id             String   @id @default(uuid())
+  farmId         String
+  cropName       String
+  targetPrice    Float
+  currentPrice   Float
+  bestMarketName String?
+  status         String   @default("Monitoring")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  farm           Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([farmId, cropName, createdAt])
+  @@map("market_alerts")
+}
+
+model PestDiagnosis {
+  id                  String          @id @default(uuid())
+  farmId              String
+  cropName            String
+  symptom             String
+  affectedArea        Int
+  uploadedImageName   String?
+  diseaseName         String
+  scientificName      String
+  confidence          Int
+  currentRisk         String
+  forecastRisk        String
+  farmRiskScore       Int
+  regionalRiskScore   Int
+  yieldLoss           Int
+  economicLoss        Float
+  priority            String
+  district            String
+  cropStage           String
+  weatherContribution Json?
+  topDiagnosis        Json?
+  rankedDiagnoses     Json?
+  explanation         Json?
+  outbreakForecast    Json?
+  recommendation      Json?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  farm                Farm            @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  actionLogs          PestActionLog[]
+
+  @@index([farmId, cropName, createdAt])
+  @@map("pest_diagnoses")
+}
+
+model PestActionLog {
+  id               String        @id @default(uuid())
+  diagnosisId      String
+  farmId           String
+  recommendationId String
+  actionType       String
+  feedbackStatus   String
+  rejectionReason  String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  diagnosis        PestDiagnosis @relation(fields: [diagnosisId], references: [id], onDelete: Cascade)
+  farm             Farm          @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([diagnosisId, createdAt])
+  @@index([farmId, createdAt])
+  @@map("pest_action_logs")
+}
+
+model NotificationPreference {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  delivery   Json?
+  categories Json?
+  summaries  Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+model NotificationAlert {
+  id                String    @id @default(uuid())
+  userId            String
+  farmId            String?
+  category          String
+  severity          String
+  source            String
+  sourceLabel       String
+  title             String
+  body              String
+  requiredAction    String
+  recommendedAction String
+  explanation       String
+  confidence        Int       @default(75)
+  channels          Json?
+  deliveryStatus    String    @default("Delivered")
+  ackStatus         String    @default("pending")
+  read              Boolean   @default(false)
+  archived          Boolean   @default(false)
+  relatedModule     String?
+  district          String?
+  sector            String?
+  crop              String?
+  deadline          String?
+  escalationLevel   Int       @default(0)
+  escalationPath    Json?
+  snoozedUntil      DateTime?
+  metadata          Json?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  farm              Farm?     @relation(fields: [farmId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([farmId, createdAt])
+  @@map("notification_alerts")
+}
+
+model NotificationTemplate {
+  id              String   @id @default(uuid())
+  title           String
+  category        String
+  description     String
+  status          String   @default("Draft")
+  lastUpdated     DateTime @default(now())
+  createdByUserId String?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdBy       User?    @relation("NotificationTemplateAuthor", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@map("notification_templates")
+}
+
+model AnalyticsExport {
+  id             String   @id @default(uuid())
+  actorUserId    String
+  farmId         String?
+  scopeType      String
+  reportTemplate String
+  exportFormat   String
+  dateRange      String?
+  cropType       String?
+  activityFilter String?
+  chartFilter    String?
+  methodology    String?
+  compliance     String?
+  comparison     String?
+  fileName       String?
+  payload        Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  actor          User     @relation(fields: [actorUserId], references: [id], onDelete: Cascade)
+  farm           Farm?    @relation(fields: [farmId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId, createdAt])
+  @@index([farmId, createdAt])
+  @@index([scopeType, createdAt])
+  @@map("analytics_exports")
+}
+
+model CommunityExpert {
+  id           String                @id @default(uuid())
+  name         String
+  specialty    String
+  organization String
+  district     String
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  discussions  CommunityDiscussion[]
+  questions    CommunityQuestion[]
+
+  @@map("community_experts")
+}
+
+model CommunityDiscussion {
+  id                String           @id @default(uuid())
+  title             String
+  summary           String
+  category          String
+  crop              String
+  region            String
+  topic             String
+  expertId          String?
+  replies           Int              @default(0)
+  views             Int              @default(0)
+  likes             Int              @default(0)
+  validationStatus  String           @default("Under Review")
+  postedLabel       String?
+  lastActivityLabel String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  expert            CommunityExpert? @relation(fields: [expertId], references: [id], onDelete: SetNull)
+
+  @@index([category, createdAt])
+  @@map("community_discussions")
+}
+
+model CommunityQuestion {
+  id            String           @id @default(uuid())
+  question      String
+  askedByUserId String?
+  askedByName   String
+  expertId      String?
+  response      String
+  status        String           @default("Queued")
+  accepted      Boolean          @default(false)
+  category      String
+  postedLabel   String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  askedByUser   User?            @relation("CommunityQuestionAuthor", fields: [askedByUserId], references: [id], onDelete: Cascade)
+  expert        CommunityExpert? @relation(fields: [expertId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@map("community_questions")
+}
+
+model CommunityStory {
+  id           String   @id @default(uuid())
+  title        String
+  summary      String
+  beforeAfter  String
+  theme        String
+  climateSmart Boolean  @default(false)
+  district     String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("community_stories")
+}
+
+model CommunityEvent {
+  id                String                       @id @default(uuid())
+  title             String
+  type              String
+  dateLabel         String
+  venue             String
+  region            String
+  registrations     Int                          @default(0)
+  seatsLeft         Int                          @default(0)
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+  registrationsList CommunityEventRegistration[]
+
+  @@map("community_events")
+}
+
+model CommunityEventRegistration {
+  id        String         @id @default(uuid())
+  eventId   String
+  userId    String
+  createdAt DateTime       @default(now())
+  event     CommunityEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User           @relation("CommunityEventRegistrationUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([userId, createdAt])
+  @@map("community_event_registrations")
+}
+
+model CommunityPractice {
+  id        String   @id @default(uuid())
+  title     String
+  status    String
+  rating    String
+  focus     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("community_practices")
+}
+
+model CommunityPracticeSubmission {
+  id                String   @id @default(uuid())
+  title             String
+  body              String
+  focus             String
+  status            String   @default("Pending validation")
+  submittedByUserId String?
+  submittedByName   String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  submittedByUser   User?    @relation("CommunityPracticeSubmitter", fields: [submittedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([submittedByUserId, createdAt])
+  @@map("community_practice_submissions")
+}
+
+model CommunityResource {
+  id        String   @id @default(uuid())
+  title     String
+  type      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("community_resources")
+}
+
+model CommunityContributor {
+  id            String   @id @default(uuid())
+  name          String
+  contributions Int
+  score         Int
+  rank          String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("community_contributors")
+}
+
+model CommunityActivity {
+  id          String   @id @default(uuid())
+  title       String
+  type        String
+  timeLabel   String?
+  actorUserId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  actorUser   User?    @relation("CommunityActivityActor", fields: [actorUserId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@map("community_activities")
+}
+
+model RegionalAdvisory {
+  id                String   @id @default(uuid())
+  title             String
+  district          String
+  sector            String
+  category          String
+  severity          String
+  message           String
+  recommendedAction String
+  deliveryChannel   String
+  targetFarmers     Int      @default(0)
+  status            String   @default("Draft")
+  createdByUserId   String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  author            User?    @relation("RegionalAdvisoryAuthor", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([district, createdAt])
+  @@map("regional_advisories")
+}
+
+model ExtensionWorkflowItem {
+  id             String    @id @default(uuid())
+  workflowKey    String    @unique
+  title          String
+  description    String
+  tone           String
+  status         String    @default("pending")
+  openCount      Int       @default(0)
+  actorUserId    String?
+  lastReviewedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  actorUser      User?     @relation("ExtensionWorkflowActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([workflowKey])
+  @@map("extension_workflow_items")
+}
+
+model CommunityFieldReport {
+  id             String   @id @default(uuid())
+  title          String
+  body           String
+  district       String
+  sector         String
+  category       String
+  severity       String
+  status         String   @default("Reviewing")
+  authorName     String
+  reporterUserId String?
+  farmId         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  reporterUser   User?    @relation("CommunityFieldReportAuthor", fields: [reporterUserId], references: [id], onDelete: SetNull)
+  farm           Farm?    @relation(fields: [farmId], references: [id], onDelete: SetNull)
+
+  @@index([district, createdAt])
+  @@map("community_field_reports")
+}
+
+model ContentEntry {
+  id              String   @id @default(uuid())
+  moduleType      String
+  title           String
+  status          String   @default("Draft")
+  language        String   @default("English")
+  cycle           String?
+  zone            String?
+  category        String?
+  summary         String?
+  metadata        Json?
+  createdByUserId String?
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdBy       User?    @relation("ContentEntryCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedBy       User?    @relation("ContentEntryUpdater", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([moduleType, updatedAt])
+  @@index([status, updatedAt])
+  @@map("content_entries")
+}
+
+model ContentSandboxRun {
+  id            String   @id @default(uuid())
+  actorUserId   String?
+  inputPayload  Json
+  outputPayload Json
+  savedAsRule   Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  actorUser     User?    @relation("ContentSandboxRunActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([savedAsRule, createdAt])
+  @@map("content_sandbox_runs")
+}

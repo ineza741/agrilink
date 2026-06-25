@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  X,
   Download,
   FileClock,
   Filter,
@@ -13,8 +14,10 @@ import {
   Upload,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import ImageWithFallback from "../../components/common/ImageWithFallback";
 import { useFarmerData } from "../../context/FarmerDataContext";
 import { apiClient } from "../../services/api";
+import { isBackendSessionActive, phase1BackendService } from "../../services/phase1Backend";
 import { downloadJsonFile, downloadTextFile } from "../../utils/actions";
 
 const cropLibrary = [
@@ -28,6 +31,7 @@ const cropLibrary = [
     organicMatterMin: 2.4,
     rotationTag: "Low Water Need",
     cycle: "4-5 Mo Cycle",
+    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/5/54/Wheat_close-up.JPG",
   },
   {
     name: "Maize (Corn)",
@@ -39,6 +43,7 @@ const cropLibrary = [
     organicMatterMin: 2.8,
     rotationTag: "Moderate Water",
     cycle: "3-4 Mo Cycle",
+    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/0/0c/Maize_by_David_Monniaux.jpg",
   },
   {
     name: "Soybean",
@@ -50,6 +55,7 @@ const cropLibrary = [
     organicMatterMin: 2.2,
     rotationTag: "Nitrogen Fixing",
     cycle: "3 Mo Cycle",
+    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/8/8b/Soybean.USDA.jpg",
   },
   {
     name: "Sorghum",
@@ -61,6 +67,7 @@ const cropLibrary = [
     organicMatterMin: 1.8,
     rotationTag: "Drought Tolerant",
     cycle: "4 Mo Cycle",
+    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/8/82/Sorghum_bicolor03.jpg",
   },
   {
     name: "Irish Potato",
@@ -72,6 +79,7 @@ const cropLibrary = [
     organicMatterMin: 3.0,
     rotationTag: "High Potassium",
     cycle: "3-4 Mo Cycle",
+    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/a/ab/Patates.jpg",
   },
   {
     name: "Beans",
@@ -83,6 +91,7 @@ const cropLibrary = [
     organicMatterMin: 2.0,
     rotationTag: "Rotation Friendly",
     cycle: "2-3 Mo Cycle",
+    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/8/8c/Phaseolus_vulgaris_-_haricots_verts.jpg",
   },
 ];
 
@@ -392,6 +401,201 @@ function createDefaultFarm() {
   };
 }
 
+function mapSoilRecordToForm(soilTest) {
+  if (!soilTest) return null;
+
+  return {
+    ph: String(soilTest.ph ?? "6.5"),
+    nitrogen: String(soilTest.nitrogen ?? "38"),
+    phosphorus: String(soilTest.phosphorus ?? "21"),
+    potassium: String(soilTest.potassium ?? "17"),
+    organicMatter: String(soilTest.organicMatter ?? "2.7"),
+    texture: soilTest.texture || "Loamy",
+  };
+}
+
+function buildBackendSoilPayload(form, selectedFarm, labFileName) {
+  return {
+    farmId: selectedFarm.id,
+    sourceType: labFileName ? "uploaded" : "manual",
+    ph: Number(form.ph || 0),
+    nitrogen: Number(form.nitrogen || 0),
+    phosphorus: Number(form.phosphorus || 0),
+    potassium: Number(form.potassium || 0),
+    organicMatter: Number(form.organicMatter || 0),
+    texture: form.texture,
+    notes: `Frontend soil analysis submitted for ${selectedFarm.name}.`,
+    ...(labFileName
+      ? {
+          labReport: {
+            fileName: labFileName,
+            fileType: "application/octet-stream",
+            storageMode: "demo-local",
+          },
+        }
+      : {}),
+  };
+}
+
+function areSoilFormsEqual(left, right) {
+  if (!left || !right) return false;
+
+  return (
+    String(left.ph ?? "") === String(right.ph ?? "") &&
+    String(left.nitrogen ?? "") === String(right.nitrogen ?? "") &&
+    String(left.phosphorus ?? "") === String(right.phosphorus ?? "") &&
+    String(left.potassium ?? "") === String(right.potassium ?? "") &&
+    String(left.organicMatter ?? "") === String(right.organicMatter ?? "") &&
+    String(left.texture ?? "") === String(right.texture ?? "")
+  );
+}
+
+function formatSoilTimestamp(value) {
+  if (!value) return "Not available";
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Not available";
+
+  return parsed.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatSoilDate(value) {
+  if (!value) return "Not available";
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Not available";
+
+  return parsed.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function getSoilSourceLabel(sourceType) {
+  switch (sourceType) {
+    case "uploaded":
+      return "Uploaded Lab Data";
+    case "estimated":
+      return "SoilGrids Estimate";
+    case "backend":
+      return "Backend Soil Test";
+    case "manual":
+      return "Manual Soil Entry";
+    default:
+      return "Local Soil Data";
+  }
+}
+
+function getHealthLabelFromScore(score) {
+  if (score >= 80) return "Excellent";
+  if (score >= 65) return "Good";
+  if (score >= 50) return "Moderate";
+  return "Low";
+}
+
+function mapBackendSuitabilityToCropCard(result) {
+  if (!result) return null;
+
+  const cropMeta = cropLibrary.find((crop) => crop.name === result.cropName);
+
+  return {
+    ...(cropMeta || {}),
+    name: result.cropName,
+    match: Number(result.suitabilityScore || 0),
+    note: result.recommendationSummary || "Backend suitability result is available for this crop.",
+    rotationTag: cropMeta?.rotationTag || result.suitabilityBand || "Backend advisory",
+    cycle: cropMeta?.cycle || "Backend analysis",
+    limitingFactors: Array.isArray(result.limitingFactors) ? result.limitingFactors : [],
+  };
+}
+
+function mapBackendFertilizerToRows(recommendation) {
+  if (!recommendation) return [];
+
+  const buildState = (value) => (value <= 0 ? "Sufficient" : value <= 24 ? "Moderate" : "Deficient");
+  const buildTone = (value) => (value <= 0 ? "green" : value <= 24 ? "amber" : "red");
+
+  return [
+    {
+      nutrient: "Nitrogen (N)",
+      state: buildState(recommendation.nitrogenKgHa),
+      fertilizer: recommendation.recommendedBlend || "Backend nutrient blend",
+      dosage: recommendation.nitrogenKgHa,
+      tone: buildTone(recommendation.nitrogenKgHa),
+      weatherAdjustment:
+        recommendation.applicationTiming || recommendation.recommendationSummary || "Backend fertilizer guidance available.",
+    },
+    {
+      nutrient: "Phosphorus (P)",
+      state: buildState(recommendation.phosphorusKgHa),
+      fertilizer: recommendation.recommendedBlend || "Backend nutrient blend",
+      dosage: recommendation.phosphorusKgHa,
+      tone: buildTone(recommendation.phosphorusKgHa),
+      weatherAdjustment:
+        recommendation.budgetNote || recommendation.recommendationSummary || "Backend fertilizer guidance available.",
+    },
+    {
+      nutrient: "Potassium (K)",
+      state: buildState(recommendation.potassiumKgHa),
+      fertilizer: recommendation.recommendedBlend || "Backend nutrient blend",
+      dosage: recommendation.potassiumKgHa,
+      tone: buildTone(recommendation.potassiumKgHa),
+      weatherAdjustment:
+        recommendation.recommendationSummary || recommendation.applicationTiming || "Backend fertilizer guidance available.",
+    },
+  ];
+}
+
+function buildLocalSoilHistoryEntry(selectedFarm, analysis, submittedForm, sourceMode, sourceStatus, labFileName) {
+  return {
+    id: `local-${selectedFarm.id}`,
+    farmId: selectedFarm.id,
+    sourceType: sourceMode || "manual",
+    analysisStatus: "Local Analysis",
+    ph: Number(submittedForm.ph || 0),
+    nitrogen: Number(submittedForm.nitrogen || 0),
+    phosphorus: Number(submittedForm.phosphorus || 0),
+    potassium: Number(submittedForm.potassium || 0),
+    organicMatter: Number(submittedForm.organicMatter || 0),
+    texture: submittedForm.texture,
+    notes: sourceStatus,
+    healthScore: analysis.healthScore,
+    healthLabel: analysis.healthLabel,
+    suitabilityResults: analysis.suitableCrops.map((crop) => ({
+      cropName: crop.name,
+      suitabilityScore: crop.match,
+      suitabilityBand: crop.match >= 85 ? "Best Fit" : crop.match >= 70 ? "Good Fit" : "Needs Adjustment",
+      recommendationSummary: crop.note,
+      limitingFactors: [],
+    })),
+    fertilizerRecommendation: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    analyzedAt: new Date().toISOString(),
+    labReport: labFileName
+      ? {
+          fileName: labFileName,
+          fileType: "application/octet-stream",
+          storageMode: "local-demo",
+        }
+      : null,
+  };
+}
+
+function getHistoryTopCrop(record) {
+  if (!record) return "No ranking";
+
+  const first = Array.isArray(record.suitabilityResults) ? record.suitabilityResults[0] : null;
+  return first?.cropName || first?.name || "No ranking";
+}
+
 function calculateSoilAnalysis(form, selectedFarm, climateContext, soilSourceMode) {
   const values = {
     ph: Number(form.ph || 0),
@@ -579,7 +783,9 @@ function calculateSoilAnalysis(form, selectedFarm, climateContext, soilSourceMod
 
 export function SoilCropPage() {
   const { currentFarms } = useFarmerData();
-  const farms = currentFarms.length ? currentFarms : [createDefaultFarm()];
+  const fallbackFarm = useMemo(() => createDefaultFarm(), []);
+  const farms = currentFarms.length ? currentFarms : [fallbackFarm];
+  const backendMode = isBackendSessionActive();
   const [selectedFarmId, setSelectedFarmId] = useState(farms[0]?.id || "soil-default-farm");
   const [libraryFilters, setLibraryFilters] = useState({
     search: "",
@@ -594,6 +800,10 @@ export function SoilCropPage() {
   const [sourceMode, setSourceMode] = useState("estimated");
   const [formDirty, setFormDirty] = useState(false);
   const [externalWarning, setExternalWarning] = useState("");
+  const [backendSoilHistory, setBackendSoilHistory] = useState([]);
+  const [backendLatestSoilTest, setBackendLatestSoilTest] = useState(null);
+  const [backendSoilMode, setBackendSoilMode] = useState("local");
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [form, setForm] = useState({
     ph: "6.5",
     nitrogen: "38",
@@ -615,6 +825,62 @@ export function SoilCropPage() {
     () => farms.find((farm) => farm.id === selectedFarmId) || farms[0],
     [farms, selectedFarmId]
   );
+  const selectedFarmCoordinates = `${selectedFarm?.location?.lat || 0}:${selectedFarm?.location?.lng || 0}`;
+  const selectedFarmRegion = selectedFarm?.region || "";
+  const selectedFarmName = selectedFarm?.name || "";
+  const selectedFarmPrimaryCrop = selectedFarm?.primaryCrop || "";
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadBackendSoilState() {
+      if (!backendMode || !selectedFarm?.id || selectedFarm.id === "soil-default-farm") {
+        if (active) {
+          setBackendSoilHistory([]);
+          setBackendLatestSoilTest(null);
+          setBackendSoilMode("local");
+        }
+        return;
+      }
+
+      try {
+        const [historyRows, suitabilityPayload] = await Promise.all([
+          phase1BackendService.soil.listByFarm(selectedFarm.id),
+          phase1BackendService.soil.getSuitabilityByFarm(selectedFarm.id),
+        ]);
+
+        if (!active) return;
+
+        const latestSoilTest = suitabilityPayload?.latestSoilTest || historyRows[0] || null;
+        setBackendSoilHistory(historyRows);
+        setBackendLatestSoilTest(latestSoilTest);
+        setBackendSoilMode(latestSoilTest ? "backend" : "local");
+
+        if (!formDirty && !labFileName && latestSoilTest) {
+          const hydratedForm = mapSoilRecordToForm(latestSoilTest);
+          if (hydratedForm && !areSoilFormsEqual(form, hydratedForm)) {
+            setForm(hydratedForm);
+          }
+          if (hydratedForm && !areSoilFormsEqual(submittedForm, hydratedForm)) {
+            setSubmittedForm(hydratedForm);
+            setSourceMode(latestSoilTest.sourceType || "manual");
+            setSourceStatus("Using backend soil test data with live weather context.");
+          }
+        }
+      } catch {
+        if (!active) return;
+        setBackendSoilHistory([]);
+        setBackendLatestSoilTest(null);
+        setBackendSoilMode("local");
+      }
+    }
+
+    loadBackendSoilState();
+
+    return () => {
+      active = false;
+    };
+  }, [backendMode, form, formDirty, labFileName, selectedFarm?.id, submittedForm]);
 
   useEffect(() => {
     let active = true;
@@ -649,7 +915,7 @@ export function SoilCropPage() {
         setSoilEstimate(estimate);
         setWeatherContext(climate);
 
-        if (!labFileName && !formDirty && estimate) {
+        if (!labFileName && !formDirty && estimate && backendSoilMode !== "backend") {
           const estimatedForm = {
             ph: String(estimate.ph),
             nitrogen: String(estimate.nitrogen),
@@ -659,8 +925,12 @@ export function SoilCropPage() {
             texture: estimate.texture,
           };
 
-          setForm(estimatedForm);
-          setSubmittedForm(estimatedForm);
+          if (!areSoilFormsEqual(form, estimatedForm)) {
+            setForm(estimatedForm);
+          }
+          if (!areSoilFormsEqual(submittedForm, estimatedForm)) {
+            setSubmittedForm(estimatedForm);
+          }
           setSourceMode("estimated");
         } else if (labFileName) {
           setSourceMode("uploaded");
@@ -670,6 +940,8 @@ export function SoilCropPage() {
 
         if (labFileName) {
           setSourceStatus("Using uploaded lab data. Estimated location data is only supporting the map and context.");
+        } else if (backendSoilMode === "backend" && backendLatestSoilTest) {
+          setSourceStatus("Using backend soil test data with live weather context.");
         } else if (!formDirty && soilLoaded && weatherLoaded) {
           setSourceStatus("Using estimated soil data from location (SoilGrids fallback) with live weather context.");
         } else if (!formDirty && soilLoaded) {
@@ -705,38 +977,74 @@ export function SoilCropPage() {
     return () => {
       active = false;
     };
-  }, [formDirty, labFileName, selectedFarm]);
+  }, [
+    backendLatestSoilTest?.id,
+    backendSoilMode,
+    form,
+    formDirty,
+    labFileName,
+    selectedFarm?.id,
+    selectedFarmCoordinates,
+    selectedFarmName,
+    selectedFarmPrimaryCrop,
+    submittedForm,
+  ]);
 
   useEffect(() => {
     if (labFileName) {
       setSourceMode("uploaded");
       setSourceStatus("Using uploaded lab data. Estimated location data is only supporting the map and context.");
     } else if (sourceMode === "uploaded") {
-      setSourceMode(formDirty ? "manual" : soilEstimate ? "estimated" : "manual");
+      setSourceMode(formDirty ? "manual" : backendSoilMode === "backend" ? "manual" : soilEstimate ? "estimated" : "manual");
       setSourceStatus(
-        soilEstimate && !formDirty
+        backendSoilMode === "backend" && !formDirty
+          ? "Using backend soil test data with live weather context."
+          : soilEstimate && !formDirty
           ? "Using estimated soil data from location (SoilGrids fallback) with live weather context."
           : "Using manual soil test data."
       );
     }
-  }, [formDirty, labFileName, soilEstimate, sourceMode]);
+  }, [backendSoilMode, formDirty, labFileName, soilEstimate, sourceMode]);
 
   const analysis = useMemo(
     () => calculateSoilAnalysis(submittedForm, selectedFarm, weatherContext, sourceMode),
     [selectedFarm, submittedForm, weatherContext, sourceMode]
   );
 
+  const effectiveSuitableCrops = useMemo(() => {
+    if (backendLatestSoilTest?.suitabilityResults?.length) {
+      const backendCards = backendLatestSoilTest.suitabilityResults.map(mapBackendSuitabilityToCropCard).filter(Boolean);
+      if (backendCards.length) return backendCards;
+    }
+
+    return analysis.suitableCrops;
+  }, [analysis.suitableCrops, backendLatestSoilTest]);
+
+  const effectiveFertilizerRows = useMemo(() => {
+    const backendRows = mapBackendFertilizerToRows(backendLatestSoilTest?.fertilizerRecommendation);
+    return backendRows.length ? backendRows : analysis.fertilizerRows;
+  }, [analysis.fertilizerRows, backendLatestSoilTest]);
+
+  const effectiveHealthScore =
+    backendLatestSoilTest?.healthScore && backendSoilMode === "backend"
+      ? backendLatestSoilTest.healthScore
+      : analysis.healthScore;
+  const effectiveHealthLabel =
+    backendLatestSoilTest?.healthLabel && backendSoilMode === "backend"
+      ? backendLatestSoilTest.healthLabel
+      : analysis.healthLabel;
+
   useEffect(() => {
     setSelectedRecommendationName((current) =>
-      analysis.suitableCrops.some((crop) => crop.name === current)
+      effectiveSuitableCrops.some((crop) => crop.name === current)
         ? current
-        : analysis.suitableCrops[0]?.name || ""
+        : effectiveSuitableCrops[0]?.name || ""
     );
-  }, [analysis.suitableCrops]);
+  }, [effectiveSuitableCrops]);
 
   const selectedRecommendation = useMemo(
-    () => analysis.suitableCrops.find((crop) => crop.name === selectedRecommendationName) || analysis.suitableCrops[0] || null,
-    [analysis.suitableCrops, selectedRecommendationName]
+    () => effectiveSuitableCrops.find((crop) => crop.name === selectedRecommendationName) || effectiveSuitableCrops[0] || null,
+    [effectiveSuitableCrops, selectedRecommendationName]
   );
 
   const selectedRecommendationDetails = useMemo(
@@ -763,13 +1071,73 @@ export function SoilCropPage() {
     return cropLibraryView.slice(0, 6).map((crop) => ({
       name: crop.name,
       compatibility:
-        analysis.suitableCrops.find((item) => item.name === crop.name)?.match ||
-        calculateSoilAnalysis(submittedForm, selectedFarm).suitableCrops.find((item) => item.name === crop.name)?.match ||
+        effectiveSuitableCrops.find((item) => item.name === crop.name)?.match ||
         0,
     }));
-  }, [analysis.suitableCrops, cropLibraryView, selectedFarm, submittedForm]);
+  }, [cropLibraryView, effectiveSuitableCrops]);
 
-  const handleAnalyze = () => {
+  const historyRecords = useMemo(() => {
+    if (backendSoilHistory.length > 0) return backendSoilHistory;
+    return [buildLocalSoilHistoryEntry(selectedFarm, analysis, submittedForm, sourceMode, sourceStatus, labFileName)];
+  }, [analysis, backendSoilHistory, labFileName, selectedFarm, sourceMode, sourceStatus, submittedForm]);
+
+  const currentLabMetadata = useMemo(() => {
+    if (backendLatestSoilTest?.labReport) {
+      return {
+        ...backendLatestSoilTest.labReport,
+        sourceLabel: getSoilSourceLabel(backendLatestSoilTest.sourceType || "backend"),
+        analysisStatus: backendLatestSoilTest.analysisStatus || "Analyzed",
+        capturedAt: backendLatestSoilTest.analyzedAt || backendLatestSoilTest.updatedAt || backendLatestSoilTest.createdAt,
+      };
+    }
+
+    if (labFileName) {
+      return {
+        fileName: labFileName,
+        fileType: "application/octet-stream",
+        storageMode: "local-demo",
+        sourceLabel: "Uploaded Lab Data",
+        analysisStatus: "Pending local analysis",
+        capturedAt: new Date().toISOString(),
+      };
+    }
+
+    return {
+      fileName: "No uploaded file",
+      fileType: backendSoilMode === "backend" ? "Database record" : "Local fallback",
+      storageMode: backendSoilMode === "backend" ? "backend" : "frontend-demo",
+      sourceLabel: getSoilSourceLabel(backendSoilMode === "backend" ? "backend" : sourceMode),
+      analysisStatus: backendLatestSoilTest?.analysisStatus || "Ready",
+      capturedAt: backendLatestSoilTest?.updatedAt || backendLatestSoilTest?.createdAt || null,
+    };
+  }, [backendLatestSoilTest, backendSoilMode, labFileName, sourceMode]);
+
+  const handleHistorySelect = (record) => {
+    const hydratedForm = mapSoilRecordToForm(record);
+    if (!hydratedForm) return;
+
+    setForm(hydratedForm);
+    setSubmittedForm(hydratedForm);
+    setFormDirty(false);
+    setLabFileName(record?.labReport?.fileName || "");
+    setSourceMode(record?.sourceType || "manual");
+    setSourceStatus(
+      record?.sourceType === "uploaded"
+        ? "Using uploaded lab data from record history with live weather context."
+        : record?.id?.startsWith?.("local-")
+        ? "Using local soil history entry."
+        : "Using backend soil test data from record history with live weather context."
+    );
+
+    if (!record?.id?.startsWith?.("local-")) {
+      setBackendLatestSoilTest(record);
+      setBackendSoilMode("backend");
+    }
+
+    setIsHistoryOpen(false);
+  };
+
+  const handleAnalyze = async () => {
     setSourceMode(labFileName ? "uploaded" : "manual");
     setSourceStatus(
       labFileName
@@ -777,6 +1145,31 @@ export function SoilCropPage() {
         : "Using manual soil test data."
     );
     setSubmittedForm(form);
+
+    if (!backendMode || !selectedFarm?.id || selectedFarm.id === "soil-default-farm") {
+      return;
+    }
+
+    try {
+      const payload = buildBackendSoilPayload(form, selectedFarm, labFileName);
+      const savedRecord = backendLatestSoilTest?.id
+        ? await phase1BackendService.soil.update(backendLatestSoilTest.id, payload)
+        : await phase1BackendService.soil.create(payload);
+
+      const analyzed = await phase1BackendService.soil.analyze(savedRecord.id);
+      const historyRows = await phase1BackendService.soil.listByFarm(selectedFarm.id);
+
+      setBackendSoilHistory(historyRows);
+      setBackendLatestSoilTest(analyzed.soilTest || savedRecord);
+      setBackendSoilMode("backend");
+      setSourceStatus(
+        labFileName
+          ? "Using uploaded lab data with backend soil persistence and live weather context."
+          : "Using backend soil test data with live weather context."
+      );
+    } catch {
+      setBackendSoilMode("local");
+    }
   };
 
   const exportAnalysis = () => {
@@ -790,6 +1183,9 @@ export function SoilCropPage() {
     downloadJsonFile("soil-analysis-history.json", {
       farm: selectedFarm,
       sourceStatus,
+      backendSoilMode,
+      backendLatestSoilTest,
+      backendSoilHistory,
       submittedForm,
       analysis,
       selectedRecommendation,
@@ -813,7 +1209,7 @@ export function SoilCropPage() {
             <Download size={15} />
             <span>Export PDF</span>
           </button>
-          <button type="button" className="prototype-soil-action primary" onClick={exportHistory}>
+          <button type="button" className="prototype-soil-action primary" onClick={() => setIsHistoryOpen(true)}>
             <FileClock size={15} />
             <span>View History</span>
           </button>
@@ -853,6 +1249,66 @@ export function SoilCropPage() {
           first, then weather refinement. Advanced crop health imaging will use AgroMonitoring later.
         </span>
         {externalWarning ? <em>{externalWarning}</em> : null}
+      </div>
+
+      <div className="prototype-soil-history-summary">
+        <article className="prototype-panel soil-history-meta-card">
+          <div className="prototype-soil-panel-title">
+            <h2>
+              <FileClock size={18} />
+              <span>Lab Report &amp; Soil Record</span>
+            </h2>
+            <span className="prototype-soil-badge">{currentLabMetadata.sourceLabel}</span>
+          </div>
+          <div className="soil-history-meta-grid">
+            <div>
+              <span>Latest report</span>
+              <strong>{currentLabMetadata.fileName}</strong>
+            </div>
+            <div>
+              <span>Analysis status</span>
+              <strong>{currentLabMetadata.analysisStatus}</strong>
+            </div>
+            <div>
+              <span>Captured</span>
+              <strong>{formatSoilTimestamp(currentLabMetadata.capturedAt)}</strong>
+            </div>
+            <div>
+              <span>Storage mode</span>
+              <strong>{currentLabMetadata.storageMode || "frontend-demo"}</strong>
+            </div>
+          </div>
+        </article>
+
+        <article className="prototype-panel soil-history-meta-card">
+          <div className="prototype-soil-panel-title">
+            <h2>
+              <FlaskConical size={18} />
+              <span>Backend-first Soil History</span>
+            </h2>
+            <span className="prototype-soil-badge">{historyRecords.length} records</span>
+          </div>
+          <div className="soil-history-meta-grid compact">
+            <div>
+              <span>Current score</span>
+              <strong>{effectiveHealthScore} / 100</strong>
+            </div>
+            <div>
+              <span>Soil mode</span>
+              <strong>{backendSoilMode === "backend" ? "Backend + live context" : "Local fallback mode"}</strong>
+            </div>
+            <div>
+              <span>Top crop</span>
+              <strong>{getHistoryTopCrop(backendLatestSoilTest || historyRecords[0])}</strong>
+            </div>
+            <div>
+              <span>History action</span>
+              <button type="button" className="prototype-soil-inline-link" onClick={() => setIsHistoryOpen(true)}>
+                Open history table
+              </button>
+            </div>
+          </div>
+        </article>
       </div>
 
       <div className="prototype-soil-grid functional">
@@ -949,12 +1405,12 @@ export function SoilCropPage() {
           <article className="prototype-panel soil-score-panel">
             <div className="soil-panel-header-row">
               <h3>Soil Health Score</h3>
-              <span className={`soil-score-badge ${analysis.healthLabel.toLowerCase()}`}>{analysis.healthLabel}</span>
+              <span className={`soil-score-badge ${effectiveHealthLabel.toLowerCase()}`}>{effectiveHealthLabel}</span>
             </div>
             <div className="soil-score-ring">
               <div className="soil-score-ring-inner">
-                <strong>{analysis.healthScore}</strong>
-                <span>{analysis.healthLabel}</span>
+                <strong>{effectiveHealthScore}</strong>
+                <span>{effectiveHealthLabel}</span>
               </div>
             </div>
             <p>
@@ -1016,7 +1472,7 @@ export function SoilCropPage() {
             </div>
 
             <div className="prototype-crop-grid">
-              {analysis.suitableCrops.slice(0, 3).map((crop, index) => (
+              {effectiveSuitableCrops.slice(0, 3).map((crop, index) => (
                 <button
                   key={crop.name}
                   type="button"
@@ -1118,8 +1574,8 @@ export function SoilCropPage() {
                 <span>Dosage (kg/acre)</span>
               </div>
 
-              {analysis.fertilizerRows.map((row) => (
-                <div key={row.nutrient} className="soil-fertilizer-row">
+                {effectiveFertilizerRows.map((row) => (
+                  <div key={row.nutrient} className="soil-fertilizer-row">
                   <strong>{row.nutrient}</strong>
                   <span className="soil-state">
                     <i className={row.tone} />
@@ -1201,9 +1657,20 @@ export function SoilCropPage() {
               <div className="soil-library-list">
                 {cropLibraryView.map((crop) => (
                   <article key={crop.name} className="soil-library-item">
-                    <strong>{crop.name}</strong>
-                    <span>{crop.season} | {crop.region}</span>
-                    <p>{crop.soilTypes.join(", ")} | pH {crop.phRange[0]}-{crop.phRange[1]}</p>
+                    <div className="soil-library-image-wrap">
+                      <ImageWithFallback
+                        src={crop.imageUrl}
+                        alt={crop.name}
+                        label={crop.name}
+                        category="crop"
+                        className="soil-library-image"
+                      />
+                    </div>
+                    <div className="soil-library-copy">
+                      <strong>{crop.name}</strong>
+                      <span>{crop.season} | {crop.region}</span>
+                      <p>{crop.soilTypes.join(", ")} | pH {crop.phRange[0]}-{crop.phRange[1]}</p>
+                    </div>
                   </article>
                 ))}
               </div>
@@ -1252,6 +1719,60 @@ export function SoilCropPage() {
           </div>
         </div>
       </div>
+
+      {isHistoryOpen ? (
+        <div className="prototype-soil-history-modal-backdrop" role="presentation" onClick={() => setIsHistoryOpen(false)}>
+          <div
+            className="prototype-soil-history-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Soil test history"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="prototype-soil-history-modal-head">
+              <div>
+                <h2>Soil Test History</h2>
+                <p>Backend records are shown first. Local fallback entries remain available when backend data is not yet present.</p>
+              </div>
+              <div className="prototype-soil-history-modal-actions">
+                <button type="button" className="prototype-soil-action secondary" onClick={exportHistory}>
+                  <Download size={15} />
+                  <span>Export JSON</span>
+                </button>
+                <button type="button" className="prototype-soil-history-close" onClick={() => setIsHistoryOpen(false)} aria-label="Close history">
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="prototype-soil-history-table">
+              <div className="prototype-soil-history-table-head">
+                <span>Source</span>
+                <span>Health</span>
+                <span>Status</span>
+                <span>Lab Report</span>
+                <span>Updated</span>
+                <span>Top Crop</span>
+                <span>Action</span>
+              </div>
+
+              {historyRecords.map((record) => (
+                <div key={record.id} className="prototype-soil-history-table-row">
+                  <span>{getSoilSourceLabel(record.sourceType)}</span>
+                  <strong>{record.healthScore || 0} / 100</strong>
+                  <span>{record.analysisStatus || "Ready"}</span>
+                  <span>{record.labReport?.fileName || "No file attached"}</span>
+                  <span>{formatSoilDate(record.updatedAt || record.createdAt)}</span>
+                  <span>{getHistoryTopCrop(record)}</span>
+                  <button type="button" className="prototype-soil-table-action" onClick={() => handleHistorySelect(record)}>
+                    Use Record
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

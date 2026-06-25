@@ -8,9 +8,33 @@ export function AuthProvider({ children }) {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    authService.bootstrap();
-    setUser(authService.getCurrentUser());
-    setIsReady(true);
+    let isMounted = true;
+
+    async function bootstrapAuth() {
+      authService.bootstrap();
+      const localUser = authService.getCurrentUser();
+
+      if (isMounted) {
+        setUser(localUser);
+      }
+
+      try {
+        const refreshedUser = await authService.refreshCurrentUser();
+        if (isMounted && refreshedUser) {
+          setUser(refreshedUser);
+        }
+      } finally {
+        if (isMounted) {
+          setIsReady(true);
+        }
+      }
+    }
+
+    bootstrapAuth();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const value = useMemo(
@@ -18,12 +42,12 @@ export function AuthProvider({ children }) {
       user,
       isReady,
       login: async (credentials) => {
-        const nextUser = authService.login(credentials);
+        const nextUser = await authService.login(credentials);
         setUser(nextUser);
         return nextUser;
       },
       register: async (payload) => {
-        const nextUser = authService.register(payload);
+        const nextUser = await authService.register(payload);
         setUser(nextUser);
         return nextUser;
       },
@@ -33,7 +57,9 @@ export function AuthProvider({ children }) {
       },
       updateCurrentUser: async (updates) => {
         const nextUser = authService.updateCurrentUser(updates);
-        setUser(nextUser);
+        setUser((currentUser) =>
+          JSON.stringify(currentUser) === JSON.stringify(nextUser) ? currentUser : nextUser
+        );
         return nextUser;
       },
     }),

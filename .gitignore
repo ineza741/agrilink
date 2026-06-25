@@ -1,0 +1,9 @@
+.idea/
+frontend/.git-embedded-backup/
+frontend/vite-dev.log
+frontend/node_modules/
+backend/node_modules/
+backend/.env
+frontend/dist/
+backend/coverage/
+backend/*.log

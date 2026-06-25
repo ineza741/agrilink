@@ -23,6 +23,7 @@ import { RecommendationsPage } from "../pages/recommendations/RecommendationsPag
 import { SettingsPage } from "../pages/settings/SettingsPage";
 import { SoilCropPage } from "../pages/soil-crop/SoilCropPage";
 import { WeatherPage } from "../pages/weather/WeatherPage";
+import { isAdminRole } from "../utils/roles";
 
 function ProtectedLayout() {
   return (
@@ -34,7 +35,7 @@ function ProtectedLayout() {
 
 function RoleDashboardPage() {
   const { user } = useAuth();
-  return user?.role === "admin" ? <DashboardPage /> : <FarmerDashboardPage />;
+  return isAdminRole(user?.role) ? <DashboardPage /> : <FarmerDashboardPage />;
 }
 
 export function AppRouter() {

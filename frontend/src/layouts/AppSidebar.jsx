@@ -6,6 +6,7 @@ import {
   farmerNavigationSections,
 } from "../data/navigation";
 import { useAuth } from "../context/AuthContext";
+import { getAdminRoleLabel, isAdminRole } from "../utils/roles";
 
 function initialsFromName(name = "User") {
   return name
@@ -19,7 +20,7 @@ function initialsFromName(name = "User") {
 export function AppSidebar({ isOpen = false, onClose = () => {} }) {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = isAdminRole(user?.role);
   const sections = isAdmin ? adminNavigationSections : farmerNavigationSections;
   const initials = initialsFromName(user?.name);
 
@@ -88,7 +89,7 @@ export function AppSidebar({ isOpen = false, onClose = () => {} }) {
           <div className="footer-avatar">{initials}</div>
           <div>
             <strong>{user?.name || brandConfig.adminFooterName}</strong>
-            <span>{user?.role === "admin" ? "Administrator" : brandConfig.adminFooterRole}</span>
+            <span>{getAdminRoleLabel(user?.role || brandConfig.adminFooterRole)}</span>
           </div>
         </div>
       ) : (

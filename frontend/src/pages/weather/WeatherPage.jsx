@@ -22,6 +22,7 @@ import {
   buildOpenMeteoArchiveUrl,
   buildOpenMeteoForecastUrl,
 } from "../../services/api";
+import { isBackendSessionActive, phase1BackendService } from "../../services/phase1Backend";
 import { useFarmerData } from "../../context/FarmerDataContext";
 
 const WEATHER_CODE_MAP = {
@@ -347,6 +348,7 @@ export function WeatherPage() {
     () => farms.find((farm) => farm.id === selectedFarmId) || farms[0] || null,
     [farms, selectedFarmId]
   );
+  const backendMode = isBackendSessionActive() && Boolean(selectedFarm?.id);
 
   useEffect(() => {
     if (!selectedFarm?.location?.lat || !selectedFarm?.location?.lng) {
@@ -372,36 +374,79 @@ export function WeatherPage() {
       console.log("Historical API URL:", historicalUrl);
     }
 
-    Promise.allSettled([
-      apiClient.weather.forecast(latitude, longitude),
-      apiClient.weather.archive(latitude, longitude, startDate, endDate),
-    ])
-      .then((results) => {
-        if (cancelled) return;
+    async function loadWeather() {
+      let backendLoaded = false;
 
-        const [forecastResult, archiveResult] = results;
+      if (backendMode) {
+        try {
+          const backendDashboard = await phase1BackendService.weather.dashboard(selectedFarm.id, {
+            range: selectedRange,
+          });
 
-        if (forecastResult.status !== "fulfilled") {
+          if (cancelled) return;
+
+          if (backendDashboard?.daily && import.meta.env.DEV) {
+            console.log("Returned daily forecast arrays:", backendDashboard.daily);
+          }
+
+          setForecastData({
+            current: backendDashboard?.current || null,
+            daily: backendDashboard?.daily || null,
+          });
+          setHistoricalData(Array.isArray(backendDashboard?.historicalSeries) ? backendDashboard.historicalSeries : []);
+          setWarning(backendDashboard?.warning || "");
+          setLastUpdated(backendDashboard?.lastUpdated || formatTimestamp(new Date()));
+          backendLoaded = Boolean(backendDashboard?.current);
+        } catch (backendError) {
+          if (import.meta.env.DEV) {
+            console.error("[WeatherPage] backend weather load failed", backendError);
+          }
+        }
+      }
+
+      if (backendLoaded || cancelled) {
+        return;
+      }
+
+      const results = await Promise.allSettled([
+        apiClient.weather.forecast(latitude, longitude),
+        apiClient.weather.archive(latitude, longitude, startDate, endDate),
+      ]);
+
+      if (cancelled) return;
+
+      const [forecastResult, archiveResult] = results;
+
+      if (forecastResult.status !== "fulfilled") {
+        setError("Unable to fetch weather data. Please check internet connection or coordinates.");
+        setForecastData(null);
+        setHistoricalData([]);
+        return;
+      }
+
+      if (import.meta.env.DEV) {
+        console.log("Returned daily forecast arrays:", forecastResult.value.daily);
+      }
+
+      setForecastData(forecastResult.value);
+
+      if (archiveResult.status === "fulfilled") {
+        setHistoricalData(toHistoricalSeries(archiveResult.value));
+      } else {
+        setHistoricalData([]);
+        setWarning("Historical climate trend could not be loaded right now. Live forecast data is still available.");
+      }
+
+      setLastUpdated(formatTimestamp(new Date()));
+    }
+
+    loadWeather()
+      .catch(() => {
+        if (!cancelled) {
           setError("Unable to fetch weather data. Please check internet connection or coordinates.");
           setForecastData(null);
           setHistoricalData([]);
-          return;
         }
-
-        if (import.meta.env.DEV) {
-          console.log("Returned daily forecast arrays:", forecastResult.value.daily);
-        }
-
-        setForecastData(forecastResult.value);
-
-        if (archiveResult.status === "fulfilled") {
-          setHistoricalData(toHistoricalSeries(archiveResult.value));
-        } else {
-          setHistoricalData([]);
-          setWarning("Historical climate trend could not be loaded right now. Live forecast data is still available.");
-        }
-
-        setLastUpdated(formatTimestamp(new Date()));
       })
       .finally(() => {
         if (!cancelled) {
@@ -412,7 +457,7 @@ export function WeatherPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedFarm, selectedRange]);
+  }, [backendMode, selectedFarm, selectedRange]);
 
   const forecastDays = useMemo(
     () => (forecastData?.daily ? toForecastDays(forecastData.daily) : []),

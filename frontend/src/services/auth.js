@@ -1,3 +1,5 @@
+import { clearBackendSession, isBackendSessionActive, phase1BackendService } from "./phase1Backend";
+
 const STORAGE_KEYS = {
   users: "agri-feed-users",
   currentUser: "agri-feed-current-user",
@@ -16,21 +18,32 @@ const defaultUsers = [
   {
     id: "user-admin-1",
     name: "AgriFeed Admin",
-    email: "admin@agrifeed.com",
-    password: "Admin123!",
+    email: "admin@agrisupport.rw",
+    password: "Admin@123",
     role: "admin",
     createdAt: "2026-06-01T08:00:00.000Z",
   },
   {
     id: "user-farmer-1",
     name: "Rodrigue Farmer",
-    email: "farmer@agrifeed.com",
-    password: "Farmer123!",
+    email: "farmer@agrisupport.rw",
+    password: "Farmer@123",
     role: "farmer",
     contact: "+250 788 555 101",
     region: "Gatenga Sector, Kicukiro District",
     experienceLevel: "Intermediate",
     createdAt: "2026-06-02T09:30:00.000Z",
+  },
+  {
+    id: "user-officer-1",
+    name: "Extension Officer",
+    email: "officer@agrisupport.rw",
+    password: "Officer@123",
+    role: "admin",
+    contact: "+250 788 400 210",
+    region: "Gatenga Sector, Kicukiro District",
+    experienceLevel: "Extension Officer",
+    createdAt: "2026-06-03T08:15:00.000Z",
   },
   {
     id: "user-farmer-2",
@@ -126,6 +139,23 @@ function saveUsers(users) {
   localStorage.setItem(STORAGE_KEYS.users, JSON.stringify(users));
 }
 
+function upsertUserRecord(userRecord) {
+  const users = readUsers();
+  const existingIndex = users.findIndex((user) => user.id === userRecord.id);
+  const nextUsers = [...users];
+
+  if (existingIndex === -1) {
+    nextUsers.push(normalizeUserRecord(userRecord));
+  } else {
+    nextUsers[existingIndex] = normalizeUserRecord({
+      ...nextUsers[existingIndex],
+      ...userRecord,
+    });
+  }
+
+  saveUsers(nextUsers);
+}
+
 function createUserRecord(payload) {
   return normalizeUserRecord({
     id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -133,6 +163,12 @@ function createUserRecord(payload) {
     region: DEFAULT_REGION,
     ...payload,
   });
+}
+
+function persistCurrentUser(user) {
+  localStorage.setItem(STORAGE_KEYS.currentUser, JSON.stringify(user));
+  upsertUserRecord(user);
+  return user;
 }
 
 export const authService = {
@@ -145,38 +181,74 @@ export const authService = {
     return saved ? JSON.parse(saved) : null;
   },
 
-  login({ email, password }) {
-    const users = readUsers();
-    const user = users.find(
-      (item) =>
-        item.email.toLowerCase() === email.toLowerCase() &&
-        item.password === password
-    );
+  async refreshCurrentUser() {
+    const currentUser = authService.getCurrentUser();
 
-    if (!user) {
-      throw new Error("Invalid email or password.");
+    if (!currentUser) {
+      return null;
     }
 
-    localStorage.setItem(STORAGE_KEYS.currentUser, JSON.stringify(user));
-    return user;
+    if (!isBackendSessionActive()) {
+      return currentUser;
+    }
+
+    try {
+      const backendUser = await phase1BackendService.auth.me();
+      return persistCurrentUser(backendUser);
+    } catch {
+      return currentUser;
+    }
   },
 
-  register(payload) {
-    const users = readUsers();
-    const exists = users.some(
-      (item) => item.email.toLowerCase() === payload.email.toLowerCase()
-    );
+  async login({ email, password }) {
+    try {
+      const backendUser = await phase1BackendService.auth.login({ email, password });
+      return persistCurrentUser({
+        ...backendUser,
+        password,
+      });
+    } catch {
+      const users = readUsers();
+      const user = users.find(
+        (item) =>
+          item.email.toLowerCase() === email.toLowerCase() &&
+          item.password === password
+      );
 
-    if (exists) {
-      throw new Error("An account with this email already exists.");
+      if (!user) {
+        throw new Error("Invalid email or password.");
+      }
+
+      clearBackendSession();
+      localStorage.setItem(STORAGE_KEYS.currentUser, JSON.stringify(user));
+      return user;
     }
+  },
 
-    const user = createUserRecord(payload);
+  async register(payload) {
+    try {
+      const backendUser = await phase1BackendService.auth.register(payload);
+      return persistCurrentUser({
+        ...backendUser,
+        password: payload.password,
+      });
+    } catch {
+      clearBackendSession();
+      const users = readUsers();
+      const exists = users.some(
+        (item) => item.email.toLowerCase() === payload.email.toLowerCase()
+      );
 
-    const nextUsers = [...users, user];
-    saveUsers(nextUsers);
-    localStorage.setItem(STORAGE_KEYS.currentUser, JSON.stringify(user));
-    return user;
+      if (exists) {
+        throw new Error("An account with this email already exists.");
+      }
+
+      const user = createUserRecord(payload);
+      const nextUsers = [...users, user];
+      saveUsers(nextUsers);
+      localStorage.setItem(STORAGE_KEYS.currentUser, JSON.stringify(user));
+      return user;
+    }
   },
 
   createUser(payload) {
@@ -195,6 +267,7 @@ export const authService = {
   },
 
   logout() {
+    clearBackendSession();
     localStorage.removeItem(STORAGE_KEYS.currentUser);
   },
 

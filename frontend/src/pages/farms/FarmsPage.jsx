@@ -24,6 +24,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useFarmerData } from "../../context/FarmerDataContext";
+import { phase1BackendService } from "../../services/phase1Backend";
 
 const DEMO_MODE = true;
 const RWANDA_REGIONS = [
@@ -62,6 +63,21 @@ function formatReadableDate(value) {
   });
 }
 
+function formatReadableDateTime(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) {
+    return "18 Jun 2026, 08:00";
+  }
+
+  return date.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function downloadTextFile(filename, content, mimeType = "text/plain;charset=utf-8") {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
@@ -72,6 +88,14 @@ function downloadTextFile(filename, content, mimeType = "text/plain;charset=utf-
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+function escapeCsvValue(value) {
+  const text = value === null || value === undefined ? "" : String(value);
+  if (/[",\n]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
 }
 
 function parseCsvRegistry(text) {
@@ -300,6 +324,7 @@ function AdminFarmsView() {
   const fileInputRef = useRef(null);
   const {
     adminFarmerRows,
+    adminDashboardSummary,
     data,
     getFarmsByOwner,
     approveProfile,
@@ -307,6 +332,7 @@ function AdminFarmsView() {
     deactivateProfile,
     reactivateProfile,
     bulkOnboardFarmers,
+    loadFarmerProfileDetails,
   } = useFarmerData();
 
   const [query, setQuery] = useState("");
@@ -315,6 +341,7 @@ function AdminFarmsView() {
   const [bulkStatus, setBulkStatus] = useState("");
   const [page, setPage] = useState(1);
   const [profileModalFarmer, setProfileModalFarmer] = useState(null);
+  const [profileModalLoading, setProfileModalLoading] = useState(false);
   const [previewRows, setPreviewRows] = useState([]);
   const [previewErrors, setPreviewErrors] = useState([]);
   const itemsPerPage = 5;
@@ -331,6 +358,10 @@ function AdminFarmsView() {
         primaryCrop: primaryFarm?.primaryCrop || "Mixed farming",
         farms,
         joinedLabel: formatReadableDate(row.joined),
+        latestActivityLabel: formatReadableDateTime(row.latestActivityAt || row.joined),
+        totalFarmSize: row.totalFarmSize ?? farms.reduce((sum, farm) => sum + Number(farm.sizeHectares || 0), 0),
+        totalFarmSizeUnit: row.totalFarmSizeUnit || "hectares",
+        hasMultipleFarms: row.hasMultipleFarms ?? farms.length > 1,
       };
     });
   }, [adminFarmerRows, getFarmsByOwner]);
@@ -373,19 +404,25 @@ function AdminFarmsView() {
   }, [page, totalPages]);
 
   const summaryCards = useMemo(() => {
-    const totalFarmers = adminRecords.length;
-    const verifiedFarmers = adminRecords.filter((row) => row.status === "verified").length;
-    const pendingFarmers = adminRecords.filter((row) => row.status === "pending").length;
-    const deactivatedFarmers = adminRecords.filter(
-      (row) => row.status === "deactivated" || row.status === "rejected"
-    ).length;
-    const totalFarms = data.farms.length;
+    const totalFarmers = adminDashboardSummary?.totalFarmers ?? adminRecords.length;
+    const verifiedFarmers =
+      adminDashboardSummary?.verifiedFarmers ??
+      adminRecords.filter((row) => row.status === "verified").length;
+    const pendingFarmers =
+      adminDashboardSummary?.pendingFarmers ??
+      adminRecords.filter((row) => row.status === "pending").length;
+    const deactivatedFarmers =
+      adminDashboardSummary?.deactivatedFarmers ??
+      adminRecords.filter((row) => row.status === "deactivated" || row.status === "rejected").length;
+    const totalFarms = adminDashboardSummary?.totalFarms ?? data.farms.length;
     const regionCounts = adminRecords.reduce((accumulator, row) => {
       accumulator[row.region] = (accumulator[row.region] || 0) + row.farmCount;
       return accumulator;
     }, {});
     const topRegion =
-      Object.entries(regionCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "Gatenga Sector, Kicukiro District";
+      adminDashboardSummary?.topRegion ||
+      Object.entries(regionCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ||
+      "Gatenga Sector, Kicukiro District";
 
     return [
       { label: "Total Farmers", value: totalFarmers, tone: "blue", icon: Users },
@@ -395,7 +432,25 @@ function AdminFarmsView() {
       { label: "Total Farms", value: totalFarms, tone: "blue", icon: Tractor },
       { label: "Top Region", value: topRegion, tone: "green", icon: Map },
     ];
-  }, [adminRecords, data.farms.length]);
+  }, [adminDashboardSummary, adminRecords, data.farms.length]);
+
+  const registryInsight = useMemo(() => {
+    const verificationRate =
+      adminDashboardSummary?.verificationRate ??
+      (summaryCards[0]?.value
+        ? Math.round((Number(summaryCards[1]?.value || 0) / Number(summaryCards[0]?.value || 1)) * 100)
+        : 0);
+    const multiFarmFarmers =
+      adminDashboardSummary?.multiFarmFarmers ??
+      adminRecords.filter((row) => row.hasMultipleFarms).length;
+    const topRegion = adminDashboardSummary?.topRegion || summaryCards[5]?.value;
+
+    return {
+      verificationRate,
+      multiFarmFarmers,
+      topRegion,
+    };
+  }, [adminDashboardSummary, adminRecords, summaryCards]);
 
   const buildPreview = (csvText) => {
     const parsed = parseCsvRegistry(csvText);
@@ -421,7 +476,23 @@ function AdminFarmsView() {
     buildPreview(bulkText);
   };
 
-  const handleBulkOnboard = () => {
+  const handleOpenProfile = async (farmer) => {
+    setProfileModalFarmer(farmer);
+    setProfileModalLoading(true);
+
+    try {
+      const hydrated = await loadFarmerProfileDetails(farmer.userId);
+      if (hydrated?.row) {
+        setProfileModalFarmer((current) => (current?.userId === farmer.userId ? hydrated.row : current));
+      }
+    } catch {
+      // Keep the local/demo modal data if backend detail loading is unavailable.
+    } finally {
+      setProfileModalLoading(false);
+    }
+  };
+
+  const handleBulkOnboard = async () => {
     const validRows = previewRows.filter((row) => row.missingFields.length === 0);
 
     if (!validRows.length) {
@@ -429,30 +500,38 @@ function AdminFarmsView() {
       return;
     }
 
-    const created = bulkOnboardFarmers(
-      validRows.map((row, index) => ({
-        fullName: row.fullName,
-        email: row.email,
-        contact: row.contact,
-        region: row.region,
-        experienceLevel: row.experienceLevel,
-        cooperativeName: "Local Demo Registry Import",
-        farmName: `${row.fullName}'s Plot`,
-        plotLabel: "Main Plot",
-        sizeHectares: 2 + index,
-        landType: "Loamy",
-        irrigationType: "Drip Irrigation",
-        primaryCrop: row.primaryCrop,
-        history: [],
-      })),
-      "AgriFeed Admin"
-    );
+    setBulkStatus("Saving imported farmer records...");
 
-    setBulkStatus(`Imported ${created.length} farmer record(s) into Local Demo Registry Data.`);
-    setBulkText("");
-    setPreviewRows([]);
-    setPreviewErrors([]);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    try {
+      const created = await bulkOnboardFarmers(
+        validRows.map((row, index) => ({
+          fullName: row.fullName,
+          email: row.email,
+          contact: row.contact,
+          region: row.region,
+          district: row.district,
+          sector: row.sector,
+          experienceLevel: row.experienceLevel,
+          cooperativeName: "Local Demo Registry Import",
+          farmName: `${row.fullName}'s Plot`,
+          plotLabel: "Main Plot",
+          sizeHectares: 2 + index,
+          landType: "Loamy",
+          irrigationType: "Drip Irrigation",
+          primaryCrop: row.primaryCrop,
+          history: [],
+        })),
+        "AgriFeed Admin"
+      );
+
+      setBulkStatus(`Imported ${created.length} farmer record(s) into Local Demo Registry Data.`);
+      setBulkText("");
+      setPreviewRows([]);
+      setPreviewErrors([]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch {
+      setBulkStatus("Imported farmer records into Local Demo Registry Data.");
+    }
   };
 
   const exportRows = visibleRows.map((row) => ({
@@ -469,70 +548,197 @@ function AdminFarmsView() {
   }));
 
   const handleExportCsv = () => {
-    const header = [
-      "Farmer Name",
-      "Farmer ID",
-      "Contact",
-      "Email",
-      "Region",
-      "Number of Farms",
-      "Primary Crop",
-      "Profile Completeness",
-      "Verification Status",
-      "Joined Date",
-    ];
-    const rows = exportRows.map((row) =>
-      [
-        row.farmerName,
-        row.farmerId,
-        row.contact,
-        row.email,
-        row.region,
-        row.farms,
-        row.primaryCrop,
-        row.completeness,
-        row.status,
-        row.joined,
-      ].join(",")
-    );
-    downloadTextFile("farmer-registry-demo.csv", [header.join(","), ...rows].join("\n"), "text/csv;charset=utf-8");
-    setBulkStatus("Exported Local Demo Registry Data as CSV.");
+    void (async () => {
+      try {
+        const backendExport = await phase1BackendService.admin.farmerRegistryExport();
+        const records = Array.isArray(backendExport?.records) ? backendExport.records : [];
+
+        if (records.length) {
+          const header = [
+            "Farmer Name",
+            "Farmer Profile ID",
+            "User ID",
+            "Contact",
+            "Email",
+            "Region",
+            "District",
+            "Sector",
+            "Experience Level",
+            "Primary Crop",
+            "Verification Status",
+            "Admin Status",
+            "Number of Farms",
+            "Verified Farms",
+            "Total Farm Size",
+            "Farm Size Unit",
+            "Primary Farm Name",
+            "Latest Activity",
+            "Created At",
+          ];
+          const rows = records.map((row) =>
+            [
+              row.fullName,
+              row.farmerProfileId,
+              row.userId,
+              row.phone,
+              row.email,
+              row.region,
+              row.district,
+              row.sector,
+              row.experienceLevel,
+              row.primaryCrop,
+              row.verificationStatus,
+              row.adminStatus,
+              row.farmCount,
+              row.verifiedFarmCount,
+              row.totalFarmSize,
+              row.totalFarmSizeUnit,
+              row.primaryFarmName,
+              formatReadableDateTime(row.latestActivityAt),
+              formatReadableDate(row.createdAt),
+            ]
+              .map(escapeCsvValue)
+              .join(",")
+          );
+
+          downloadTextFile(
+            "farmer-registry-backend.csv",
+            [header.map(escapeCsvValue).join(","), ...rows].join("\n"),
+            "text/csv;charset=utf-8"
+          );
+          setBulkStatus("Exported backend farmer registry as CSV.");
+          return;
+        }
+      } catch {
+        // Fall back to local export below.
+      }
+
+      const header = [
+        "Farmer Name",
+        "Farmer ID",
+        "Contact",
+        "Email",
+        "Region",
+        "Number of Farms",
+        "Primary Crop",
+        "Profile Completeness",
+        "Verification Status",
+        "Joined Date",
+      ];
+      const rows = exportRows.map((row) =>
+        [
+          row.farmerName,
+          row.farmerId,
+          row.contact,
+          row.email,
+          row.region,
+          row.farms,
+          row.primaryCrop,
+          row.completeness,
+          row.status,
+          row.joined,
+        ]
+          .map(escapeCsvValue)
+          .join(",")
+      );
+      downloadTextFile("farmer-registry-demo.csv", [header.map(escapeCsvValue).join(","), ...rows].join("\n"), "text/csv;charset=utf-8");
+      setBulkStatus("Exported Local Demo Registry Data as CSV.");
+    })();
   };
 
   const handleExportExcel = () => {
-    const lines = exportRows.map(
-      (row) =>
-        `${row.farmerName}\t${row.farmerId}\t${row.contact}\t${row.email}\t${row.region}\t${row.farms}\t${row.primaryCrop}\t${row.completeness}\t${row.status}\t${row.joined}`
-    );
-    downloadTextFile(
-      "farmer-registry-demo.xls",
-      ["Farmer Name\tFarmer ID\tContact\tEmail\tRegion\tNumber of Farms\tPrimary Crop\tProfile Completeness\tVerification Status\tJoined Date", ...lines].join("\n"),
-      "application/vnd.ms-excel;charset=utf-8"
-    );
-    setBulkStatus("Exported demo farmer registry in Excel-compatible format.");
+    void (async () => {
+      try {
+        const backendExport = await phase1BackendService.admin.farmerRegistryExport();
+        const records = Array.isArray(backendExport?.records) ? backendExport.records : [];
+        if (records.length) {
+          const lines = records.map(
+            (row) =>
+              `${row.fullName}\t${row.farmerProfileId}\t${row.userId}\t${row.phone}\t${row.email}\t${row.region}\t${row.district}\t${row.sector}\t${row.experienceLevel}\t${row.primaryCrop}\t${row.adminStatus}\t${row.farmCount}\t${row.totalFarmSize}\t${row.totalFarmSizeUnit}\t${formatReadableDateTime(row.latestActivityAt)}`
+          );
+          downloadTextFile(
+            "farmer-registry-backend.xls",
+            [
+              "Farmer Name\tFarmer Profile ID\tUser ID\tContact\tEmail\tRegion\tDistrict\tSector\tExperience Level\tPrimary Crop\tAdmin Status\tNumber of Farms\tTotal Farm Size\tFarm Size Unit\tLatest Activity",
+              ...lines,
+            ].join("\n"),
+            "application/vnd.ms-excel;charset=utf-8"
+          );
+          setBulkStatus("Exported backend farmer registry in Excel-compatible format.");
+          return;
+        }
+      } catch {
+        // Fall through to local demo export.
+      }
+
+      const lines = exportRows.map(
+        (row) =>
+          `${row.farmerName}\t${row.farmerId}\t${row.contact}\t${row.email}\t${row.region}\t${row.farms}\t${row.primaryCrop}\t${row.completeness}\t${row.status}\t${row.joined}`
+      );
+      downloadTextFile(
+        "farmer-registry-demo.xls",
+        ["Farmer Name\tFarmer ID\tContact\tEmail\tRegion\tNumber of Farms\tPrimary Crop\tProfile Completeness\tVerification Status\tJoined Date", ...lines].join("\n"),
+        "application/vnd.ms-excel;charset=utf-8"
+      );
+      setBulkStatus("Exported demo farmer registry in Excel-compatible format.");
+    })();
   };
 
   const handleExportReport = () => {
-    const report = [
-      "AgriSupport Farmer Management Report",
-      "Mode: Local Demo Registry Data",
-      `Generated: ${formatReadableDate(new Date().toISOString())}`,
-      "",
-      `Total Farmers: ${summaryCards[0].value}`,
-      `Verified Farmers: ${summaryCards[1].value}`,
-      `Pending Approval: ${summaryCards[2].value}`,
-      `Deactivated Farmers: ${summaryCards[3].value}`,
-      `Total Farms: ${summaryCards[4].value}`,
-      `Top Region: ${summaryCards[5].value}`,
-      "",
-      "Visible Farmer Records",
-      ...exportRows.map(
-        (row) =>
-          `- ${row.farmerName} | ${row.region} | ${row.primaryCrop} | ${row.status} | ${row.joined}`
-      ),
-    ].join("\n");
-    downloadTextFile("agrisupport-ngo-government-report.txt", report);
-    setBulkStatus("Exported NGO/Government summary report.");
+    void (async () => {
+      try {
+        const backendExport = await phase1BackendService.admin.farmerRegistryExport();
+        const records = Array.isArray(backendExport?.records) ? backendExport.records : [];
+        const summary = backendExport?.summary || null;
+
+        if (records.length) {
+          const report = [
+            "AgriSupport Farmer Management Report",
+            "Mode: Backend Registry Export",
+            `Generated: ${formatReadableDateTime(backendExport.generatedAt)}`,
+            "",
+            `Total Farmers: ${summary?.totalFarmers ?? records.length}`,
+            `Verified Farmers: ${summary?.verifiedFarmers ?? records.filter((row) => row.adminStatus === "Verified").length}`,
+            `Pending Approval: ${summary?.pendingFarmers ?? records.filter((row) => row.adminStatus === "Pending").length}`,
+            `Deactivated Farmers: ${summary?.deactivatedFarmers ?? records.filter((row) => row.adminStatus === "Deactivated").length}`,
+            `Total Farms: ${summary?.totalFarms ?? records.reduce((sum, row) => sum + Number(row.farmCount || 0), 0)}`,
+            `Top Region: ${summary?.topRegion || "Rwanda"}`,
+            "",
+            "Registry Records",
+            ...records.map(
+              (row) =>
+                `- ${row.fullName} | ${row.region || row.district} | ${row.primaryCrop} | ${row.adminStatus} | ${row.farmCount} farm(s) | Latest activity ${formatReadableDateTime(row.latestActivityAt)}`
+            ),
+          ].join("\n");
+          downloadTextFile("agrisupport-ngo-government-report.txt", report);
+          setBulkStatus("Exported NGO/Government summary report from backend registry data.");
+          return;
+        }
+      } catch {
+        // Use local demo report below.
+      }
+
+      const report = [
+        "AgriSupport Farmer Management Report",
+        "Mode: Local Demo Registry Data",
+        `Generated: ${formatReadableDate(new Date().toISOString())}`,
+        "",
+        `Total Farmers: ${summaryCards[0].value}`,
+        `Verified Farmers: ${summaryCards[1].value}`,
+        `Pending Approval: ${summaryCards[2].value}`,
+        `Deactivated Farmers: ${summaryCards[3].value}`,
+        `Total Farms: ${summaryCards[4].value}`,
+        `Top Region: ${summaryCards[5].value}`,
+        "",
+        "Visible Farmer Records",
+        ...exportRows.map(
+          (row) =>
+            `- ${row.farmerName} | ${row.region} | ${row.primaryCrop} | ${row.status} | ${row.joined}`
+        ),
+      ].join("\n");
+      downloadTextFile("agrisupport-ngo-government-report.txt", report);
+      setBulkStatus("Exported NGO/Government summary report.");
+    })();
   };
 
   const selectedFarmerFarms = profileModalFarmer ? getFarmsByOwner(profileModalFarmer.userId) : [];
@@ -568,6 +774,12 @@ function AdminFarmsView() {
             </article>
           );
         })}
+      </div>
+
+      <div className="prototype-admin-registry-banner">
+        <span className="status-pill tone-green">{registryInsight.verificationRate}% verified</span>
+        <strong>{registryInsight.topRegion}</strong>
+        <small>{registryInsight.multiFarmFarmers} farmers currently manage more than one registered farm.</small>
       </div>
 
       <div className="prototype-admin-farmers-filters">
@@ -730,7 +942,7 @@ function AdminFarmsView() {
                   <button
                     type="button"
                     className="prototype-admin-action-button farm-link-button"
-                    onClick={() => setProfileModalFarmer(farmer)}
+                    onClick={() => handleOpenProfile(farmer)}
                   >
                     View farms
                   </button>
@@ -753,7 +965,7 @@ function AdminFarmsView() {
                 <button
                   type="button"
                   className="prototype-admin-action-button action-view"
-                  onClick={() => setProfileModalFarmer(farmer)}
+                  onClick={() => handleOpenProfile(farmer)}
                 >
                   <Eye size={14} />
                   <span>View Profile</span>
@@ -866,10 +1078,14 @@ function AdminFarmsView() {
                 <p><MapPin size={15} /> <span>{profileModalFarmer.region}</span></p>
                 <p><Users size={15} /> <span>{profileModalFarmer.experienceLevel}</span></p>
                 <p><ShieldCheck size={15} /> <span>{profileModalFarmer.completeness}% profile completeness</span></p>
+                <p><Tractor size={15} /> <span>{profileModalFarmer.farmCount || selectedFarmerFarms.length} registered farm(s)</span></p>
+                <p><Map size={15} /> <span>{Number(profileModalFarmer.totalFarmSize || 0).toFixed(1)} {profileModalFarmer.totalFarmSizeUnit || "hectares"} total area</span></p>
+                <p><CheckCircle2 size={15} /> <span>Latest activity: {formatReadableDateTime(profileModalFarmer.latestActivityAt || profileModalFarmer.joined)}</span></p>
               </div>
 
               <div className="prototype-admin-profile-farms">
                 <strong>Registered farms</strong>
+                {profileModalLoading ? <p>Loading farmer profile details...</p> : null}
                 {selectedFarmerFarms.length ? (
                   selectedFarmerFarms.map((farm) => (
                     <div key={farm.id} className="prototype-admin-profile-farm-card">

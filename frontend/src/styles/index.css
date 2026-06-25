@@ -4,7 +4,29 @@
 
 :root {
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  color: #0f172a;
+  --agri-primary: #2e7d32;
+  --agri-secondary: #4caf50;
+  --agri-light: #e8f5e9;
+
+  --weather-blue: #42a5f5;
+  --soil-brown: #8d6e63;
+  --pest-orange: #fb8c00;
+  --market-purple: #7e57c2;
+  --critical-red: #e53935;
+
+  --success: #4caf50;
+  --warning: #fb8c00;
+  --danger: #e53935;
+
+  --surface: #ffffff;
+  --surface-soft: #f8fafc;
+  --border: #e2e8f0;
+
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --shadow-soft: 0 10px 24px rgba(15, 23, 42, 0.08);
+  --shadow-lift: 0 16px 36px rgba(46, 125, 50, 0.12);
+  color: var(--text-primary);
   background: #f5f7fb;
   line-height: 1.5;
   font-weight: 400;
@@ -14,7 +36,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: #f5f7fb;
+  background: linear-gradient(180deg, #f3f7f2 0%, #f7fafc 24%, #f5f7fb 100%);
 }
 
 a {
@@ -1771,6 +1793,170 @@ button {
   font-size: 0.9rem;
 }
 
+.prototype-soil-history-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.soil-history-meta-card {
+  padding: 1.2rem 1.35rem;
+}
+
+.soil-history-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+  margin-top: 1rem;
+}
+
+.soil-history-meta-grid.compact {
+  gap: 0.85rem;
+}
+
+.soil-history-meta-grid div {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid rgba(46, 125, 50, 0.12);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fbfefb 0%, #f5fbf6 100%);
+}
+
+.soil-history-meta-grid span {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.soil-history-meta-grid strong {
+  color: var(--text-primary);
+  font-size: 0.96rem;
+  line-height: 1.45;
+}
+
+.prototype-soil-inline-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--agri-primary);
+  font-weight: 700;
+  text-align: left;
+}
+
+.prototype-soil-history-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background: rgba(15, 23, 42, 0.44);
+  backdrop-filter: blur(6px);
+}
+
+.prototype-soil-history-modal {
+  width: min(1080px, 100%);
+  max-height: min(80vh, 780px);
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem;
+  border: 1px solid rgba(46, 125, 50, 0.12);
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 28px 50px rgba(15, 23, 42, 0.18);
+  overflow: hidden;
+}
+
+.prototype-soil-history-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.prototype-soil-history-modal-head h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.35rem;
+}
+
+.prototype-soil-history-modal-head p {
+  margin: 0.35rem 0 0;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.prototype-soil-history-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.prototype-soil-history-close {
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(46, 125, 50, 0.18);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--agri-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.prototype-soil-history-table {
+  border: 1px solid rgba(46, 125, 50, 0.14);
+  border-radius: 16px;
+  overflow: auto;
+}
+
+.prototype-soil-history-table-head,
+.prototype-soil-history-table-row {
+  display: grid;
+  grid-template-columns: 1.1fr 0.75fr 0.95fr 1.2fr 0.95fr 1fr 0.9fr;
+  gap: 0.9rem;
+  align-items: center;
+  padding: 0.9rem 1rem;
+}
+
+.prototype-soil-history-table-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f5faf5;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.prototype-soil-history-table-row {
+  color: var(--text-primary);
+  background: #ffffff;
+}
+
+.prototype-soil-history-table-row + .prototype-soil-history-table-row {
+  border-top: 1px solid rgba(221, 232, 221, 0.85);
+}
+
+.prototype-soil-history-table-row strong {
+  color: var(--text-primary);
+}
+
+.prototype-soil-table-action {
+  min-height: 34px;
+  padding: 0 0.85rem;
+  border: 1px solid rgba(46, 125, 50, 0.24);
+  border-radius: 10px;
+  background: var(--agri-soft);
+  color: var(--agri-primary);
+  font-weight: 700;
+}
+
 
 .prototype-soil-left,
 .prototype-soil-right {
@@ -2430,20 +2616,45 @@ button {
 
 .soil-library-list {
   display: grid;
-  gap: 0.7rem;
+  gap: 0.9rem;
   margin-top: 1rem;
 }
 
 .soil-library-item {
-  padding: 0.95rem 1rem;
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  align-items: stretch;
+  gap: 0.95rem;
+  min-height: 120px;
+  padding: 0.95rem;
   border: 1px solid #e3ecf5;
-  border-radius: 12px;
-  background: #f9fbfe;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f4f9fe 100%);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.05);
+}
+
+.soil-library-image-wrap {
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.soil-library-image {
+  width: 100%;
+  height: 100%;
+  min-height: 112px;
+  object-fit: cover;
+}
+
+.soil-library-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .soil-library-item strong {
   display: block;
   color: #1b2640;
+  font-size: 1.02rem;
 }
 
 .soil-library-item span,
@@ -2451,6 +2662,10 @@ button {
   display: block;
   margin-top: 0.3rem;
   color: #60718c;
+}
+
+.soil-library-item p {
+  line-height: 1.55;
 }
 
 .soil-risk-list {
@@ -2534,16 +2749,26 @@ button {
   }
 
   .prototype-soil-module-toolbar,
+  .prototype-soil-history-summary,
   .soil-library-filters,
   .soil-lower-grid,
   .soil-suitability-head,
-  .soil-suitability-row {
+  .soil-suitability-row,
+  .soil-history-meta-grid,
+  .prototype-soil-history-table-head,
+  .prototype-soil-history-table-row {
     grid-template-columns: 1fr;
   }
 
   .soil-map-legend {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .prototype-soil-history-modal-head,
+  .prototype-soil-history-modal-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 
@@ -7154,8 +7379,15 @@ button {
 
 .prototype-farm-report-actions {
   display: inline-flex;
-  gap: 0.7rem;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  flex-wrap: nowrap;
   color: #7a8ca2;
+}
+
+.prototype-farm-report-icon-button {
+  padding: 0;
 }
 
 .prototype-farm-analytics-footer {
@@ -13440,6 +13672,99 @@ button {
   gap: 0.95rem;
 }
 
+.reports-admin-summary-grid {
+  margin-top: 0.2rem;
+}
+
+.reports-admin-summary-grid .prototype-farm-analytics-summary-card {
+  min-height: 100%;
+}
+
+.prototype-analytics-source-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.prototype-admin-report-status {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.prototype-admin-report-status-card {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 16px 18px;
+  display: grid;
+  gap: 4px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05);
+}
+
+.prototype-admin-report-status-card span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.prototype-admin-report-status-card strong {
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.prototype-admin-report-status-card small {
+  color: var(--text-secondary);
+}
+
+.prototype-reports-history-modal {
+  max-width: min(1080px, 92vw);
+}
+
+.prototype-reports-history-table {
+  display: grid;
+  gap: 0;
+}
+
+.prototype-reports-history-head,
+.prototype-reports-history-row {
+  display: grid;
+  grid-template-columns: minmax(240px, 2.2fr) minmax(150px, 1.4fr) 0.8fr 1fr 1fr;
+  gap: 14px;
+  align-items: center;
+}
+
+.prototype-reports-history-head {
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.prototype-reports-history-row {
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  color: var(--text-secondary);
+}
+
+.prototype-reports-history-row strong {
+  color: var(--text-primary);
+}
+
+@media (max-width: 960px) {
+  .prototype-reports-history-head,
+  .prototype-reports-history-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .analytics-ai-insights-list,
 .analytics-sustainability-list,
 .analytics-benchmark-list,
@@ -17865,22 +18190,31 @@ button {
 
 .pest-library-card-v2 {
   display: grid;
-  grid-template-columns: 176px 1fr;
+  grid-template-columns: 188px 1fr;
+  min-height: 214px;
   overflow: hidden;
   border: 1px solid #d7e5f6;
   border-radius: 1.15rem;
-  background: #fdfefe;
+  background: linear-gradient(180deg, #fcfeff 0%, #f7fbff 100%);
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.05);
 }
 
-.pest-library-card-v2 img {
+.pest-library-image-wrap {
+  overflow: hidden;
+}
+
+.pest-library-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  min-height: 200px;
+  min-height: 214px;
 }
 
 .pest-library-copy-v2 {
-  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 1.05rem 1.15rem;
 }
 
 .pest-library-copy-v2 strong {
@@ -17900,6 +18234,412 @@ button {
   margin: 0.75rem 0 0;
   color: #4f698b;
   line-height: 1.55;
+}
+
+.agri-pill-tab {
+  min-height: 40px;
+  padding: 0 1rem;
+  border: 1px solid #d8e5f1;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #4a5d78;
+  font-weight: 700;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.agri-pill-tab:hover {
+  border-color: #b9d8ee;
+  background: #f6fbff;
+  color: #1a7fbf;
+  transform: translateY(-1px);
+}
+
+.agri-pill-tab.active {
+  border-color: #1ea4e9;
+  background: linear-gradient(180deg, #32b6f4 0%, #1ea4e9 100%);
+  color: #ffffff;
+  box-shadow: 0 12px 26px rgba(30, 164, 233, 0.24);
+}
+
+.agri-icon-action-button {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 36px;
+  border: 1px solid #d9e4ef;
+  border-radius: 10px;
+  background: #f8fbfe;
+  color: #41546d;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.agri-icon-action-button:hover {
+  background: #eef7ff;
+  border-color: #b8d8ef;
+  color: #1a7fbf;
+  box-shadow: 0 8px 18px rgba(30, 164, 233, 0.12);
+  transform: translateY(-1px);
+}
+
+.agri-icon-action-button:focus-visible,
+.agri-pill-tab:focus-visible {
+  outline: 3px solid rgba(30, 164, 233, 0.18);
+  outline-offset: 2px;
+}
+
+.prototype-source-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 0.75rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.prototype-source-pill.blue {
+  background: #eaf6ff;
+  color: #187fcb;
+}
+
+.prototype-source-pill.green {
+  background: #ecfdf3;
+  color: #16803c;
+}
+
+.prototype-source-pill.amber {
+  background: #fff7e6;
+  color: #b56708;
+}
+
+.ai-recommendation-center {
+  display: grid;
+  gap: 1.3rem;
+}
+
+.ai-center-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.85fr);
+  gap: 1.2rem;
+}
+
+.ai-center-title-block {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.ai-center-title-block h1 {
+  margin: 0;
+  font-size: clamp(2.4rem, 4vw, 3.35rem);
+  letter-spacing: -0.04em;
+  color: #18243d;
+}
+
+.ai-center-title-block p {
+  max-width: 860px;
+  margin: 0;
+  color: #5e718d;
+  font-size: 1.02rem;
+  line-height: 1.6;
+}
+
+.ai-center-label {
+  color: #1ea4e9;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.ai-center-source-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.ai-center-actions-card {
+  padding: 1.15rem;
+}
+
+.ai-center-actions-grid {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.ai-center-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.4rem;
+  flex-wrap: nowrap;
+}
+
+.ai-center-farm-selector,
+.ai-center-filter-grid label {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.ai-center-farm-selector {
+  flex: 0 0 360px;
+  min-width: 360px;
+}
+
+.ai-center-farm-selector span,
+.ai-center-filter-grid label span {
+  color: #7488a3;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ai-center-farm-selector select,
+.ai-center-filter-grid select,
+.ai-center-filter-grid input {
+  height: 44px;
+  padding: 0 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #1b2640;
+  font-size: 0.96rem;
+}
+
+.ai-center-search {
+  height: 46px;
+  flex: 1 1 420px;
+  min-width: 420px;
+  margin-left: 0;
+  gap: 0.7rem;
+  padding: 0 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.ai-center-search svg {
+  flex: 0 0 auto;
+}
+
+.ai-center-search input {
+  width: 100%;
+  min-width: 0;
+  font-size: 0.96rem;
+}
+
+.ai-center-summary-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.ai-center-summary-card {
+  min-height: 94px;
+}
+
+.ai-center-filter-panel {
+  padding: 1.15rem 1.2rem;
+}
+
+.ai-center-filter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ai-center-filter-head h2 {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: #18243d;
+  font-size: 1.08rem;
+}
+
+.ai-center-filter-head small {
+  color: #72849e;
+}
+
+.ai-center-tabs {
+  margin-top: 1rem;
+}
+
+.ai-center-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.9rem;
+  margin-top: 1rem;
+}
+
+.ai-center-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(320px, 0.9fr);
+  gap: 1.2rem;
+}
+
+.ai-center-list-column,
+.ai-center-side-column {
+  display: grid;
+  gap: 1.2rem;
+}
+
+.ai-center-panel-toolbar h2 {
+  margin: 0;
+}
+
+.ai-center-panel-toolbar p {
+  margin: 0.35rem 0 0;
+  color: #72839c;
+}
+
+.ai-center-recommendation-card.selected {
+  border-color: #8dccf0;
+  box-shadow: 0 16px 32px rgba(30, 164, 233, 0.12);
+}
+
+.ai-center-badges {
+  margin-top: 1rem;
+}
+
+.ai-center-card-metadata {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.9rem;
+  color: #5f7290;
+  font-size: 0.93rem;
+}
+
+.ai-center-card-metadata b {
+  color: #23324d;
+}
+
+.ai-center-priority-body {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1rem;
+}
+
+.ai-center-priority-body strong {
+  color: #18243d;
+  font-size: 1.12rem;
+}
+
+.ai-center-priority-body p {
+  margin: 0;
+  color: #5d7190;
+  line-height: 1.55;
+}
+
+.ai-center-tracking-card {
+  padding: 1.2rem;
+}
+
+.ai-center-history-list {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.ai-center-history-item {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid #e4ecf5;
+  border-radius: 14px;
+  background: #f8fbff;
+}
+
+.ai-center-history-item strong {
+  color: #1a7b42;
+}
+
+.ai-center-history-item span,
+.ai-center-history-item small {
+  color: #6f839d;
+}
+
+.ai-center-details-panel {
+  padding: 1.25rem;
+}
+
+.ai-center-bottom-grid {
+  align-items: start;
+}
+
+.ai-center-analytics-list {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1rem;
+}
+
+.ai-center-analytics-row {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.ai-center-analytics-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: #42556f;
+}
+
+.ai-center-analytics-head strong {
+  color: #18243d;
+}
+
+.ai-center-analytics-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.4rem;
+}
+
+.ai-center-analytics-metrics div {
+  padding: 0.9rem 1rem;
+  border: 1px solid #e4edf6;
+  border-radius: 14px;
+  background: #f8fbff;
+}
+
+.ai-center-analytics-metrics span {
+  display: block;
+  color: #70849f;
+  font-size: 0.82rem;
+}
+
+.ai-center-analytics-metrics strong {
+  display: block;
+  margin-top: 0.3rem;
+  color: #18243d;
+}
+
+.spin {
+  animation: agri-spin 1s linear infinite;
+}
+
+@keyframes agri-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .pest-treatment-grid-v2,
@@ -17967,6 +18707,68 @@ button {
 
   .pest-library-card-v2 {
     grid-template-columns: 1fr;
+  }
+
+  .soil-library-item {
+    grid-template-columns: 1fr;
+  }
+
+  .soil-library-image,
+  .pest-library-image {
+    min-height: 180px;
+  }
+}
+
+@media (max-width: 1280px) {
+  .ai-center-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .ai-center-filter-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1024px) {
+  .ai-center-hero,
+  .ai-center-main-grid,
+  .ai-center-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-center-actions-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ai-center-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .ai-center-farm-selector,
+  .ai-center-search {
+    min-width: 0;
+    width: 100%;
+    flex: 1 1 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  .ai-center-summary-grid,
+  .ai-center-filter-grid,
+  .ai-center-analytics-metrics,
+  .ai-center-actions-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-center-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .ai-center-filter-head {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 
@@ -18280,4 +19082,1443 @@ button {
   .prototype-irrigation-reminder-inline {
     flex-direction: column;
   }
+}
+.app-runtime-fallback {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: #eef4fb;
+}
+
+.app-runtime-fallback-card {
+  width: min(720px, 100%);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 18px;
+  padding: 24px;
+  border-radius: 22px;
+  border: 1px solid #cfe0f5;
+  background: #ffffff;
+  box-shadow: 0 20px 48px rgba(28, 50, 92, 0.08);
+}
+
+.app-runtime-fallback-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: #fff4e8;
+  color: #cc6f22;
+}
+
+.app-runtime-fallback-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.app-runtime-fallback-copy strong {
+  font-size: 1.05rem;
+  color: #152449;
+}
+
+.app-runtime-fallback-copy p,
+.app-runtime-fallback-copy small {
+  color: #5d739d;
+}
+
+.app-runtime-fallback-actions {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.global-search-wrap {
+  position: relative;
+}
+
+.global-search-control {
+  min-width: min(380px, 42vw);
+}
+
+.global-search-control input {
+  min-width: 0;
+}
+
+.global-search-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  width: min(640px, 92vw);
+  max-height: 70vh;
+  overflow: auto;
+  z-index: 40;
+  border-radius: 20px;
+  border: 1px solid #d8e4f3;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 24px 48px rgba(21, 36, 73, 0.12);
+  backdrop-filter: blur(16px);
+}
+
+.global-search-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #e6eef8;
+}
+
+.global-search-panel-head strong {
+  color: #152449;
+}
+
+.global-search-panel-head span {
+  font-size: 0.84rem;
+  color: #6a7f9f;
+}
+
+.global-search-empty {
+  padding: 18px;
+  display: grid;
+  gap: 6px;
+}
+
+.global-search-empty strong {
+  color: #152449;
+}
+
+.global-search-empty p {
+  color: #627aa1;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.global-search-groups {
+  padding: 10px;
+  display: grid;
+  gap: 12px;
+}
+
+.global-search-group {
+  display: grid;
+  gap: 8px;
+}
+
+.global-search-group-title {
+  padding: 0 8px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #7190bb;
+}
+
+.global-search-group-list {
+  display: grid;
+  gap: 8px;
+}
+
+.global-search-result {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid #e1ebf8;
+  background: #f8fbff;
+  text-align: left;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.global-search-result:hover {
+  transform: translateY(-1px);
+  border-color: #b8d1f3;
+  box-shadow: 0 12px 24px rgba(63, 136, 232, 0.08);
+}
+
+.global-search-result-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.global-search-result-copy strong {
+  color: #163054;
+}
+
+.global-search-result-copy p {
+  color: #627aa1;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.global-search-result-source {
+  flex-shrink: 0;
+  align-self: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #eaf4ff;
+  color: #2c6db3;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .app-runtime-fallback-card {
+    grid-template-columns: 1fr;
+  }
+
+  .app-runtime-fallback-actions {
+    grid-column: auto;
+  }
+
+  .global-search-control {
+    min-width: min(100%, 88vw);
+  }
+
+  .global-search-panel {
+    width: min(100vw - 24px, 620px);
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .global-search-result {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* Agricultural Intelligence Platform Theme Overrides */
+.prototype-sidebar {
+  border-right: 1px solid rgba(76, 175, 80, 0.14);
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbf6 100%);
+}
+
+.sidebar-brand {
+  color: var(--text-primary);
+}
+
+.brand-mark {
+  background: linear-gradient(135deg, var(--agri-primary) 0%, var(--agri-secondary) 100%);
+  box-shadow: 0 10px 20px rgba(46, 125, 50, 0.18);
+}
+
+.sidebar-section-title {
+  color: #7b8b81;
+}
+
+.prototype-link {
+  border: 1px solid transparent;
+  color: #365147;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.prototype-link:hover {
+  background: rgba(76, 175, 80, 0.08);
+  border-color: rgba(76, 175, 80, 0.16);
+  color: var(--agri-primary);
+  transform: translateX(2px);
+}
+
+.prototype-link.active {
+  background: var(--agri-light);
+  border-color: rgba(76, 175, 80, 0.22);
+  box-shadow: inset 3px 0 0 var(--agri-primary), 0 10px 24px rgba(76, 175, 80, 0.12);
+  color: var(--agri-primary);
+}
+
+.sidebar-footer-card {
+  border: 1px solid rgba(76, 175, 80, 0.16);
+  background: linear-gradient(180deg, #ffffff 0%, #f4faf3 100%);
+}
+
+.footer-avatar,
+.top-avatar,
+.admin-profile-pill .top-avatar,
+.dashboard-layout.farmer-layout .top-avatar {
+  background: linear-gradient(135deg, #d8f2d6 0%, #86cb7c 48%, #2e7d32 100%);
+  color: #10311a;
+}
+
+.dashboard-main {
+  background:
+    radial-gradient(circle at top right, rgba(76, 175, 80, 0.08), transparent 20%),
+    linear-gradient(180deg, #f3f7f2 0%, #f7fafc 20%, #f6f8fb 100%);
+}
+
+.prototype-header,
+.farmer-header {
+  border-bottom-color: rgba(76, 175, 80, 0.14);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+}
+
+.header-icon-button,
+.dashboard-layout.farmer-layout .header-icon-button,
+.farmer-menu-button,
+.logout-mini-button,
+.farmer-close-button {
+  border-color: rgba(148, 163, 184, 0.3);
+  background: #ffffff;
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.header-icon-button:hover,
+.dashboard-layout.farmer-layout .header-icon-button:hover,
+.farmer-menu-button:hover,
+.logout-mini-button:hover,
+.farmer-close-button:hover {
+  background: #f8fbf8;
+  border-color: rgba(76, 175, 80, 0.24);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.header-status-badge {
+  background: #e8f5e9;
+  color: var(--agri-primary);
+  border: 1px solid rgba(76, 175, 80, 0.18);
+}
+
+.header-status-badge.offline {
+  background: #fff4e5;
+  color: #c77717;
+  border: 1px solid rgba(251, 140, 0, 0.18);
+}
+
+.header-sync-button {
+  background: #f4f9ff;
+  border-color: rgba(66, 165, 245, 0.28);
+  color: #175ea6;
+  box-shadow: 0 8px 18px rgba(66, 165, 245, 0.08);
+}
+
+.header-sync-button:hover:not(:disabled) {
+  background: #e9f5ff;
+  border-color: rgba(66, 165, 245, 0.42);
+  box-shadow: 0 12px 24px rgba(66, 165, 245, 0.12);
+}
+
+.global-search-control,
+.header-search {
+  border-color: rgba(76, 175, 80, 0.12);
+  background: #ffffff;
+}
+
+.global-search-control:focus-within,
+.header-search:focus-within {
+  border-color: rgba(76, 175, 80, 0.32);
+  box-shadow: 0 0 0 4px rgba(76, 175, 80, 0.08);
+}
+
+.prototype-panel,
+.mini-summary-card,
+.prototype-admin-stat-card,
+.farmer-stat-card,
+.weather-forecast-card,
+.weather-current-card,
+.weather-alert-card,
+.weather-indicator-card,
+.market-highlight-card,
+.recommendation-card,
+.prototype-alert-summary-card,
+.knowledge-hub-stat-card,
+.command-summary-card,
+.command-resource-card,
+.soil-score-panel,
+.soil-fertilizer-panel,
+.pest-diagnosis-hero,
+.pest-impact-card,
+.prototype-admin-content-table-card,
+.prototype-admin-sync-card,
+.prototype-admin-recent-card,
+.prototype-admin-logic-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.prototype-panel:hover,
+.mini-summary-card:hover,
+.prototype-admin-stat-card:hover,
+.farmer-stat-card:hover,
+.weather-forecast-card:hover,
+.weather-current-card:hover,
+.market-highlight-card:hover,
+.recommendation-card:hover,
+.knowledge-hub-stat-card:hover,
+.command-summary-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-soft);
+}
+
+.toolbar-button,
+.recommendation-primary-button,
+.recommendation-secondary-button,
+.farmer-link-button,
+.quick-action-chip {
+  border-radius: 12px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.toolbar-button.primary {
+  background: linear-gradient(135deg, var(--agri-primary) 0%, var(--agri-secondary) 100%);
+  box-shadow: 0 12px 22px rgba(46, 125, 50, 0.18);
+}
+
+.toolbar-button.primary:hover,
+.quick-action-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lift);
+}
+
+.toolbar-button.muted,
+.farmer-link-button,
+.quick-action-chip {
+  border-color: rgba(76, 175, 80, 0.24);
+  color: var(--agri-primary);
+  background: #ffffff;
+}
+
+.toolbar-button.muted:hover,
+.farmer-link-button:hover,
+.quick-action-chip:hover {
+  background: rgba(76, 175, 80, 0.08);
+}
+
+.recommendation-primary-button,
+.recommendation-primary-button:visited {
+  background: linear-gradient(135deg, #2d7ff0 0%, #42a5f5 100%);
+  color: #ffffff;
+  box-shadow: 0 12px 24px rgba(45, 127, 240, 0.2);
+}
+
+.recommendation-secondary-button,
+.recommendation-muted-button {
+  border-color: rgba(45, 127, 240, 0.24);
+  color: #2563eb;
+  background: #ffffff;
+}
+
+.recommendation-secondary-button:hover,
+.recommendation-muted-button:hover,
+.recommendation-primary-button:hover {
+  transform: translateY(-1px);
+}
+
+.mini-summary-card,
+.prototype-admin-stat-card,
+.farmer-stat-card,
+.recommendation-summary-card,
+.prototype-farm-analytics-summary-card,
+.prototype-market-stats-card,
+.prototype-alert-summary-card {
+  border-top: 4px solid var(--agri-primary);
+}
+
+.command-summary-card.tone-weather,
+.weather-current-card,
+.weather-forecast-card,
+.weather-trend-card,
+.weather-seasonal-card,
+.weather-indicator-card,
+.weather-footer-card {
+  border-top: 4px solid var(--weather-blue);
+}
+
+.soil-input-panel,
+.soil-score-panel,
+.soil-map-panel,
+.soil-crops-panel,
+.soil-suitability-panel,
+.soil-fertilizer-panel,
+.soil-library-panel,
+.soil-risk-panel {
+  border-top: 4px solid var(--soil-brown);
+}
+
+.pest-diagnosis-hero,
+.pest-diagnostic-form,
+.pest-forecast-panel,
+.pest-impact-card,
+.pest-regional-panel,
+.pest-action-panel,
+.pest-history-panel,
+.pest-library-panel,
+.pest-treatment-panel-v2,
+.pest-explanation-panel {
+  border-top: 4px solid var(--pest-orange);
+}
+
+.prototype-market-chart-panel,
+.market-forecast-panel,
+.prototype-market-table-panel,
+.prototype-market-stats-card,
+.prototype-market-map-card,
+.prototype-market-alerts-card,
+.prototype-market-export-card,
+.market-logistics-upgraded {
+  border-top: 4px solid var(--market-purple);
+}
+
+.prototype-alert-summary-card.critical,
+.prototype-alert-priority-card,
+.prototype-alert-card.elevated {
+  border-top: 4px solid var(--critical-red);
+}
+
+.prototype-admin-generator-card,
+.prototype-admin-chart-card,
+.prototype-admin-export-card,
+.prototype-farm-analytics-chart-card,
+.prototype-farm-report-table-card {
+  border-top: 4px solid var(--weather-blue);
+}
+
+.prototype-admin-content-table-card,
+.prototype-admin-sync-card,
+.prototype-admin-recent-card,
+.prototype-admin-logic-card {
+  border-top: 4px solid var(--agri-primary);
+}
+
+.market-badge {
+  background: rgba(126, 87, 194, 0.1);
+  color: var(--market-purple);
+}
+
+.regional-source-badge,
+.admin-data-source-chip {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: #ffffff;
+  color: var(--text-secondary);
+}
+
+.regional-source-badge.live,
+.regional-source-badge.weather {
+  background: rgba(66, 165, 245, 0.12);
+  color: #1769aa;
+}
+
+.regional-source-badge.local {
+  background: rgba(141, 110, 99, 0.12);
+  color: #6d4c41;
+}
+
+.regional-source-badge.demo {
+  background: rgba(76, 175, 80, 0.12);
+  color: var(--agri-primary);
+}
+
+.regional-source-badge.pests {
+  background: rgba(251, 140, 0, 0.14);
+  color: #c66900;
+}
+
+.status-pill.verified,
+.status-pill.tone-green,
+.dashboard-status-pill.active {
+  background: rgba(76, 175, 80, 0.14);
+  color: var(--agri-primary);
+}
+
+.status-pill.review,
+.status-pill.tone-blue {
+  background: rgba(66, 165, 245, 0.12);
+  color: #2563eb;
+}
+
+.status-pill.flagged,
+.status-pill.tone-red {
+  background: rgba(229, 57, 53, 0.12);
+  color: var(--danger);
+}
+
+.status-pill.scheduled,
+.status-pill.tone-purple {
+  background: rgba(126, 87, 194, 0.12);
+  color: var(--market-purple);
+}
+
+.status-pill.tone-amber,
+.status-pill.tone-orange,
+.dashboard-status-pill.pending {
+  background: rgba(251, 140, 0, 0.14);
+  color: #c66900;
+}
+
+.weather-alert-item.high,
+.prototype-alert-severity-pill.critical,
+.prototype-alert-severity-pill.high {
+  border-color: rgba(229, 57, 53, 0.22);
+  background: rgba(229, 57, 53, 0.06);
+}
+
+.prototype-alert-summary-card.weather,
+.prototype-alert-ai-panel {
+  border-top-color: var(--weather-blue);
+}
+
+.prototype-alert-summary-card.pests,
+.prototype-alert-template-card {
+  border-top-color: var(--pest-orange);
+}
+
+.prototype-alert-summary-card.market {
+  border-top-color: var(--market-purple);
+}
+
+.prototype-alert-summary-card.system {
+  border-top-color: var(--critical-red);
+}
+
+.dashboard-layout.farmer-layout {
+  --farmer-page-bg: #f2f7f2;
+  --farmer-surface: var(--surface);
+  --farmer-border: #d7e6d8;
+  --farmer-border-soft: #e5efe4;
+  --farmer-text: var(--text-primary);
+  --farmer-text-muted: var(--text-secondary);
+  --farmer-text-soft: #94a3b8;
+  --farmer-blue: var(--weather-blue);
+  --farmer-blue-soft: #e6f4fe;
+  --farmer-blue-pale: #f2f9ff;
+  --farmer-green: var(--agri-primary);
+  --farmer-green-soft: var(--agri-light);
+  --farmer-red: var(--danger);
+  --farmer-red-soft: #fff3f2;
+  --farmer-red-border: #f3c8c6;
+  --farmer-orange: var(--warning);
+  --farmer-orange-soft: #fff4e8;
+}
+
+.dashboard-layout.farmer-layout .brand-mark,
+.dashboard-layout.farmer-layout .farmer-support-button {
+  background: linear-gradient(135deg, var(--agri-primary) 0%, var(--agri-secondary) 100%);
+}
+
+.dashboard-layout.farmer-layout .farmer-link {
+  border: 1px solid transparent;
+  color: #41566d;
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dashboard-layout.farmer-layout .farmer-link.active {
+  background: var(--agri-light);
+  border-color: rgba(76, 175, 80, 0.2);
+  color: var(--agri-primary);
+  box-shadow: inset 3px 0 0 var(--agri-primary), 0 10px 20px rgba(76, 175, 80, 0.1);
+}
+
+.dashboard-layout.farmer-layout .farmer-link:hover {
+  background: rgba(76, 175, 80, 0.08);
+  color: var(--agri-primary);
+  transform: translateX(2px);
+}
+
+.prototype-admin-side-head svg,
+.prototype-admin-tab.active,
+.prototype-admin-sidebar-group button.active,
+.knowledge-hub-side-card .panel-toolbar svg,
+.command-decision-center .command-recommendation-priority {
+  color: var(--agri-primary);
+}
+
+.knowledge-hub-stat-card,
+.knowledge-hub-impact-card,
+.knowledge-hub-discussions,
+.knowledge-hub-qa-card,
+.knowledge-hub-stories-card,
+.knowledge-hub-side-card,
+.knowledge-hub-contributors-card,
+.knowledge-hub-practice-card {
+  border-top: 4px solid var(--agri-primary);
+}
+
+.prototype-market-map-card.upgraded .map-caption,
+.command-map-panel .map-caption {
+  color: var(--text-secondary);
+}
+
+@media (max-width: 900px) {
+  .prototype-link:hover,
+  .dashboard-layout.farmer-layout .farmer-link:hover {
+    transform: none;
+  }
+}
+
+/* Agricultural-first color cleanup */
+:root {
+  --agri-soft: #f1f8f4;
+  --water-blue: #0288d1;
+  --ai-blue: #2563eb;
+  --border: #dde8dd;
+}
+
+.btn-primary-agri,
+.prototype-admin-primary-button,
+.toolbar-button.primary,
+.dashboard-primary-link,
+.recommendation-primary-button {
+  background: var(--agri-primary);
+  border-color: var(--agri-primary);
+  color: #ffffff;
+}
+
+.btn-primary-agri:hover,
+.prototype-admin-primary-button:hover,
+.toolbar-button.primary:hover,
+.dashboard-primary-link:hover,
+.recommendation-primary-button:hover {
+  background: #256628;
+  border-color: #256628;
+  box-shadow: 0 14px 26px rgba(46, 125, 50, 0.22);
+}
+
+.btn-outline-agri,
+.prototype-admin-secondary-button,
+.dashboard-ghost-button,
+.toolbar-button.muted,
+.farmer-link-button,
+.quick-action-chip,
+.recommendation-secondary-button,
+.recommendation-export-button {
+  background: #ffffff;
+  border: 1px solid rgba(46, 125, 50, 0.24);
+  color: var(--agri-primary);
+}
+
+.btn-outline-agri:hover,
+.prototype-admin-secondary-button:hover,
+.dashboard-ghost-button:hover,
+.toolbar-button.muted:hover,
+.farmer-link-button:hover,
+.quick-action-chip:hover,
+.recommendation-secondary-button:hover,
+.recommendation-export-button:hover {
+  background: var(--agri-soft);
+  border-color: rgba(46, 125, 50, 0.4);
+  color: #256628;
+}
+
+.recommendation-muted-button.recommendation-danger-button {
+  background: rgba(229, 57, 53, 0.08);
+  border: 1px solid rgba(229, 57, 53, 0.22);
+  color: var(--danger);
+}
+
+.recommendation-muted-button.recommendation-danger-button:hover {
+  background: rgba(229, 57, 53, 0.14);
+  border-color: rgba(229, 57, 53, 0.32);
+}
+
+.recommendation-secondary-button.recommendation-send-button {
+  background: #ffffff;
+  border: 1px solid rgba(46, 125, 50, 0.24);
+  color: var(--agri-primary);
+}
+
+.recommendation-secondary-button.recommendation-send-button:hover {
+  background: var(--agri-soft);
+  border-color: rgba(46, 125, 50, 0.38);
+}
+
+.tab-active-agri,
+.agri-pill-tab.active,
+.prototype-admin-content-tabs button.active,
+.recommendation-tab.active {
+  border-color: var(--agri-primary);
+  color: var(--agri-primary);
+}
+
+.agri-pill-tab {
+  border-color: #dce8dd;
+  color: #446051;
+  background: #ffffff;
+}
+
+.agri-pill-tab:hover {
+  border-color: rgba(76, 175, 80, 0.24);
+  background: var(--agri-soft);
+  color: var(--agri-primary);
+}
+
+.agri-pill-tab.active {
+  background: linear-gradient(180deg, #53b85c 0%, var(--agri-primary) 100%);
+  color: #ffffff;
+  box-shadow: 0 12px 24px rgba(46, 125, 50, 0.22);
+}
+
+.prototype-admin-content-tabs button.active,
+.recommendation-tab.active {
+  border-bottom-color: var(--agri-primary);
+  color: var(--agri-primary);
+}
+
+.recommendation-rank-badge,
+.recommendation-category-badge,
+.recommendation-driver-chip,
+.badge-success-agri {
+  background: var(--agri-light);
+  color: var(--agri-primary);
+  border: 1px solid rgba(46, 125, 50, 0.16);
+}
+
+.card-accent-agri,
+.mini-summary-card,
+.prototype-admin-stat-card,
+.farmer-stat-card,
+.recommendation-summary-card,
+.prototype-farm-analytics-summary-card,
+.prototype-market-stats-card,
+.prototype-admin-farmers-summary-card,
+.prototype-admin-farmers-table-card-v2 .prototype-admin-farmers-summary-card {
+  border-top-color: var(--agri-primary);
+}
+
+.module-weather {
+  border-top-color: var(--weather-blue) !important;
+}
+
+.module-soil {
+  border-top-color: var(--soil-brown) !important;
+}
+
+.module-pest {
+  border-top-color: var(--pest-orange) !important;
+}
+
+.module-market {
+  border-top-color: var(--market-purple) !important;
+}
+
+.module-ai {
+  border-top-color: var(--ai-blue) !important;
+}
+
+.prototype-link.active,
+.dashboard-layout.farmer-layout .farmer-link.active {
+  color: var(--agri-primary);
+  background: var(--agri-light);
+}
+
+.prototype-admin-content-tabs button,
+.recommendation-tab {
+  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.prototype-admin-content-tabs button:hover,
+.recommendation-tab:hover {
+  color: var(--agri-primary);
+}
+
+.prototype-admin-export-icon.blue,
+.prototype-admin-farmers-summary-icon.blue,
+.farmer-summary-icon.tone-blue,
+.farmer-summary-icon.tone-sky,
+.stat-icon.tone-blue,
+.initials-badge.tone-sky {
+  background: var(--agri-light);
+  color: var(--agri-primary);
+}
+
+.status-pill.review,
+.status-pill.tone-blue {
+  background: rgba(76, 175, 80, 0.1);
+  color: var(--agri-primary);
+}
+
+.dashboard-alert-item.severity-medium {
+  border-left-color: var(--agri-secondary);
+  background: #f3fbf4;
+}
+
+.resource-bar-fill.tone-green,
+.weather-progress-track:not(.warning):not(.blue) div {
+  background: linear-gradient(90deg, var(--agri-secondary), var(--agri-primary));
+}
+
+.resource-bar-fill.tone-blue,
+.weather-progress-track.blue div {
+  background: linear-gradient(90deg, var(--weather-blue), var(--water-blue));
+}
+
+.weather-current-temp,
+.weather-panel-heading h2 svg,
+.weather-forecast-day svg,
+.weather-range-switch button.active,
+.weather-trend-line,
+.weather-trend-legend i,
+.prototype-weather-source-note svg {
+  color: var(--weather-blue);
+}
+
+.weather-range-switch button.active {
+  background: var(--weather-blue);
+}
+
+.weather-trend-area {
+  fill: rgba(66, 165, 245, 0.14);
+}
+
+.recommendation-icon.tone-blue,
+.recommendation-icon.tone-sky,
+.prototype-source-pill.blue,
+.ai-center-label,
+.recommendation-confidence span,
+.ai-center-recommendation-card.selected {
+  color: var(--ai-blue);
+}
+
+.recommendation-icon.tone-blue,
+.recommendation-icon.tone-sky {
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.prototype-source-pill.blue {
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.ai-center-recommendation-card.selected {
+  border-color: rgba(37, 99, 235, 0.28);
+  box-shadow: 0 16px 32px rgba(37, 99, 235, 0.12);
+}
+
+.recommendation-filter-chip.active,
+.active-filter-pill,
+.selected-category-pill {
+  background: var(--agri-primary);
+  color: #ffffff;
+}
+
+.pest-library-card-v2 {
+  border-color: rgba(251, 140, 0, 0.16);
+  background: linear-gradient(180deg, #fffdfa 0%, #fff7ef 100%);
+}
+
+.pest-library-copy-v2 span {
+  color: #c66900;
+}
+
+.soil-score-panel .soil-score-ring,
+.soil-module-highlight {
+  border-color: var(--soil-brown);
+}
+
+.prototype-admin-primary-button.full,
+.dashboard-primary-link.command-decision-button {
+  background: var(--agri-primary);
+  border-color: var(--agri-primary);
+}
+
+.dashboard-primary-link.command-decision-button:hover,
+.prototype-admin-primary-button.full:hover {
+  background: #256628;
+  border-color: #256628;
+}
+
+/* Screenshot-driven palette cleanup */
+.prototype-soil-action.primary,
+.prototype-soil-submit {
+  background: linear-gradient(135deg, var(--agri-primary) 0%, var(--agri-secondary) 100%);
+  border: 1px solid var(--agri-primary);
+  color: #ffffff;
+  box-shadow: 0 12px 22px rgba(46, 125, 50, 0.18);
+}
+
+.prototype-soil-action.primary:hover,
+.prototype-soil-submit:hover {
+  background: #256628;
+  border-color: #256628;
+}
+
+.prototype-soil-action.secondary {
+  background: #ffffff;
+  border: 1px solid rgba(46, 125, 50, 0.24);
+  color: var(--agri-primary);
+}
+
+.prototype-soil-action.secondary:hover {
+  background: var(--agri-soft);
+  border-color: rgba(46, 125, 50, 0.38);
+}
+
+.prototype-crop-card {
+  border-color: rgba(46, 125, 50, 0.14);
+  background: linear-gradient(180deg, #f8fcf8 0%, #ffffff 100%);
+}
+
+.prototype-crop-card.selected {
+  border-color: rgba(46, 125, 50, 0.38);
+  box-shadow: 0 16px 30px rgba(46, 125, 50, 0.12);
+}
+
+.prototype-crop-top strong,
+.soil-recommendation-detail-head span,
+.prototype-soil-badge {
+  color: var(--agri-primary);
+}
+
+.soil-recommendation-banner {
+  background: linear-gradient(180deg, #eff8f0 0%, #f7fcf7 100%);
+  border: 1px solid rgba(46, 125, 50, 0.14);
+}
+
+.soil-recommendation-banner svg {
+  color: var(--agri-primary);
+}
+
+.weather-forecast-day.active {
+  border-color: rgba(66, 165, 245, 0.55);
+  background: linear-gradient(180deg, #f4faff 0%, #eef7ff 100%);
+  box-shadow: inset 0 0 0 1px rgba(66, 165, 245, 0.55);
+}
+
+.weather-window-card,
+.weather-current-metrics div,
+.weather-seasonal-summary div,
+.weather-indicator-card {
+  background: #ffffff;
+}
+
+.prototype-irrigation-reminder-inline button {
+  background: linear-gradient(135deg, var(--agri-primary) 0%, var(--agri-secondary) 100%);
+  border: 1px solid var(--agri-primary);
+  color: #ffffff;
+  box-shadow: 0 12px 22px rgba(46, 125, 50, 0.18);
+}
+
+.prototype-irrigation-reminder-inline button:hover {
+  background: #256628;
+  border-color: #256628;
+}
+
+.prototype-irrigation-reminder-inline select,
+.prototype-irrigation-toolbar-field select,
+.prototype-irrigation-toolbar-field input {
+  border-color: rgba(46, 125, 50, 0.18);
+}
+
+.prototype-irrigation-toolbar-field select:focus,
+.prototype-irrigation-toolbar-field input:focus {
+  border-color: rgba(46, 125, 50, 0.42);
+  box-shadow: 0 0 0 4px rgba(76, 175, 80, 0.1);
+}
+
+.irrigation-state-banner {
+  border-color: rgba(46, 125, 50, 0.18);
+  background: #f1f8f4;
+  color: #29513a;
+}
+
+.irrigation-data-badge.local {
+  background: #f0f7f1;
+  color: var(--agri-primary);
+}
+
+.irrigation-detail-panel,
+.irrigation-resource-row,
+.irrigation-fertilizer-summary {
+  border-color: rgba(46, 125, 50, 0.14);
+}
+
+.irrigation-fertilizer-summary {
+  background: #f1f8f4;
+  color: #29513a;
+}
+
+.irrigation-detail-actions button {
+  border-color: rgba(46, 125, 50, 0.2);
+  color: var(--agri-primary);
+}
+
+.irrigation-detail-actions button:hover {
+  background: var(--agri-soft);
+}
+
+.irrigation-sensor-mode {
+  border: 1px solid rgba(46, 125, 50, 0.1);
+  background: #f3f8f4;
+}
+
+.irrigation-sensor-mode button {
+  color: #506a5a;
+}
+
+.irrigation-sensor-mode button.active {
+  background: #ffffff;
+  color: var(--agri-primary);
+  box-shadow: 0 10px 18px rgba(46, 125, 50, 0.1);
+}
+
+.irrigation-nutrient-fill {
+  background: linear-gradient(90deg, var(--agri-secondary), var(--agri-primary));
+}
+
+.prototype-farm-analytics-primary {
+  background: linear-gradient(135deg, var(--agri-primary) 0%, var(--agri-secondary) 100%);
+  border-color: var(--agri-primary);
+  color: #ffffff;
+}
+
+.prototype-farm-analytics-primary:hover {
+  background: #256628;
+  border-color: #256628;
+}
+
+.prototype-farm-analytics-secondary,
+.prototype-farm-report-link,
+.analytics-template-button {
+  background: #ffffff;
+  border-color: rgba(46, 125, 50, 0.22);
+  color: var(--agri-primary);
+}
+
+.prototype-farm-analytics-secondary:hover,
+.prototype-farm-report-link:hover,
+.analytics-template-button:hover {
+  background: var(--agri-soft);
+  border-color: rgba(46, 125, 50, 0.38);
+}
+
+.prototype-farm-analytics-stat-card,
+.prototype-farm-analytics-chart-card,
+.prototype-farm-report-table-card {
+  border-top: 4px solid var(--agri-primary);
+}
+
+.prototype-farm-analytics-stat-head svg,
+.prototype-farm-analytics-legend i.actual {
+  color: var(--agri-primary);
+}
+
+.prototype-farm-analytics-legend i.revenue {
+  background: var(--agri-primary);
+}
+
+.prototype-farm-analytics-legend i.costs,
+.prototype-farm-analytics-legend i.target {
+  background: var(--soil-brown);
+}
+
+.prototype-alert-tabs button.active,
+.prototype-alert-filter-chip.active,
+.prototype-alert-pref-chip.active,
+.prototype-alert-template-pill,
+.prototype-alert-action.primary {
+  border-color: var(--agri-primary);
+  background: var(--agri-light);
+  color: var(--agri-primary);
+}
+
+.prototype-alert-tabs button.active {
+  border-bottom-color: var(--agri-primary);
+  background: transparent;
+}
+
+.prototype-alert-action.primary {
+  background: linear-gradient(135deg, var(--agri-primary) 0%, var(--agri-secondary) 100%);
+  color: #ffffff;
+}
+
+.prototype-alert-action.primary:hover {
+  background: #256628;
+}
+
+.prototype-alert-action,
+.prototype-alert-template-pill {
+  border: 1px solid rgba(46, 125, 50, 0.2);
+}
+
+.prototype-alert-action:hover,
+.prototype-alert-template-pill:hover,
+.prototype-alert-filter-chip:hover,
+.prototype-alert-pref-chip:hover {
+  background: var(--agri-soft);
+  border-color: rgba(46, 125, 50, 0.34);
+  color: var(--agri-primary);
+}
+
+.prototype-alert-source-chip {
+  background: var(--agri-light);
+  color: var(--agri-primary);
+}
+
+.prototype-alert-source-chip.irrigation,
+.prototype-alert-tabs button[data-category="irrigation"] {
+  background: rgba(66, 165, 245, 0.1);
+  color: #1b74c9;
+}
+
+.prototype-alert-severity-pill.info {
+  background: rgba(66, 165, 245, 0.1);
+  color: #1b74c9;
+}
+
+.prototype-alert-summary-card.pests {
+  background: linear-gradient(180deg, #fffaf1 0%, #ffffff 100%);
+}
+
+.prototype-alert-summary-card.market {
+  background: linear-gradient(180deg, #f7f2ff 0%, #ffffff 100%);
+}
+
+.prototype-admin-farmers-summary-icon.blue {
+  background: var(--agri-light);
+  color: var(--agri-primary);
+}
+
+.prototype-admin-bulk-textarea:focus,
+.prototype-admin-entry-inline input:focus,
+.community-expert-form textarea:focus,
+.community-field input:focus,
+.community-field select:focus,
+.community-field textarea:focus {
+  border-color: rgba(46, 125, 50, 0.42);
+  box-shadow: 0 0 0 4px rgba(76, 175, 80, 0.1);
+}
+
+.regional-heatmap-card {
+  background: linear-gradient(180deg, #fcfffc 0%, #f5faf5 100%);
+  border-color: rgba(46, 125, 50, 0.12);
+}
+
+.regional-heatmap-card:hover,
+.regional-heatmap-card.active {
+  border-color: rgba(46, 125, 50, 0.38);
+  box-shadow: 0 16px 28px rgba(46, 125, 50, 0.12);
+}
+
+.regional-heatmap-bars div,
+.regional-heatmap-score {
+  border-color: rgba(46, 125, 50, 0.12);
+}
+
+.regional-command-item {
+  background: #f7fbf7;
+  border-color: rgba(46, 125, 50, 0.14);
+}
+
+.regional-command-item svg {
+  color: var(--agri-primary);
+}
+
+.region-map-button:hover strong,
+.regional-data-button:hover strong {
+  color: var(--agri-primary);
+}
+
+.maintenance-action,
+.role-action {
+  background: #f7fbf7;
+}
+
+.maintenance-action:hover,
+.role-action:hover {
+  background: var(--agri-soft);
+}
+
+.prototype-admin-monitoring-item {
+  background: #f8fcf8;
+  border-color: rgba(46, 125, 50, 0.14);
+}
+
+.prototype-admin-monitoring-item span {
+  color: var(--agri-primary);
+}
+
+/* Visual QA cleanup pass: remove remaining generic blue UI where it is not module-specific */
+.role-switcher {
+  border-color: rgba(76, 175, 80, 0.18);
+  background: #f3faf3;
+}
+
+.role-option {
+  color: var(--text-secondary);
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.role-option.active {
+  color: var(--agri-primary);
+  box-shadow: 0 10px 18px rgba(46, 125, 50, 0.14);
+}
+
+.login-card a,
+.register-card a,
+a[href="/register"] {
+  color: var(--agri-primary);
+}
+
+.login-card a:hover,
+.register-card a:hover,
+a[href="/register"]:hover {
+  color: #256628;
+}
+
+.header-sync-button {
+  background: #f4fbf4;
+  border-color: rgba(76, 175, 80, 0.28);
+  color: var(--agri-primary);
+  box-shadow: 0 8px 18px rgba(76, 175, 80, 0.12);
+}
+
+.header-sync-button:hover:not(:disabled) {
+  background: #ebf7eb;
+  border-color: rgba(76, 175, 80, 0.42);
+  box-shadow: 0 12px 24px rgba(76, 175, 80, 0.16);
+}
+
+.approve-button,
+.prototype-admin-action-button.approve,
+.prototype-admin-bulk-save,
+.prototype-admin-primary-button {
+  background: linear-gradient(135deg, var(--agri-primary) 0%, var(--agri-secondary) 100%);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 12px 24px rgba(46, 125, 50, 0.18);
+}
+
+.approve-button:hover,
+.prototype-admin-action-button.approve:hover,
+.prototype-admin-bulk-save:hover,
+.prototype-admin-primary-button:hover {
+  background: linear-gradient(135deg, #256628 0%, #388e3c 100%);
+  box-shadow: 0 14px 28px rgba(46, 125, 50, 0.22);
+}
+
+.prototype-admin-export-card,
+.prototype-admin-generator-card,
+.prototype-admin-chart-card,
+.prototype-farm-analytics-chart-card,
+.prototype-farm-report-table-card {
+  border-top-color: var(--agri-primary);
+}
+
+.prototype-admin-farmer-badge,
+.prototype-admin-badge,
+.profile-avatar-badge {
+  background: var(--agri-light);
+  color: var(--agri-primary);
+}
+
+.farm-link-button,
+.prototype-admin-action-button.farm-link-button,
+.prototype-admin-export-action,
+.prototype-admin-outline-button {
+  background: #ffffff;
+  border-color: rgba(76, 175, 80, 0.24);
+  color: var(--agri-primary);
+}
+
+.farm-link-button:hover,
+.prototype-admin-action-button.farm-link-button:hover,
+.prototype-admin-export-action:hover,
+.prototype-admin-outline-button:hover {
+  background: rgba(76, 175, 80, 0.08);
+  border-color: rgba(76, 175, 80, 0.38);
+  color: #256628;
+}
+
+.prototype-weather-status:not(.error):not(.warning),
+.prototype-weather-status.loading {
+  background: #f4fbf4;
+  border-color: rgba(76, 175, 80, 0.18);
+  color: #355c36;
+}
+
+.prototype-panel select,
+.prototype-panel input,
+.prototype-panel textarea,
+.input-shell,
+.community-field input,
+.community-field select,
+.community-field textarea,
+.prototype-admin-bulk-textarea,
+.prototype-admin-entry-inline input,
+.recommendation-toolbar-select,
+.recommendation-toolbar-search,
+.prototype-market-toolbar input,
+.prototype-market-toolbar select {
+  border-color: rgba(76, 175, 80, 0.18);
+}
+
+.prototype-panel select:focus,
+.prototype-panel input:focus,
+.prototype-panel textarea:focus,
+.community-field input:focus,
+.community-field select:focus,
+.community-field textarea:focus,
+.recommendation-toolbar-select:focus,
+.recommendation-toolbar-search:focus,
+.prototype-market-toolbar input:focus,
+.prototype-market-toolbar select:focus {
+  border-color: rgba(76, 175, 80, 0.42);
+  box-shadow: 0 0 0 4px rgba(76, 175, 80, 0.1);
+  outline: none;
+}
+
+.pest-priority-badge.medium {
+  background: rgba(251, 140, 0, 0.14);
+  color: #c66900;
+  border-color: rgba(251, 140, 0, 0.18);
+}
+
+.pest-metric-card {
+  background: #fcfdf9;
+  border-color: rgba(76, 175, 80, 0.14);
+}
+
+.pest-metric-card small {
+  color: #6b7f6f;
+}
+
+.pest-metric-card strong {
+  color: var(--agri-primary);
+}
+
+.community-filter-chip,
+.prototype-filter-chip,
+.recommendation-filter-chip {
+  border-color: rgba(76, 175, 80, 0.18);
+  color: #49644b;
+}
+
+.community-filter-chip:hover,
+.prototype-filter-chip:hover,
+.recommendation-filter-chip:hover {
+  background: rgba(76, 175, 80, 0.08);
+  border-color: rgba(76, 175, 80, 0.32);
+}
+
+.prototype-admin-action-button.action-view,
+.prototype-admin-action-button.action-view:visited,
+.profile-prototype-button.secondary,
+.prototype-pest-step-actions .secondary,
+.pest-action-strip .secondary {
+  background: #ffffff;
+  border-color: rgba(76, 175, 80, 0.24);
+  color: var(--agri-primary);
+}
+
+.prototype-admin-action-button.action-view:hover,
+.profile-prototype-button.secondary:hover,
+.prototype-pest-step-actions .secondary:hover,
+.pest-action-strip .secondary:hover {
+  background: rgba(76, 175, 80, 0.08);
+  border-color: rgba(76, 175, 80, 0.38);
+  color: #256628;
+}
+
+.prototype-admin-methodology-card.active {
+  background: linear-gradient(180deg, #f4fbf4 0%, #ffffff 100%);
+  border-color: rgba(76, 175, 80, 0.38);
+  box-shadow: 0 12px 24px rgba(46, 125, 50, 0.12);
+}
+
+.prototype-admin-methodology-card.active strong,
+.prototype-admin-methodology-card.active p {
+  color: var(--agri-primary);
 }

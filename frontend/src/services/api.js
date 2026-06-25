@@ -77,10 +77,10 @@ export function buildOpenMeteoForecastUrl(latitude, longitude) {
   });
 }
 
-export async function getOpenMeteoForecast(latitude, longitude) {
+export async function getOpenMeteoForecast(latitude, longitude, options = {}) {
   const url = buildOpenMeteoForecastUrl(latitude, longitude);
 
-  return requestJson(url);
+  return requestJson(url, options);
 }
 
 export function buildOpenMeteoArchiveUrl(latitude, longitude, startDate, endDate) {
@@ -94,13 +94,13 @@ export function buildOpenMeteoArchiveUrl(latitude, longitude, startDate, endDate
   });
 }
 
-export async function getOpenMeteoArchive(latitude, longitude, startDate, endDate) {
+export async function getOpenMeteoArchive(latitude, longitude, startDate, endDate, options = {}) {
   const url = buildOpenMeteoArchiveUrl(latitude, longitude, startDate, endDate);
 
-  return requestJson(url);
+  return requestJson(url, options);
 }
 
-export async function getSoilGridsEstimate(latitude, longitude) {
+export async function getSoilGridsEstimate(latitude, longitude, options = {}) {
   const pluralUrl = buildUrl(SOILGRIDS_BASE_URL, {
     lat: latitude,
     lon: longitude,
@@ -110,7 +110,7 @@ export async function getSoilGridsEstimate(latitude, longitude) {
   });
 
   try {
-    return await requestJson(pluralUrl);
+    return await requestJson(pluralUrl, options);
   } catch {
     const legacyUrl = buildUrl(SOILGRIDS_BASE_URL, {
       lat: latitude,
@@ -120,7 +120,7 @@ export async function getSoilGridsEstimate(latitude, longitude) {
       value: "mean",
     });
 
-    return requestJson(legacyUrl);
+    return requestJson(legacyUrl, options);
   }
 }
 

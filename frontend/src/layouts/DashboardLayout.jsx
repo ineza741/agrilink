@@ -4,11 +4,12 @@ import { Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { AppHeader } from "./AppHeader";
 import { AppSidebar } from "./AppSidebar";
+import { isAdminRole } from "../utils/roles";
 
 export function DashboardLayout() {
   const { user } = useAuth();
   const location = useLocation();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = isAdminRole(user?.role);
   const [isFarmerSidebarOpen, setIsFarmerSidebarOpen] = useState(false);
   const shouldShowHeader = true;
 

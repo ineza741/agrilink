@@ -209,7 +209,7 @@ export function AddFarmPage() {
     }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!form.name || !form.sizeHectares || !form.landType || !form.region || !form.irrigationType) {
       setFeedback("Please complete the required farm registration fields before saving.");
       return;
@@ -221,7 +221,7 @@ export function AddFarmPage() {
     }
 
     if (bulkMode) {
-      saveBulkRegistration(user.id, {
+      await saveBulkRegistration(user.id, {
         cooperativeName: form.cooperativeName || "Unnamed Cooperative",
         primaryFarm: form,
         additionalPlots,
@@ -231,7 +231,7 @@ export function AddFarmPage() {
       return;
     }
 
-    saveFarm(user.id, {
+    await saveFarm(user.id, {
       id: farmToEdit?.id,
       ...form,
       sizeHectares: Number(form.sizeHectares),

@@ -13,6 +13,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { useFarmerData } from "../../context/FarmerDataContext";
 import { apiClient } from "../../services/api";
+import { isBackendSessionActive, phase1BackendService } from "../../services/phase1Backend";
 
 const IRRIGATION_STORAGE_KEY = "agri-feed-irrigation-module-v1";
 
@@ -581,7 +582,11 @@ function logIrrigationDebug(label, payload) {
 
 export function IrrigationPage() {
   const { currentFarms } = useFarmerData();
-  const farms = currentFarms.length ? currentFarms : [createDefaultFarm()];
+  const fallbackFarm = useMemo(() => createDefaultFarm(), []);
+  const farms = useMemo(
+    () => (currentFarms.length ? currentFarms : [fallbackFarm]),
+    [currentFarms, fallbackFarm]
+  );
   const stored = useMemo(() => loadStoredState(), []);
 
   const [calendarDate, setCalendarDate] = useState(() => new Date());
@@ -596,6 +601,7 @@ export function IrrigationPage() {
   const [reminderType, setReminderType] = useState("irrigation");
   const [reminderDate, setReminderDate] = useState(stored.reminderDate || "");
   const [reminders, setReminders] = useState(stored.reminders || []);
+  const [backendAdvisory, setBackendAdvisory] = useState(null);
   const [remoteState, setRemoteState] = useState({
     loading: true,
     notice: "",
@@ -636,6 +642,8 @@ export function IrrigationPage() {
     () => farms.find((farm) => farm.id === selectedFarmId) || farms[0],
     [farms, selectedFarmId]
   );
+  const backendFarmId = selectedFarm?.backendFarmId || (selectedFarm?.id !== "irrigation-default-farm" ? selectedFarm?.id : "");
+  const backendMode = isBackendSessionActive() && Boolean(backendFarmId);
 
   useEffect(() => {
     if (!selectedFarm) return;
@@ -643,7 +651,7 @@ export function IrrigationPage() {
     if (!options.includes(cropStage)) {
       setCropStage(getDefaultGrowthStage(selectedFarm.primaryCrop || "Maize"));
     }
-  }, [cropStage, selectedFarm]);
+  }, [cropStage, selectedFarm?.id, selectedFarm?.primaryCrop]);
 
   useEffect(() => {
     let cancelled = false;
@@ -653,6 +661,7 @@ export function IrrigationPage() {
       const longitude = selectedFarm?.location?.lng;
 
       if (!latitude || !longitude) {
+        setBackendAdvisory(null);
         setRemoteState({
           loading: false,
           notice: "Demo Data is being used because this farm does not yet have valid coordinates.",
@@ -686,17 +695,20 @@ export function IrrigationPage() {
         weatherLabel: "Demo Data",
         soilLabel: "Local Data",
       };
+      let resolvedWeather = nextState.weather;
+      let resolvedSoil = nextState.soil;
 
       try {
         const [weatherResult, soilResult] = await Promise.allSettled([
-          apiClient.weather.forecast(latitude, longitude),
-          apiClient.soil.estimate(latitude, longitude),
+          apiClient.weather.forecast(latitude, longitude, { timeoutMs: 4500 }),
+          apiClient.soil.estimate(latitude, longitude, { timeoutMs: 2200 }),
         ]);
 
         if (cancelled) return;
 
         if (weatherResult.status === "fulfilled") {
           nextState.weather = weatherResult.value;
+          resolvedWeather = weatherResult.value;
           nextState.lastUpdated = weatherResult.value?.current?.time || new Date().toISOString();
           nextState.weatherLabel = "Live Weather Data";
           logIrrigationDebug("weather API response", weatherResult.value);
@@ -707,6 +719,7 @@ export function IrrigationPage() {
 
         if (soilResult.status === "fulfilled") {
           nextState.soil = parseSoilEstimate(soilResult.value, selectedFarm);
+          resolvedSoil = nextState.soil;
           nextState.soilLabel = "Local Data";
           logIrrigationDebug("soil data response", soilResult.value);
         } else {
@@ -719,12 +732,60 @@ export function IrrigationPage() {
         if (cancelled) return;
         console.error("[IrrigationPage] advisory load failed", error);
         nextState.weather = createMockWeatherData(selectedFarm);
+        resolvedWeather = nextState.weather;
         nextState.notice = "Demo Data is being used because live advisory services were unavailable.";
         nextState.weatherLabel = "Demo Data";
-      } finally {
-        if (!cancelled) {
-          setRemoteState(nextState);
+      }
+
+      if (backendMode) {
+        try {
+          const backendReminders = await phase1BackendService.irrigation.listReminders(backendFarmId);
+          if (!cancelled) {
+            setReminders((current) => [
+              ...current.filter((entry) => entry.farmId !== selectedFarm.id),
+              ...backendReminders,
+            ]);
+          }
+        } catch (error) {
+          console.error("[IrrigationPage] backend reminder load failed", error);
         }
+
+        try {
+          const backendCalculated = await phase1BackendService.irrigation.calculate(backendFarmId, {
+            crop: selectedFarm?.primaryCrop || "Maize",
+            cropStage: cropStage || getDefaultGrowthStage(selectedFarm?.primaryCrop || "Maize"),
+            irrigationType: selectedFarm?.irrigationType || "Manual Irrigation",
+            weather: resolvedWeather,
+            soilProfile: resolvedSoil,
+            soilMoisture: Number(soilMoisture || 0),
+            sensorMode,
+            targetYield: Number(targetYield || 0),
+            fertilizerType,
+            budget: Number(budget || 0),
+            weatherLabel: nextState.weatherLabel,
+            soilLabel: nextState.soilLabel,
+            notice: nextState.notice || undefined,
+          });
+
+          if (!cancelled) {
+            setBackendAdvisory(backendCalculated);
+            nextState.soilLabel = backendCalculated?.soilLabel || nextState.soilLabel;
+          }
+        } catch (error) {
+          console.error("[IrrigationPage] backend advisory calculation failed", error);
+          if (!cancelled) {
+            setBackendAdvisory(null);
+          }
+          nextState.notice = nextState.notice
+            ? `${nextState.notice} Backend advisory persistence is unavailable, so the local advisory engine is being used.`
+            : "Local advisory engine is being used because backend irrigation persistence is unavailable.";
+        }
+      } else if (!cancelled) {
+        setBackendAdvisory(null);
+      }
+
+      if (!cancelled) {
+        setRemoteState(nextState);
       }
     }
 
@@ -732,7 +793,7 @@ export function IrrigationPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedFarm]);
+  }, [backendFarmId, backendMode, budget, cropStage, fertilizerType, selectedFarm?.id, selectedFarm?.irrigationType, selectedFarm?.landType, selectedFarm?.location?.lat, selectedFarm?.location?.lng, selectedFarm?.name, selectedFarm?.primaryCrop, selectedFarm?.sizeHectares, sensorMode, soilMoisture, targetYield]);
 
   const soilProfile = useMemo(
     () => remoteState.soil || createFallbackSoilProfile(selectedFarm),
@@ -741,6 +802,10 @@ export function IrrigationPage() {
 
   const advisory = useMemo(
     () => {
+      if (backendAdvisory) {
+        logIrrigationDebug("backend advisory result", backendAdvisory);
+        return backendAdvisory;
+      }
       if (!remoteState.weather || !selectedFarm) return null;
       const result = calculateAdvisory({
         farm: selectedFarm,
@@ -765,7 +830,7 @@ export function IrrigationPage() {
       logIrrigationDebug("fertilizer calculation result", result.fertilizer);
       return result;
     },
-    [budget, cropStage, fertilizerType, reminders, remoteState.weather, selectedFarm, sensorMode, soilMoisture, soilProfile, targetYield]
+    [backendAdvisory, budget, cropStage, fertilizerType, reminders, remoteState.weather, selectedFarm, sensorMode, soilMoisture, soilProfile, targetYield]
   );
 
   const calendarLabel = calendarDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
@@ -803,30 +868,101 @@ export function IrrigationPage() {
 
   const selectedSchedule = selectedScheduleDate ? scheduleByDate.get(selectedScheduleDate) : null;
 
-  const addReminder = () => {
+  const addReminder = async () => {
     if (!reminderDate || !selectedFarm) return;
     const dateKey = reminderDate;
-    setReminders((current) => {
-      const existing = current.find((entry) => entry.dateKey === dateKey && entry.farmId === selectedFarm.id && entry.type === reminderType);
-      if (existing) return current;
-      return [
+    const localFallbackRecord = {
+      id: `rem-${Date.now()}`,
+      farmId: selectedFarm.id,
+      dateKey,
+      type: reminderType,
+      priority: reminderType === "fertilizer" ? "High" : "Medium",
+      status: "Pending",
+      createdAt: new Date().toISOString(),
+    };
+
+    const existing = reminders.find(
+      (entry) => entry.dateKey === dateKey && entry.farmId === selectedFarm.id && entry.type === reminderType
+    );
+
+    if (existing) {
+      setSelectedScheduleDate(dateKey);
+      return;
+    }
+
+    if (backendMode) {
+      try {
+        const created = await phase1BackendService.irrigation.createReminder(backendFarmId, {
+          dateKey,
+          type: reminderType,
+          priority: localFallbackRecord.priority,
+          status: "Pending",
+          advisoryId: advisory?.id || null,
+        });
+        setReminders((current) => [...current, created]);
+        setSelectedScheduleDate(dateKey);
+        return;
+      } catch (error) {
+        console.error("[IrrigationPage] backend reminder create failed", error);
+      }
+    }
+
+    setReminders((current) => [...current, localFallbackRecord]);
+    setSelectedScheduleDate(dateKey);
+  };
+
+  const updateReminderStatus = async (dateKey, nextStatus) => {
+    if (!selectedFarm) return;
+    const existing = reminders.find((entry) => entry.farmId === selectedFarm.id && entry.dateKey === dateKey);
+    const matchedSchedule = scheduleByDate.get(dateKey);
+
+    if (backendMode && existing?.id && !String(existing.id).startsWith("rem-") && !String(existing.id).startsWith("auto-rem-")) {
+      try {
+        const updated = await phase1BackendService.irrigation.updateReminder(existing.id, {
+          status: nextStatus,
+        });
+        setReminders((current) =>
+          current.map((entry) => (entry.id === updated.id ? updated : entry))
+        );
+        return;
+      } catch (error) {
+        console.error("[IrrigationPage] backend reminder update failed", error);
+      }
+    }
+
+    if (backendMode && !existing && matchedSchedule) {
+      try {
+        const created = await phase1BackendService.irrigation.createReminder(backendFarmId, {
+          dateKey,
+          type: matchedSchedule.reminderType || "irrigation",
+          priority: matchedSchedule.recommendedMm >= 5 ? "High" : "Medium",
+          status: nextStatus,
+          advisoryId: advisory?.id || null,
+        });
+        setReminders((current) => [...current, created]);
+        return;
+      } catch (error) {
+        console.error("[IrrigationPage] backend reminder create-on-status failed", error);
+      }
+    }
+
+    if (!existing && matchedSchedule) {
+      setReminders((current) => [
         ...current,
         {
           id: `rem-${Date.now()}`,
           farmId: selectedFarm.id,
           dateKey,
-          type: reminderType,
-          priority: reminderType === "fertilizer" ? "High" : "Medium",
-          status: "Pending",
+          type: matchedSchedule.reminderType || "irrigation",
+          priority: matchedSchedule.recommendedMm >= 5 ? "High" : "Medium",
+          status: nextStatus,
           createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         },
-      ];
-    });
-    setSelectedScheduleDate(dateKey);
-  };
+      ]);
+      return;
+    }
 
-  const updateReminderStatus = (dateKey, nextStatus) => {
-    if (!selectedFarm) return;
     setReminders((current) =>
       current.map((entry) =>
         entry.farmId === selectedFarm.id && entry.dateKey === dateKey
@@ -836,11 +972,27 @@ export function IrrigationPage() {
     );
   };
 
-  const handleCalendarClick = (cell) => {
+  const handleCalendarClick = async (cell) => {
     if (!cell.currentMonth) return;
     setSelectedScheduleDate(cell.dateKey);
     const hasExisting = reminders.some((entry) => entry.farmId === selectedFarm.id && entry.dateKey === cell.dateKey);
     if (!hasExisting && advisory?.scheduleDates.find((entry) => entry.dateKey === cell.dateKey)?.scheduled) {
+      if (backendMode) {
+        try {
+          const created = await phase1BackendService.irrigation.createReminder(backendFarmId, {
+            dateKey: cell.dateKey,
+            type: "irrigation",
+            priority: "High",
+            status: "Pending",
+            advisoryId: advisory?.id || null,
+          });
+          setReminders((current) => [...current, created]);
+          return;
+        } catch (error) {
+          console.error("[IrrigationPage] backend auto reminder create failed", error);
+        }
+      }
+
       setReminders((current) => [
         ...current,
         {

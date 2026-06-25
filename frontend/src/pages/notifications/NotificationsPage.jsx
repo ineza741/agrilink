@@ -1,4 +1,4 @@
-import {
+﻿import {
   Archive,
   Bell,
   Bot,
@@ -22,9 +22,11 @@ import {
   TrendingUp,
   TriangleAlert,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 import { useFarmerData } from "../../context/FarmerDataContext";
+import { isBackendSessionActive, phase1BackendService } from "../../services/phase1Backend";
 
 const NOTIFICATION_STORAGE_KEY = "agri-feed-notification-center-v3";
 const DEMO_MODE = true;
@@ -256,7 +258,7 @@ function createBaseNotifications(farm) {
       archived: false,
       ackStatus: "pending",
       deliveryStatus: "Opened",
-      relatedModule: "/pest-prediction",
+      relatedModule: "/pests-diseases",
       district,
       sector,
       crop,
@@ -431,6 +433,7 @@ function recommendationSnippet(alert) {
 
 export function NotificationsPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { currentFarms } = useFarmerData();
   const primaryFarm = currentFarms?.[0] || {
     name: "Gatenga Demonstration Plot",
@@ -439,6 +442,11 @@ export function NotificationsPage() {
     primaryCrop: "Maize",
   };
   const farmSignature = `${primaryFarm.name}|${primaryFarm.district}|${primaryFarm.sector}|${primaryFarm.primaryCrop || "Maize"}`;
+  const backendFarmId = primaryFarm?.backendFarmId || "";
+  const userRole = String(user?.role || "").toLowerCase();
+  const adminFacingMode = userRole === "admin" || userRole === "extensionofficer";
+  const backendSessionEnabled = isBackendSessionActive() || user?.authSource === "backend";
+  const backendEnabled = adminFacingMode || (backendSessionEnabled && Boolean(backendFarmId));
   const stored = useMemo(() => loadStoredState(), []);
 
   const [activeTab, setActiveTab] = useState(stored.activeTab || "timeline");
@@ -447,7 +455,7 @@ export function NotificationsPage() {
     stored.filters || {
       search: "",
       severity: "all",
-      district: primaryFarm.district || "All Districts",
+      district: adminFacingMode ? "All Districts" : primaryFarm.district || "All Districts",
       crop: "all",
       source: "all",
       status: "all",
@@ -460,6 +468,7 @@ export function NotificationsPage() {
   );
   const [templates, setTemplates] = useState(stored.templates || templateSeed);
   const [statusMessage, setStatusMessage] = useState("");
+  const [backendLoading, setBackendLoading] = useState(false);
 
   useEffect(() => {
     saveStoredState({
@@ -473,6 +482,8 @@ export function NotificationsPage() {
   }, [activeTab, categoryFilter, filters, preferences, notifications, templates]);
 
   useEffect(() => {
+    if (adminFacingMode) return;
+
     setNotifications((current) => {
       if (!Array.isArray(current) || current.length === 0) {
         return createBaseNotifications(primaryFarm);
@@ -498,7 +509,41 @@ export function NotificationsPage() {
 
       return changed ? next : current;
     });
-  }, [farmSignature]);
+  }, [adminFacingMode, farmSignature]);
+
+  const refreshBackendCenter = useCallback(async () => {
+    if (!backendEnabled) return false;
+
+    setBackendLoading(true);
+    try {
+      const center = await phase1BackendService.notifications.center(adminFacingMode ? "" : backendFarmId);
+
+      if (center?.preferences) {
+        setPreferences(buildDefaultPreferences(center.preferences));
+      }
+
+      if (Array.isArray(center?.templates) && center.templates.length > 0) {
+        setTemplates(center.templates);
+      }
+
+      if (Array.isArray(center?.notifications) && center.notifications.length > 0) {
+        setNotifications(normalizeNotifications(center.notifications, primaryFarm));
+      } else {
+        setNotifications(createBaseNotifications(primaryFarm));
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Notifications backend center load failed:", error);
+      return false;
+    } finally {
+      setBackendLoading(false);
+    }
+  }, [adminFacingMode, backendEnabled, backendFarmId, farmSignature]);
+
+  useEffect(() => {
+    refreshBackendCenter();
+  }, [refreshBackendCenter]);
 
   useEffect(() => {
     if (!statusMessage) return;
@@ -643,7 +688,26 @@ export function NotificationsPage() {
 
   const aiRecommendation = useMemo(() => recommendationSnippet(priorityAlert), [priorityAlert]);
 
-  const markAllAsRead = () => {
+  const syncAlertRecord = (updatedAlert) => {
+    setNotifications((current) =>
+      current.map((item) => (item.id === updatedAlert.id ? normalizeNotifications([updatedAlert], primaryFarm)[0] : item))
+    );
+  };
+
+  const markAllAsRead = async () => {
+    if (backendEnabled) {
+      try {
+        const nextAlerts = await phase1BackendService.notifications.markAllRead(backendFarmId);
+        if (Array.isArray(nextAlerts) && nextAlerts.length > 0) {
+          setNotifications(normalizeNotifications(nextAlerts, primaryFarm));
+          setStatusMessage("All active alerts marked as read.");
+          return;
+        }
+      } catch (error) {
+        console.error("Notifications mark-all-read failed:", error);
+      }
+    }
+
     setNotifications((current) =>
       current.map((item) => ({
         ...item,
@@ -659,7 +723,18 @@ export function NotificationsPage() {
     setStatusMessage(message);
   };
 
-  const markAsRead = (id) => {
+  const markAsRead = async (id) => {
+    if (backendEnabled) {
+      try {
+        const updated = await phase1BackendService.notifications.markRead(id);
+        syncAlertRecord(updated);
+        setStatusMessage("Alert marked as read.");
+        return;
+      } catch (error) {
+        console.error("Notification read action failed:", error);
+      }
+    }
+
     updateAlert(
       id,
       (item) => ({ ...item, read: true, deliveryStatus: item.deliveryStatus === "Delivered" ? "Opened" : item.deliveryStatus }),
@@ -667,7 +742,18 @@ export function NotificationsPage() {
     );
   };
 
-  const confirmAlert = (id) => {
+  const confirmAlert = async (id) => {
+    if (backendEnabled) {
+      try {
+        const updated = await phase1BackendService.notifications.confirm(id);
+        syncAlertRecord(updated);
+        setStatusMessage("Alert confirmation recorded.");
+        return;
+      } catch (error) {
+        console.error("Notification confirm action failed:", error);
+      }
+    }
+
     updateAlert(
       id,
       (item) => ({ ...item, ackStatus: "confirmed", read: true, deliveryStatus: "Acknowledged" }),
@@ -675,11 +761,33 @@ export function NotificationsPage() {
     );
   };
 
-  const archiveAlert = (id) => {
+  const archiveAlert = async (id) => {
+    if (backendEnabled) {
+      try {
+        const updated = await phase1BackendService.notifications.archive(id);
+        syncAlertRecord(updated);
+        setStatusMessage("Alert archived.");
+        return;
+      } catch (error) {
+        console.error("Notification archive action failed:", error);
+      }
+    }
+
     updateAlert(id, (item) => ({ ...item, archived: true, read: true }), "Alert archived.");
   };
 
-  const snoozeAlert = (id) => {
+  const snoozeAlert = async (id) => {
+    if (backendEnabled) {
+      try {
+        const updated = await phase1BackendService.notifications.snooze(id, { hours: 6 });
+        syncAlertRecord(updated);
+        setStatusMessage("Alert snoozed for 6 hours.");
+        return;
+      } catch (error) {
+        console.error("Notification snooze action failed:", error);
+      }
+    }
+
     const snoozedUntil = new Date();
     snoozedUntil.setHours(snoozedUntil.getHours() + 6);
     updateAlert(
@@ -710,7 +818,20 @@ export function NotificationsPage() {
     }));
   };
 
-  const savePreferences = () => {
+  const savePreferences = async () => {
+    if (backendEnabled) {
+      try {
+        const updated = await phase1BackendService.notifications.updatePreferences(preferences);
+        if (updated) {
+          setPreferences(buildDefaultPreferences(updated));
+        }
+        setStatusMessage("Notification preferences and summary schedules saved.");
+        return;
+      } catch (error) {
+        console.error("Notification preferences save failed:", error);
+      }
+    }
+
     setStatusMessage("Notification preferences and summary schedules saved locally.");
   };
 
@@ -718,7 +839,18 @@ export function NotificationsPage() {
     setFilters((current) => ({ ...current, [key]: value }));
   };
 
-  const updateTemplateStatus = (id) => {
+  const updateTemplateStatus = async (id) => {
+    if (backendEnabled) {
+      try {
+        const updated = await phase1BackendService.notifications.updateTemplateStatus(id);
+        setTemplates((current) => current.map((item) => (item.id === id ? updated : item)));
+        setStatusMessage("Notification template status updated.");
+        return;
+      } catch (error) {
+        console.error("Notification template status update failed:", error);
+      }
+    }
+
     setTemplates((current) =>
       current.map((item) =>
         item.id === id
@@ -749,8 +881,14 @@ export function NotificationsPage() {
           <span className="regional-source-badge weather">Live Weather Data</span>
           <span className="regional-source-badge pests">Demo Pest Data</span>
           <span className="regional-source-badge demo">Demo Market Data</span>
-          <span className="regional-source-badge local">Local Data</span>
+          <span className="regional-source-badge local">{backendEnabled ? "Backend + Local Data" : "Local Data"}</span>
         </div>
+
+        {backendLoading ? (
+          <div className="prototype-alert-status-banner" role="status">
+            Loading notifications command center...
+          </div>
+        ) : null}
 
         {statusMessage ? (
           <div className="prototype-alert-status-banner" role="status">
@@ -1288,3 +1426,10 @@ export function NotificationsPage() {
     </section>
   );
 }
+
+
+
+
+
+
+

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useFarmerData } from "../../context/FarmerDataContext";
+import { isBackendSessionActive, phase1BackendService } from "../../services/phase1Backend";
 
 const MARKET_STORAGE_KEY = "agri-feed-market-module-v2";
 
@@ -350,6 +351,13 @@ export function MarketPage() {
   const [timeframe, setTimeframe] = useState(stored.timeframe || "30D");
   const [targetPrice, setTargetPrice] = useState(stored.targetPrice || "750");
   const [alerts, setAlerts] = useState(stored.alerts || []);
+  const [backendMarket, setBackendMarket] = useState(null);
+  const [backendAlerts, setBackendAlerts] = useState([]);
+  const [marketState, setMarketState] = useState({
+    loading: false,
+    notice: "",
+    source: "Demo Market Data",
+  });
 
   useEffect(() => {
     saveStoredState({ selectedCrop, timeframe, targetPrice, alerts });
@@ -366,15 +374,91 @@ export function MarketPage() {
     [farms, selectedFarmId]
   );
 
-  const market = useMemo(
+  const localMarket = useMemo(
     () => buildMarketData({ farm: selectedFarm, crop: selectedCrop, timeframe }),
     [selectedFarm, selectedCrop, timeframe]
   );
+  const backendFarmId = selectedFarm?.backendFarmId || selectedFarm?.id || "";
+  const backendMode = isBackendSessionActive() && Boolean(selectedFarm?.backendFarmId);
+  const market = backendMarket || localMarket;
+  const visibleAlerts = backendMode ? backendAlerts : alerts;
+  const marketCoordinateLabel =
+    selectedFarm?.location?.lat !== undefined && selectedFarm?.location?.lng !== undefined
+      ? `${selectedFarm.location.lat.toFixed(4)}, ${selectedFarm.location.lng.toFixed(4)}`
+      : selectedFarm?.latitude !== undefined && selectedFarm?.longitude !== undefined
+        ? `${Number(selectedFarm.latitude).toFixed(4)}, ${Number(selectedFarm.longitude).toFixed(4)}`
+        : "--";
+  const bestMarketWholesaleLabel = market.bestMarket?.wholesalePriceLabel
+    || (market.bestMarket?.wholesalePrice ? `${formatRwf(market.bestMarket.wholesalePrice)} / kg` : "--");
+  const bestMarketExportLabel = market.bestMarket?.exportPriceLabel
+    || (market.bestMarket?.exportPrice ? `${formatRwf(market.bestMarket.exportPrice)} / kg` : "--");
 
-  const createAlert = () => {
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!backendMode || !backendFarmId) {
+      setBackendMarket(null);
+      setBackendAlerts([]);
+      setMarketState({
+        loading: false,
+        notice: "Using demo/local market intelligence for this farm.",
+        source: "Demo Market Data",
+      });
+      return undefined;
+    }
+
+    async function loadBackendMarket() {
+      setMarketState({
+        loading: true,
+        notice: "",
+        source: "Live Backend Market Data",
+      });
+
+      try {
+        const [analysis, alertItems] = await Promise.all([
+          phase1BackendService.market.analyze(backendFarmId, {
+            crop: selectedCrop,
+            timeframe,
+          }),
+          phase1BackendService.market.listAlerts(backendFarmId),
+        ]);
+
+        if (cancelled) return;
+
+        setBackendMarket(analysis || null);
+        setBackendAlerts(alertItems || []);
+        setMarketState({
+          loading: false,
+          notice: analysis
+            ? "Using backend market analysis with local fallback preserved."
+            : "No backend market analysis found yet. Showing demo market data.",
+          source: analysis ? "Live Backend Market Data" : "Demo Market Data",
+        });
+      } catch (error) {
+        if (cancelled) return;
+
+        console.warn("Market backend load failed. Falling back to demo market data.", error);
+        setBackendMarket(null);
+        setBackendAlerts([]);
+        setMarketState({
+          loading: false,
+          notice: "Backend market data is unavailable right now. Showing demo market data for presentation mode.",
+          source: "Demo Market Data",
+        });
+      }
+    }
+
+    loadBackendMarket();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [backendFarmId, backendMode, selectedCrop, timeframe]);
+
+  const createAlert = async () => {
     const price = Number(targetPrice);
     if (!price || !market.bestMarket) return;
-    const nextAlert = {
+    const localAlert = {
       id: `${selectedFarm.id}-${selectedCrop}-${price}-${market.bestMarket.name}`,
       crop: selectedCrop,
       targetPrice: Math.round(price),
@@ -382,10 +466,36 @@ export function MarketPage() {
       createdAt: new Date().toISOString(),
       status: price <= market.bestMarket.currentPrice ? "Target reached" : "Monitoring",
     };
+
+    if (backendMode && backendFarmId) {
+      try {
+        const created = await phase1BackendService.market.createAlert(backendFarmId, {
+          crop: selectedCrop,
+          targetPrice: Math.round(price),
+        });
+        setBackendAlerts((current) => {
+          if (current.some((item) => item.id === created.id)) return current;
+          return [created, ...current].slice(0, 6);
+        });
+        setMarketState((current) => ({
+          ...current,
+          notice: `Price alert saved for ${selectedCrop} in ${market.bestMarket.name}.`,
+        }));
+        return;
+      } catch (error) {
+        console.warn("Backend market alert save failed. Falling back to local alert storage.", error);
+      }
+    }
+
     setAlerts((current) => {
-      if (current.some((item) => item.id === nextAlert.id)) return current;
-      return [nextAlert, ...current].slice(0, 6);
+      if (current.some((item) => item.id === localAlert.id)) return current;
+      return [localAlert, ...current].slice(0, 6);
     });
+    setMarketState((current) => ({
+      ...current,
+      notice: `Local demo alert created for ${selectedCrop}.`,
+      source: current.source || "Demo Market Data",
+    }));
   };
 
   return (
@@ -441,10 +551,14 @@ export function MarketPage() {
         </div>
         <div className="prototype-market-context-card">
           <strong>Coordinates</strong>
-          <span>
-            {selectedFarm.location.lat.toFixed(4)}, {selectedFarm.location.lng.toFixed(4)}
-          </span>
+          <span>{marketCoordinateLabel}</span>
         </div>
+      </div>
+
+      <div className="prototype-module-status-row">
+        <span className="prototype-module-chip success">{marketState.source}</span>
+        {backendMode ? <span className="prototype-module-chip">Backend farm linked</span> : <span className="prototype-module-chip">Frontend-only fallback</span>}
+        {marketState.notice ? <span className="prototype-module-note">{marketState.notice}</span> : null}
       </div>
 
       <div className="prototype-market-head-actions">
@@ -544,7 +658,7 @@ export function MarketPage() {
                     <span>{row.name}</span>
                   </strong>
                   <span>{row.distanceLabel}</span>
-                  <strong>{row.currentPriceLabel}</strong>
+                  <strong>{row.currentPriceLabel || `${formatRwf(row.currentPrice)} / kg`}</strong>
                   <span>{row.demandLabel}</span>
                   <span>{row.trendLabel}</span>
                   <span>{row.accessibilityLabel}</span>
@@ -658,7 +772,7 @@ export function MarketPage() {
                   </a>
                   <a
                     className="prototype-market-map-link"
-                    href={`https://www.google.com/maps/dir/?api=1&origin=${selectedFarm.location.lat},${selectedFarm.location.lng}&destination=${market.bestMarket.coordinates.lat},${market.bestMarket.coordinates.lng}`}
+                    href={`https://www.google.com/maps/dir/?api=1&origin=${selectedFarm?.location?.lat ?? selectedFarm?.latitude ?? -1.9441},${selectedFarm?.location?.lng ?? selectedFarm?.longitude ?? 30.0619}&destination=${market.bestMarket.coordinates.lat},${market.bestMarket.coordinates.lng}`}
                     target="_blank"
                     rel="noreferrer"
                   >
@@ -675,13 +789,14 @@ export function MarketPage() {
               <h3>Price Alerts</h3>
             </div>
             <div className="prototype-market-alert-list upgraded">
-              {alerts.length ? (
-                alerts.map((alert) => (
+              {visibleAlerts.length ? (
+                visibleAlerts.map((alert) => (
                   <div key={alert.id} className="prototype-market-alert-row detailed">
                     <strong>{alert.crop}</strong>
                     <span>Created: {new Date(alert.createdAt).toLocaleDateString("en-ZA")}</span>
                     <span>Target Price: {formatRwf(alert.targetPrice)}</span>
                     <span>Current Price: {formatRwf(alert.currentPrice)}</span>
+                    {alert.bestMarketName ? <span>Best Market: {alert.bestMarketName}</span> : null}
                     <small>{alert.status}</small>
                   </div>
                 ))
@@ -718,11 +833,11 @@ export function MarketPage() {
             <div className="prototype-market-export-list">
               <div>
                 <strong>Wholesale Benchmark</strong>
-                <span>{market.bestMarket?.wholesalePriceLabel || "--"} for the current crop window.</span>
+                <span>{bestMarketWholesaleLabel} for the current crop window.</span>
               </div>
               <div>
                 <strong>Export Benchmark</strong>
-                <span>{market.bestMarket?.exportPriceLabel || "--"} if crop quality and volume meet export channel thresholds.</span>
+                <span>{bestMarketExportLabel} if crop quality and volume meet export channel thresholds.</span>
               </div>
             </div>
           </article>

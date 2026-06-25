@@ -16,9 +16,11 @@ import {
   Upload,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import ImageWithFallback from "../../components/common/ImageWithFallback";
 import { useAuth } from "../../context/AuthContext";
 import { useFarmerData } from "../../context/FarmerDataContext";
 import { apiClient } from "../../services/api";
+import { isBackendSessionActive, phase1BackendService } from "../../services/phase1Backend";
 import { downloadJsonFile, downloadTextFile } from "../../utils/actions";
 
 const PEST_STORAGE_KEY = "agri-feed-pest-module-v2";
@@ -489,7 +491,11 @@ function buildDynamicRecommendation(diagnosisModel, farm, crop) {
 export function PestsPage() {
   const { user } = useAuth();
   const { currentFarms } = useFarmerData();
-  const farms = currentFarms.length ? currentFarms : [createDefaultFarm()];
+  const fallbackFarm = useMemo(() => createDefaultFarm(), []);
+  const farms = useMemo(
+    () => (currentFarms.length ? currentFarms : [fallbackFarm]),
+    [currentFarms, fallbackFarm]
+  );
   const stored = useMemo(() => loadStoredState(), []);
 
   const [selectedFarmId, setSelectedFarmId] = useState(farms[0]?.id || "pest-default-farm");
@@ -500,6 +506,15 @@ export function PestsPage() {
   const [librarySearch, setLibrarySearch] = useState("");
   const [historyLog, setHistoryLog] = useState(() => stored.historyLog || outbreakHistorySeed);
   const [actionLog, setActionLog] = useState(() => stored.actionLog || []);
+  const [backendDiagnosis, setBackendDiagnosis] = useState(null);
+  const [backendHistoryLog, setBackendHistoryLog] = useState([]);
+  const [backendActionLog, setBackendActionLog] = useState([]);
+  const [backendLibrary, setBackendLibrary] = useState([]);
+  const [pestState, setPestState] = useState({
+    loading: false,
+    notice: "",
+    source: "Demo Pest Data",
+  });
   const [weatherState, setWeatherState] = useState({
     loading: true,
     error: "",
@@ -515,10 +530,12 @@ export function PestsPage() {
     () => farms.find((farm) => farm.id === selectedFarmId) || farms[0],
     [farms, selectedFarmId]
   );
+  const backendFarmId = selectedFarm?.backendFarmId || "";
+  const backendMode = isBackendSessionActive() && Boolean(backendFarmId);
 
   useEffect(() => {
     setSelectedCrop(selectedFarm?.primaryCrop || "Potato");
-  }, [selectedFarm]);
+  }, [selectedFarm?.id, selectedFarm?.primaryCrop]);
 
   useEffect(() => {
     let active = true;
@@ -526,7 +543,7 @@ export function PestsPage() {
       if (!selectedFarm?.location?.lat || !selectedFarm?.location?.lng) {
         setWeatherState({
           loading: false,
-          error: "Selected farm does not yet have coordinates for weather-linked pest forecasting.",
+          error: "Demo weather context is being used until this farm has valid coordinates.",
           data: null,
           lastUpdated: "",
         });
@@ -535,7 +552,9 @@ export function PestsPage() {
 
       setWeatherState((current) => ({ ...current, loading: true, error: "" }));
       try {
-        const response = await apiClient.weather.forecast(selectedFarm.location.lat, selectedFarm.location.lng);
+        const response = await apiClient.weather.forecast(selectedFarm.location.lat, selectedFarm.location.lng, {
+          timeoutMs: 4500,
+        });
         if (!active) return;
         setWeatherState({
           loading: false,
@@ -547,7 +566,7 @@ export function PestsPage() {
         if (!active) return;
         setWeatherState({
           loading: false,
-          error: "Unable to load live weather signals for pest forecasting.",
+          error: "Live weather is temporarily unavailable, so demo weather context is being used for pest forecasting.",
           data: null,
           lastUpdated: "",
         });
@@ -558,7 +577,7 @@ export function PestsPage() {
     return () => {
       active = false;
     };
-  }, [selectedFarm]);
+  }, [selectedFarm?.id, selectedFarm?.location?.lat, selectedFarm?.location?.lng]);
 
   const weatherContribution = useMemo(
     () => buildWeatherContribution(weatherState.data),
@@ -579,17 +598,96 @@ export function PestsPage() {
     [affectedArea, historyLog, selectedCrop, selectedFarm, selectedSymptom, uploadedImageName, weatherContribution]
   );
 
+  useEffect(() => {
+    let active = true;
+
+    if (!backendMode || !backendFarmId) {
+      setBackendDiagnosis(null);
+      setBackendHistoryLog([]);
+      setBackendActionLog([]);
+      setBackendLibrary([]);
+      setPestState({
+        loading: false,
+        notice: "Using demo/local pest intelligence for this farm.",
+        source: "Demo Pest Data",
+      });
+      return undefined;
+    }
+
+    async function loadBackendPestData() {
+      setPestState({
+        loading: true,
+        notice: "",
+        source: "Backend Pest Data",
+      });
+
+      try {
+        const [latest, history, library] = await Promise.all([
+          phase1BackendService.pests.latest(backendFarmId),
+          phase1BackendService.pests.history(backendFarmId),
+          phase1BackendService.pests.library({ crop: selectedCrop }),
+        ]);
+
+        if (!active) return;
+
+        setBackendDiagnosis(latest || null);
+        setBackendHistoryLog(history || []);
+        setBackendLibrary(library || []);
+
+        if (latest?.id) {
+          const actions = await phase1BackendService.pests.listActions(latest.id);
+          if (!active) return;
+          setBackendActionLog(actions || []);
+        } else {
+          setBackendActionLog([]);
+        }
+
+        setPestState({
+          loading: false,
+          notice: latest
+            ? "Using backend pest diagnosis history with demo fallback preserved."
+            : "No backend pest diagnosis exists yet for this farm. Demo intelligence remains available.",
+          source: latest ? "Backend Pest Data" : "Demo Pest Data",
+        });
+      } catch (error) {
+        if (!active) return;
+        console.warn("Pest backend load failed. Falling back to demo pest intelligence.", error);
+        setBackendDiagnosis(null);
+        setBackendHistoryLog([]);
+        setBackendActionLog([]);
+        setBackendLibrary([]);
+        setPestState({
+          loading: false,
+          notice: "Backend pest data is unavailable right now. Showing demo pest intelligence for presentation mode.",
+          source: "Demo Pest Data",
+        });
+      }
+    }
+
+    loadBackendPestData();
+
+    return () => {
+      active = false;
+    };
+  }, [backendFarmId, backendMode, selectedCrop]);
+
   const dynamicRecommendation = useMemo(
     () => buildDynamicRecommendation(diagnosisModel, selectedFarm, selectedCrop),
     [diagnosisModel, selectedCrop, selectedFarm]
   );
 
+  const activeDiagnosis = backendDiagnosis || diagnosisModel;
+  const activeRecommendation = activeDiagnosis?.recommendation || dynamicRecommendation;
+  const activeHistoryLog = backendMode && backendHistoryLog.length ? backendHistoryLog : historyLog;
+
   const trackedRecommendation = useMemo(
-    () =>
-      actionLog
-        .filter((entry) => entry.recommendationId === dynamicRecommendation.recommendationId)
-        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)),
-    [actionLog, dynamicRecommendation.recommendationId]
+    () => {
+      const source = backendMode ? backendActionLog : actionLog;
+      return source
+        .filter((entry) => entry.recommendationId === activeRecommendation.recommendationId)
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    },
+    [actionLog, activeRecommendation.recommendationId, backendActionLog, backendMode]
   );
 
   const treatmentEffectiveness = useMemo(() => {
@@ -601,7 +699,7 @@ export function PestsPage() {
 
   const displayedLibrary = useMemo(
     () =>
-      diagnosisModel.ranked.filter((item) => {
+      (backendLibrary.length ? backendLibrary : diagnosisModel.ranked).filter((item) => {
         const query = librarySearch.toLowerCase();
         return (
           !query ||
@@ -610,39 +708,39 @@ export function PestsPage() {
           item.affectedCrops.join(" ").toLowerCase().includes(query)
         );
       }),
-    [diagnosisModel.ranked, librarySearch]
+    [backendLibrary, diagnosisModel.ranked, librarySearch]
   );
 
   const regionalTracking = useMemo(() => {
-    const totalDistrictEvents = historyLog.filter((entry) => entry.district === diagnosisModel.district).length;
+    const totalDistrictEvents = activeHistoryLog.filter((entry) => entry.district === activeDiagnosis.district).length;
     const trend =
-      diagnosisModel.outbreakForecast.predictedRisk === "High"
+      activeDiagnosis.outbreakForecast.predictedRisk === "High"
         ? "Increasing"
-        : diagnosisModel.outbreakForecast.predictedRisk === "Moderate"
+        : activeDiagnosis.outbreakForecast.predictedRisk === "Moderate"
           ? "Stable"
           : "Decreasing";
     return {
-      district: diagnosisModel.district,
-      intensity: clamp(Math.round(diagnosisModel.regionalRiskScore / 10), 2, 10),
+      district: activeDiagnosis.district,
+      intensity: clamp(Math.round(activeDiagnosis.regionalRiskScore / 10), 2, 10),
       trend,
       clusterCount: 2 + totalDistrictEvents,
     };
-  }, [diagnosisModel, historyLog]);
+  }, [activeDiagnosis, activeHistoryLog]);
 
   const activityFeed = useMemo(() => {
     const items = [
       {
         id: "weather-link",
-        tone: diagnosisModel.outbreakForecast.predictedRisk === "High" ? "critical" : "review",
+        tone: activeDiagnosis.outbreakForecast.predictedRisk === "High" ? "critical" : "review",
         title: "Weather-driven outbreak pressure updated",
         detail: weatherContribution.explanation,
         timestamp: weatherState.lastUpdated || new Date().toISOString(),
       },
       {
         id: "diagnosis",
-        tone: diagnosisModel.priority === "Critical" ? "critical" : "review",
-        title: `${diagnosisModel.topDiagnosis.name} detected for ${selectedCrop}`,
-        detail: `${diagnosisModel.currentRisk} current risk with ${diagnosisModel.confidence}% confidence on ${selectedFarm.name}.`,
+        tone: activeDiagnosis.priority === "Critical" ? "critical" : "review",
+        title: `${activeDiagnosis.topDiagnosis.name} detected for ${selectedCrop}`,
+        detail: `${activeDiagnosis.currentRisk} current risk with ${activeDiagnosis.confidence}% confidence on ${selectedFarm.name}.`,
         timestamp: new Date().toISOString(),
       },
       ...trackedRecommendation.map((entry) => ({
@@ -658,9 +756,39 @@ export function PestsPage() {
     ];
 
     return items.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 6);
-  }, [diagnosisModel, selectedCrop, selectedFarm.name, trackedRecommendation, weatherContribution.explanation, weatherState.lastUpdated]);
+  }, [activeDiagnosis, selectedCrop, selectedFarm.name, trackedRecommendation, weatherContribution.explanation, weatherState.lastUpdated]);
 
-  const submitSymptomCheck = () => {
+  const submitSymptomCheck = async () => {
+    if (backendMode && backendFarmId) {
+      try {
+        setPestState((current) => ({ ...current, loading: true, notice: "" }));
+        const diagnosis = await phase1BackendService.pests.analyze(backendFarmId, {
+          crop: selectedCrop,
+          symptom: selectedSymptom,
+          affectedArea,
+          uploadedImageName,
+          weatherContribution,
+        });
+        setBackendDiagnosis(diagnosis);
+        setBackendHistoryLog(diagnosis.historyLog || []);
+        setBackendLibrary(diagnosis.library || []);
+        setBackendActionLog([]);
+        setPestState({
+          loading: false,
+          notice: `Backend pest diagnosis saved for ${selectedCrop} on ${selectedFarm.name}.`,
+          source: "Backend Pest Data",
+        });
+        return;
+      } catch (error) {
+        console.warn("Backend pest analysis failed. Falling back to local history entry.", error);
+        setPestState({
+          loading: false,
+          notice: "Backend pest diagnosis is unavailable right now. Local demo pest logic is still active.",
+          source: "Demo Pest Data",
+        });
+      }
+    }
+
     const event = {
       id: `history-${Date.now()}`,
       date: new Date().toISOString(),
@@ -674,13 +802,33 @@ export function PestsPage() {
     setHistoryLog((current) => [event, ...current].slice(0, 10));
   };
 
-  const trackRecommendation = (feedbackStatus) => {
+  const trackRecommendation = async (feedbackStatus) => {
+    if (backendMode && activeDiagnosis?.id && activeRecommendation?.recommendationId) {
+      try {
+        const created = await phase1BackendService.pests.addAction(activeDiagnosis.id, {
+          recommendationId: activeRecommendation.recommendationId,
+          actionType: activeRecommendation.actionType || "Pest/Disease",
+          feedbackStatus,
+          rejectionReason: "",
+        });
+        setBackendActionLog((current) => [created, ...current].slice(0, 30));
+        setPestState((current) => ({
+          ...current,
+          notice: `Backend farmer action recorded as ${feedbackStatus}.`,
+          source: "Backend Pest Data",
+        }));
+        return;
+      } catch (error) {
+        console.warn("Backend pest action logging failed. Falling back to local action log.", error);
+      }
+    }
+
     const nextRecord = {
       id: `pest-action-${Date.now()}`,
-      recommendationId: dynamicRecommendation.recommendationId,
+      recommendationId: activeRecommendation.recommendationId,
       farmerId: user?.id || "demo-farmer",
       farmId: selectedFarm.id,
-      actionType: dynamicRecommendation.actionType,
+      actionType: activeRecommendation.actionType,
       feedbackStatus,
       rejectionReason: "",
       timestamp: new Date().toISOString(),
@@ -691,7 +839,7 @@ export function PestsPage() {
   const downloadProtocol = () => {
     downloadTextFile(
       `${diagnosisModel.topDiagnosis.name.toLowerCase().replace(/\s+/g, "-")}-protocol.txt`,
-      `Protocol: ${diagnosisModel.topDiagnosis.name}\nConfidence: ${diagnosisModel.confidence}%\nRisk: ${diagnosisModel.currentRisk}\nPriority: ${diagnosisModel.priority}\n\nChemical treatment:\n${diagnosisModel.topDiagnosis.treatment.chemical}\n\nOrganic / IPM:\n${diagnosisModel.topDiagnosis.treatment.organic}\n\nPreventive measure:\n${diagnosisModel.topDiagnosis.preventionAdvice}`
+      `Protocol: ${activeDiagnosis.topDiagnosis.name}\nConfidence: ${activeDiagnosis.confidence}%\nRisk: ${activeDiagnosis.currentRisk}\nPriority: ${activeDiagnosis.priority}\n\nChemical treatment:\n${activeDiagnosis.topDiagnosis.treatment.chemical}\n\nOrganic / IPM:\n${activeDiagnosis.topDiagnosis.treatment.organic}\n\nPreventive measure:\n${activeDiagnosis.topDiagnosis.preventionAdvice}`
     );
   };
 
@@ -702,8 +850,8 @@ export function PestsPage() {
       symptom: selectedSymptom,
       affectedArea,
       weatherContribution,
-      diagnosisModel,
-      historyLog,
+      diagnosisModel: activeDiagnosis,
+      historyLog: activeHistoryLog,
       actionLog: trackedRecommendation,
     });
   };
@@ -718,6 +866,12 @@ export function PestsPage() {
           </p>
         </div>
 
+        <div className="prototype-module-status-row">
+          <span className="prototype-module-chip success">{pestState.source}</span>
+          {backendMode ? <span className="prototype-module-chip">Backend farm linked</span> : <span className="prototype-module-chip">Frontend-only fallback</span>}
+          {pestState.notice ? <span className="prototype-module-note">{pestState.notice}</span> : null}
+        </div>
+
         {weatherState.error ? <div className="pest-intel-warning">{weatherState.error}</div> : null}
 
         <div className="pest-intelligence-grid">
@@ -725,24 +879,24 @@ export function PestsPage() {
             <div className="pest-hero-head">
               <div>
                 <span className="pest-kicker">AI Diagnosis Confidence Score</span>
-                <h2>{diagnosisModel.topDiagnosis.name}</h2>
-                <p>{diagnosisModel.topDiagnosis.scientificName}</p>
+                <h2>{activeDiagnosis.topDiagnosis.name}</h2>
+                <p>{activeDiagnosis.topDiagnosis.scientificName}</p>
               </div>
-              <span className={`pest-priority-badge ${diagnosisModel.priority.toLowerCase()}`}>{diagnosisModel.priority}</span>
+              <span className={`pest-priority-badge ${activeDiagnosis.priority.toLowerCase()}`}>{activeDiagnosis.priority}</span>
             </div>
 
             <div className="pest-hero-metrics">
               <div className="pest-metric-card">
                 <small>Confidence</small>
-                <strong>{diagnosisModel.confidence}%</strong>
+                <strong>{activeDiagnosis.confidence}%</strong>
               </div>
               <div className="pest-metric-card">
                 <small>Farm Risk</small>
-                <strong>{diagnosisModel.currentRisk}</strong>
+                <strong>{activeDiagnosis.currentRisk}</strong>
               </div>
               <div className="pest-metric-card">
                 <small>Regional Risk</small>
-                <strong>{getRiskLabel(diagnosisModel.regionalRiskScore)}</strong>
+                <strong>{getRiskLabel(activeDiagnosis.regionalRiskScore)}</strong>
               </div>
             </div>
 
@@ -750,7 +904,7 @@ export function PestsPage() {
               <ThermometerSun size={18} />
               <p>
                 Humidity at {weatherContribution.current?.humidity ?? "--"}% and temperature of{" "}
-                {weatherContribution.current?.temperature ?? "--"}C increase {diagnosisModel.topDiagnosis.name.toLowerCase()} risk on{" "}
+                {weatherContribution.current?.temperature ?? "--"}C increase {activeDiagnosis.topDiagnosis.name.toLowerCase()} risk on{" "}
                 {selectedFarm.name}.
               </p>
             </div>
@@ -900,19 +1054,19 @@ export function PestsPage() {
             <div className="pest-forecast-grid">
               <div>
                 <small>Current Risk</small>
-                <strong>{diagnosisModel.outbreakForecast.currentRisk}</strong>
+                <strong>{activeDiagnosis.outbreakForecast.currentRisk}</strong>
               </div>
               <div>
                 <small>Predicted Risk</small>
-                <strong>{diagnosisModel.outbreakForecast.predictedRisk}</strong>
+                <strong>{activeDiagnosis.outbreakForecast.predictedRisk}</strong>
               </div>
               <div>
                 <small>Confidence</small>
-                <strong>{diagnosisModel.outbreakForecast.confidence}%</strong>
+                <strong>{activeDiagnosis.outbreakForecast.confidence}%</strong>
               </div>
             </div>
 
-            <p className="pest-forecast-drivers">{diagnosisModel.outbreakForecast.drivers}</p>
+            <p className="pest-forecast-drivers">{activeDiagnosis.outbreakForecast.drivers}</p>
           </article>
 
           <article className="prototype-panel pest-impact-card">
@@ -927,11 +1081,11 @@ export function PestsPage() {
             <div className="pest-impact-metrics">
               <div>
                 <small>Estimated Yield Loss</small>
-                <strong>{diagnosisModel.yieldLoss}%</strong>
+                <strong>{activeDiagnosis.yieldLoss}%</strong>
               </div>
               <div>
                 <small>Estimated Economic Loss</small>
-                <strong>{formatRwf(diagnosisModel.economicLoss)}</strong>
+                <strong>{formatRwf(activeDiagnosis.economicLoss)}</strong>
               </div>
             </div>
 
@@ -981,7 +1135,7 @@ export function PestsPage() {
             <div className="pest-action-highlight">
               <div>
                 <small>Recommendation</small>
-                <strong>{dynamicRecommendation.title}</strong>
+                <strong>{activeRecommendation.title}</strong>
               </div>
               <div>
                 <small>Treatment Effectiveness</small>
@@ -990,7 +1144,7 @@ export function PestsPage() {
             </div>
 
             <ol className="pest-guidance-list">
-              {dynamicRecommendation.guidance.map((item) => (
+              {activeRecommendation.guidance.map((item) => (
                 <li key={item}>{item}</li>
               ))}
             </ol>
@@ -1027,7 +1181,7 @@ export function PestsPage() {
                 <span>Severity</span>
                 <span>Action</span>
               </div>
-              {historyLog.slice(0, 6).map((row) => (
+              {activeHistoryLog.slice(0, 6).map((row) => (
                 <div key={row.id || `${row.date}-${row.pathogen}`} className="prototype-pest-history-row">
                   <span>{row.monthLabel || row.date}</span>
                   <strong>{row.pathogen}</strong>
@@ -1061,7 +1215,15 @@ export function PestsPage() {
           <div className="pest-library-grid-v2">
             {displayedLibrary.map((card) => (
               <article key={card.id} className="pest-library-card-v2">
-                <img src={card.imageUrl} alt={card.name} />
+                <div className="pest-library-image-wrap">
+                  <ImageWithFallback
+                    src={card.imageUrl}
+                    alt={card.name}
+                    label={card.name}
+                    category="disease"
+                    className="pest-library-image"
+                  />
+                </div>
                 <div className="pest-library-copy-v2">
                   <strong>{card.name}</strong>
                   <span>{card.scientificName}</span>
@@ -1089,17 +1251,17 @@ export function PestsPage() {
             <div>
               <ShieldCheck size={16} />
               <strong>Chemical Option</strong>
-              <p>{diagnosisModel.topDiagnosis.treatment.chemical}</p>
+              <p>{activeDiagnosis.topDiagnosis.treatment.chemical}</p>
             </div>
             <div>
               <Sparkles size={16} />
               <strong>Organic / IPM</strong>
-              <p>{diagnosisModel.topDiagnosis.treatment.organic}</p>
+              <p>{activeDiagnosis.topDiagnosis.treatment.organic}</p>
             </div>
             <div>
               <CheckCircle2 size={16} />
               <strong>Prevention Advice</strong>
-              <p>{diagnosisModel.topDiagnosis.preventionAdvice}</p>
+              <p>{activeDiagnosis.topDiagnosis.preventionAdvice}</p>
             </div>
           </div>
         </article>
@@ -1116,28 +1278,28 @@ export function PestsPage() {
           <div className="pest-explanation-grid">
             <div>
               <strong>Weather contribution</strong>
-              <p>{diagnosisModel.explanation.weather}</p>
+              <p>{activeDiagnosis.explanation.weather}</p>
             </div>
             <div>
               <strong>Farm-specific risk</strong>
-              <p>{diagnosisModel.explanation.soil}</p>
+              <p>{activeDiagnosis.explanation.soil}</p>
             </div>
             <div>
               <strong>Crop-stage reason</strong>
-              <p>{diagnosisModel.explanation.stage}</p>
+              <p>{activeDiagnosis.explanation.stage}</p>
             </div>
             <div>
               <strong>Economic context</strong>
-              <p>{diagnosisModel.explanation.market}</p>
+              <p>{activeDiagnosis.explanation.market}</p>
             </div>
             <div className="full">
               <strong>Confidence summary</strong>
-              <p>{diagnosisModel.explanation.confidence}</p>
+              <p>{activeDiagnosis.explanation.confidence}</p>
             </div>
           </div>
         </div>
 
-        {weatherState.loading ? <div className="pest-intel-loading">Loading live weather-linked pest intelligence...</div> : null}
+        {weatherState.loading || pestState.loading ? <div className="pest-intel-loading">Loading live weather-linked pest intelligence...</div> : null}
       </div>
     </section>
   );

@@ -21,6 +21,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useFarmerData } from "../../context/FarmerDataContext";
 import { apiClient } from "../../services/api";
+import { isBackendSessionActive, phase1BackendService } from "../../services/phase1Backend";
 import { downloadCsvFile, downloadJsonFile, downloadTextFile } from "../../utils/actions";
 
 const DEMO_MODE = true;
@@ -812,7 +813,7 @@ function FarmerRegionalAlerts({ state, setState }) {
   );
 }
 
-function AdminRegionalDashboard({ state, setState }) {
+function AdminRegionalDashboard({ state, setState, backendAdminMode, backendPayload, applyBackendDashboard, isLoading }) {
   const { adminFarmerRows = [], data = {} } = useFarmerData();
   const [selectedDistrict, setSelectedDistrict] = useState(DISTRICT_META[0].district);
   const [selectedSector, setSelectedSector] = useState(DISTRICT_META[0].sector);
@@ -829,6 +830,10 @@ function AdminRegionalDashboard({ state, setState }) {
   const allFarms = Array.isArray(data.farms) ? data.farms : [];
 
   const districtProfiles = useMemo(() => {
+    if (Array.isArray(backendPayload?.districtProfiles) && backendPayload.districtProfiles.length) {
+      return backendPayload.districtProfiles;
+    }
+
     return DISTRICT_META.map((meta) => {
       const outbreaks = state.outbreaks.filter((item) => item.district === meta.district);
       const markets = state.marketAlerts.filter((item) => item.district === meta.district);
@@ -870,7 +875,7 @@ function AdminRegionalDashboard({ state, setState }) {
         verificationRate,
       };
     });
-  }, [adminFarmerRows, allFarms, state.advisories, state.communityReports, state.marketAlerts, state.outbreaks]);
+  }, [adminFarmerRows, allFarms, backendPayload?.districtProfiles, state.advisories, state.communityReports, state.marketAlerts, state.outbreaks]);
 
   const selectedProfile = useMemo(
     () => districtProfiles.find((item) => item.district === selectedDistrict) || districtProfiles[0],
@@ -884,6 +889,11 @@ function AdminRegionalDashboard({ state, setState }) {
   }, [selectedProfile]);
 
   const monitoringRows = useMemo(() => {
+    const backendRows = backendPayload?.monitoringRowsByDistrict?.[selectedDistrict];
+    if (Array.isArray(backendRows) && backendRows.length) {
+      return backendRows;
+    }
+
     const sectorMap = new Map();
 
     selectedProfile?.outbreaks.forEach((item) => {
@@ -935,9 +945,10 @@ function AdminRegionalDashboard({ state, setState }) {
       weatherRisk: scoreToSeverity(item.weatherRiskScore),
       pestIntensity: scoreToSeverity(item.pestRiskScore),
     }));
-  }, [selectedProfile]);
+  }, [backendPayload?.monitoringRowsByDistrict, selectedDistrict, selectedProfile]);
 
   const insightMessage = useMemo(() => {
+    if (backendPayload?.summaryInsight && selectedDistrict === districtProfiles[0]?.district) return backendPayload.summaryInsight;
     if (!selectedProfile) return "";
     const highestDriver = [
       { label: "weather risk", value: selectedProfile.weatherRisk },
@@ -949,13 +960,42 @@ function AdminRegionalDashboard({ state, setState }) {
     return `${selectedProfile.district} requires close monitoring because ${highestDriver.label} is elevated and extension coordination is needed across ${selectedProfile.farmsCount || 0} farm records.`;
   }, [selectedProfile]);
 
-  const publishAdvisory = () => {
+  const publishAdvisory = async () => {
     const title = advisoryTitle.trim();
     const message = advisoryMessage.trim();
     const action = recommendedAction.trim();
     if (!title || !message || !action) return;
 
     const targetFarmers = Math.max(12, (selectedProfile?.farmersCount || 0) * 6);
+
+    if (backendAdminMode) {
+      try {
+        const result = await phase1BackendService.admin.issueRegionalAdvisory({
+          title,
+          district: selectedDistrict,
+          sector: selectedSector,
+          category,
+          severity,
+          deliveryChannel,
+          message,
+          recommendedAction: action,
+          targetFarmers,
+        });
+
+        if (result?.dashboard) {
+          applyBackendDashboard(result.dashboard);
+        }
+
+        setStatusMessage(`Regional advisory published for ${selectedDistrict}.`);
+        setAdvisoryTitle("");
+        setAdvisoryMessage("");
+        setRecommendedAction("");
+        return;
+      } catch {
+        // Fall back to local/demo state if backend advisory publishing is unavailable.
+      }
+    }
+
     setState((current) => ({
       ...current,
       advisories: [
@@ -1041,6 +1081,8 @@ function AdminRegionalDashboard({ state, setState }) {
 
       {statusMessage ? <div className="community-inline-notice">{statusMessage}</div> : null}
 
+      {isLoading ? <div className="irrigation-state-banner">Loading backend regional monitoring data...</div> : null}
+
       <div className="management-toolbar">
         <div className="toolbar-search">
           <Search size={15} />
@@ -1091,7 +1133,7 @@ function AdminRegionalDashboard({ state, setState }) {
         <article className="prototype-panel">
           <div className="panel-toolbar">
             <h2>Regional Risk Heatmap</h2>
-            <span className="regional-inline-tag">Demo + Local Data</span>
+            <span className="regional-inline-tag">{backendAdminMode ? "Backend + Demo Fallback" : "Demo + Local Data"}</span>
           </div>
           <div className="regional-heatmap-grid">
             {districtProfiles.map((profile) => (
@@ -1419,8 +1461,51 @@ export function RegionalMonitoringPage() {
     saveRegionalState(state);
   }, [state]);
 
-  if (user?.role === "admin") {
-    return <AdminRegionalDashboard state={state} setState={setState} />;
+  const backendAdminMode = ["admin", "extensionofficer"].includes(user?.role) && isBackendSessionActive();
+  const [adminBackendPayload, setAdminBackendPayload] = useState(null);
+  const [adminBackendLoading, setAdminBackendLoading] = useState(false);
+
+  const applyBackendDashboard = (payload) => {
+    setAdminBackendPayload(payload);
+    if (payload?.state) {
+      setState(normalizeSavedState(payload.state));
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAdminRegionalBackend() {
+      if (!backendAdminMode) return;
+      setAdminBackendLoading(true);
+      try {
+        const payload = await phase1BackendService.admin.regionalMonitoring();
+        if (cancelled || !payload) return;
+        applyBackendDashboard(payload);
+      } catch {
+        // Keep local/demo regional dashboard available if backend loading fails.
+      } finally {
+        if (!cancelled) setAdminBackendLoading(false);
+      }
+    }
+
+    loadAdminRegionalBackend();
+    return () => {
+      cancelled = true;
+    };
+  }, [backendAdminMode]);
+
+  if (["admin", "extensionofficer"].includes(user?.role)) {
+    return (
+      <AdminRegionalDashboard
+        state={state}
+        setState={setState}
+        backendAdminMode={backendAdminMode}
+        backendPayload={adminBackendPayload}
+        applyBackendDashboard={applyBackendDashboard}
+        isLoading={adminBackendLoading}
+      />
+    );
   }
 
   return <FarmerRegionalAlerts state={state} setState={setState} />;
