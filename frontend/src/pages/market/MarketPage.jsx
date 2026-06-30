@@ -1,16 +1,18 @@
 import {
-  Bell,
-  Bot,
-  ExternalLink,
-  MapPinned,
-  PackageCheck,
-  Route,
-  ShipWheel,
-  TrendingUp,
+  ArrowDownRight, ArrowUpRight, Award, BarChart3, Bell, Bot, CheckCircle2, ChevronRight,
+  Clock, DollarSign, ExternalLink, Eye, Gauge, Globe, Info, MapPinned, Maximize2,
+  Navigation, PackageCheck, Route, ShipWheel, ShoppingCart, Star, Store, Target,
+  TrendingDown, TrendingUp, Truck, Users, Warehouse,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useFarmerData } from "../../context/FarmerDataContext";
 import { isBackendSessionActive, phase1BackendService } from "../../services/phase1Backend";
+import { PageShell } from "../../components/common/PageShell";
+import { PageHeader } from "../../components/common/PageHeader";
+import { AppCard } from "../../components/common/AppCard";
+import { ActionButton } from "../../components/common/ActionButton";
+import { StatusBadge } from "../../components/common/StatusBadge";
+import { MetricCard } from "../../components/common/MetricCard";
 
 const MARKET_STORAGE_KEY = "agri-feed-market-module-v2";
 
@@ -498,351 +500,454 @@ export function MarketPage() {
     }));
   };
 
+  const CROP_EMOJI = {
+    Wheat: "\u{1F33E}", Corn: "\u{1F33D}", Soybeans: "\u{1FAD8}", Rice: "\u{1F35A}", Barley: "\u{1F33E}",
+    Beans: "\u{1FAD8}", "Irish Potato": "\u{1F954}", "Sweet Potato": "\u{1F360}", Cassava: "\u{1F331}",
+    Sorghum: "\u{1F33E}", Banana: "\u{1F34C}", Plantain: "\u{1F34C}", Groundnuts: "\u{1F95C}", Peas: "\u{1FADB}",
+    Coffee: "\u2615", Tea: "\u{1F375}",
+  };
+
   return (
-    <section className="management-page prototype-market-page upgraded-market-page">
-      <div className="page-title-block prototype-market-title">
-        <h1>Market Intelligence</h1>
-        <p>
-          Location-aware crop pricing, demand forecasting, logistics guidance, and AI-supported selling decisions.
-        </p>
-      </div>
-
-      <div className="prototype-market-toolbar">
-        <label className="prototype-market-toolbar-field">
-          <span>Active farm</span>
-          <select value={selectedFarmId} onChange={(event) => setSelectedFarmId(event.target.value)}>
-            {farms.map((farm) => (
-              <option key={farm.id} value={farm.id}>
-                {farm.name} - {farm.region}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="prototype-market-toolbar-field">
-          <span>Time horizon</span>
-          <select value={timeframe} onChange={(event) => setTimeframe(event.target.value)}>
-            <option value="30D">30 Days</option>
-            <option value="90D">90 Days</option>
-            <option value="6M">6 Months</option>
-          </select>
-        </label>
-
-        <label className="prototype-market-toolbar-field">
-          <span>Target price alert</span>
-          <div className="prototype-market-alert-inline">
-            <input type="number" step="1" value={targetPrice} onChange={(event) => setTargetPrice(event.target.value)} />
-            <button type="button" className="prototype-market-alert-button" onClick={createAlert}>
-              <Bell size={16} />
-              <span>Set Alert</span>
-            </button>
+    <PageShell>
+      <PageHeader
+        title="Market Intelligence"
+        subtitle="Live crop pricing, demand forecasting, nearby market comparison, and AI selling guidance."
+        actions={
+          <div className="mk-header-actions">
+            <StatusBadge variant={backendMode ? "success" : "default"}>
+              {backendMode ? "Backend linked" : "Demo data"}
+            </StatusBadge>
           </div>
-        </label>
+        }
+      />
+
+      <div className="mk-filter-bar">
+        <div className="mk-filter-left">
+          <label className="mk-filter-field">
+            <span className="mk-filter-label">Farm</span>
+            <select value={selectedFarmId} onChange={(e) => setSelectedFarmId(e.target.value)}>
+              {farms.map((farm) => (
+                <option key={farm.id} value={farm.id}>
+                  {farm.name} &mdash; {farm.region}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="mk-filter-field">
+            <span className="mk-filter-label">Timeframe</span>
+            <div className="mk-tab-group">
+              {["30D", "90D", "6M"].map((t) => (
+                <button key={t} type="button" className={`mk-tab ${timeframe === t ? "active" : ""}`} onClick={() => setTimeframe(t)}>
+                  {t === "30D" ? "30 Days" : t === "90D" ? "90 Days" : "6 Months"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="mk-filter-field mk-target-field">
+            <span className="mk-filter-label">Target Price (RWF)</span>
+            <div className="mk-target-input-wrap">
+              <input type="number" step="1" value={targetPrice} onChange={(e) => setTargetPrice(e.target.value)} placeholder="e.g. 750" />
+              <button type="button" className="mk-alert-btn" onClick={createAlert} title="Set price alert">
+                <Bell size={16} />
+              </button>
+            </div>
+          </label>
+        </div>
+        <div className="mk-filter-right">
+          <div className="mk-context-chips">
+            <span className="mk-context-chip">{market.district}</span>
+            <span className="mk-context-chip">{market.province}</span>
+          </div>
+        </div>
       </div>
 
-      <div className="prototype-market-context-row">
-        <div className="prototype-market-context-card">
-          <strong>Farm district</strong>
-          <span>{market.district}</span>
+      {marketState.notice ? (
+        <div className="mk-notice">
+          <Info size={14} />
+          <span>{marketState.notice}</span>
         </div>
-        <div className="prototype-market-context-card">
-          <strong>Province</strong>
-          <span>{market.province}</span>
-        </div>
-        <div className="prototype-market-context-card">
-          <strong>Coordinates</strong>
-          <span>{marketCoordinateLabel}</span>
-        </div>
-      </div>
+      ) : null}
 
-      <div className="prototype-module-status-row">
-        <span className="prototype-module-chip success">{marketState.source}</span>
-        {backendMode ? <span className="prototype-module-chip">Backend farm linked</span> : <span className="prototype-module-chip">Frontend-only fallback</span>}
-        {marketState.notice ? <span className="prototype-module-note">{marketState.notice}</span> : null}
-      </div>
-
-      <div className="prototype-market-head-actions">
-        <div className="prototype-market-filters">
+      <div className="mk-crop-strip">
+        <div className="mk-crop-chips">
           {cropFilters.map((crop) => (
-            <button
-              key={crop}
-              type="button"
-              className={selectedCrop === crop ? "prototype-market-filter active" : "prototype-market-filter"}
-              onClick={() => setSelectedCrop(crop)}
-            >
-              {crop}
+            <button key={crop} type="button" className={`mk-crop-chip ${selectedCrop === crop ? "active" : ""}`} onClick={() => setSelectedCrop(crop)}>
+              <span className="mk-chip-emoji">{CROP_EMOJI[crop] || "\u{1F331}"}</span>
+              <span>{crop}</span>
             </button>
           ))}
         </div>
       </div>
 
-      <div className="prototype-market-grid upgraded">
-        <div className="prototype-market-main">
-          <article className="prototype-panel prototype-market-chart-panel">
-            <div className="prototype-market-panel-head">
-              <h2>Live & Historical Price Trend ({timeframe})</h2>
-              <span className="prototype-market-growth">
-                {market.forecasts[1].forecastChange >= 0 ? "+" : ""}
-                {market.forecasts[1].forecastChange}% 30-day direction
-              </span>
-            </div>
+      <div className="mk-kpi-grid">
+        <div className="mk-kpi-card">
+          <div className="mk-kpi-icon green"><DollarSign size={20} /></div>
+          <div className="mk-kpi-body">
+            <span className="mk-kpi-label">Current Price</span>
+            <strong className="mk-kpi-value">{formatRwf(market.currentPrice)}</strong>
+            <span className="mk-kpi-sub">/{selectedCrop} kg</span>
+          </div>
+          <span className={`mk-kpi-trend ${market.forecasts[0].forecastChange >= 0 ? "up" : "down"}`}>
+            {market.forecasts[0].forecastChange >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+            {market.forecasts[0].forecastChange >= 0 ? "+" : ""}{market.forecasts[0].forecastChange}%
+          </span>
+        </div>
+        <div className="mk-kpi-card">
+          <div className="mk-kpi-icon blue"><TrendingUp size={20} /></div>
+          <div className="mk-kpi-body">
+            <span className="mk-kpi-label">Demand Forecast</span>
+            <strong className="mk-kpi-value">{market.demandForecast}<small>/100</small></strong>
+            <span className="mk-kpi-sub">{getDemandLabel(market.demandForecast)} demand</span>
+          </div>
+          <span className={`mk-kpi-trend ${market.demandForecast >= 70 ? "up" : "down"}`}>
+            {market.demandForecast >= 70 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+            {market.demandForecast >= 70 ? "Strong" : "Weak"}
+          </span>
+        </div>
+        <div className="mk-kpi-card">
+          <div className="mk-kpi-icon amber"><Star size={20} /></div>
+          <div className="mk-kpi-body">
+            <span className="mk-kpi-label">Best Market Score</span>
+            <strong className="mk-kpi-value">{market.bestMarket?.opportunityScore || 0}<small>/100</small></strong>
+            <span className="mk-kpi-sub">{market.bestMarket?.recommendation || "\u2014"}</span>
+          </div>
+          <StatusBadge variant={market.bestMarket?.recommendation === "Best Choice" ? "success" : market.bestMarket?.recommendation === "Good Option" ? "info" : "default"}>
+            {market.bestMarket?.name || "\u2014"}
+          </StatusBadge>
+        </div>
+        <div className="mk-kpi-card">
+          <div className="mk-kpi-icon purple"><Bot size={20} /></div>
+          <div className="mk-kpi-body">
+            <span className="mk-kpi-label">AI Confidence</span>
+            <strong className="mk-kpi-value">{market.aiConfidence}<small>%</small></strong>
+            <div className="mk-kpi-bar-track"><div className="mk-kpi-bar-fill" style={{ width: `${market.aiConfidence}%` }} /></div>
+          </div>
+          <span className="mk-kpi-extra">{market.aiDecision}</span>
+        </div>
+        <div className="mk-kpi-card">
+          <div className="mk-kpi-icon green"><BarChart3 size={20} /></div>
+          <div className="mk-kpi-body">
+            <span className="mk-kpi-label">Forecast Change</span>
+            <strong className="mk-kpi-value">{market.forecasts[1].forecastChange >= 0 ? "+" : ""}{market.forecasts[1].forecastChange}<small>%</small></strong>
+            <span className="mk-kpi-sub">{getTrendLabel(market.forecasts[1].forecastChange)}</span>
+          </div>
+          <span className="mk-kpi-trend-label">30-day outlook</span>
+        </div>
+      </div>
 
-            <div className="prototype-market-chart">
-              <div className="prototype-market-chart-lines">
-                {[1, 2, 3, 4].map((line) => (
-                  <i key={line} />
-                ))}
-              </div>
-              <div className="prototype-market-bars">
-                {market.trendBars.map((height, index) => (
-                  <span
-                    key={`${height}-${index}`}
-                    className={index === market.trendBars.length - 1 ? "active" : ""}
-                    style={{ height: `${height}%` }}
-                  />
-                ))}
-              </div>
-              <div className="prototype-market-axis">
-                <span>Start</span>
-                <span>Demand build-up</span>
-                <span>Peak trading</span>
-                <span>Today</span>
-              </div>
-            </div>
-          </article>
+      <div className="mk-main-layout">
+        <div className="mk-main-left">
 
-          <article className="prototype-panel market-forecast-panel">
-            <div className="prototype-market-panel-head">
-              <h2>Price Forecasting</h2>
-              <span>Current vs predicted</span>
+          <AppCard className="mk-chart-card">
+            <div className="mk-card-head">
+              <div className="mk-card-head-left">
+                <BarChart3 size={18} />
+                <h3>Price Trend &mdash; {timeframe}</h3>
+              </div>
+              <div className="mk-card-head-right">
+                <span className={`mk-trend-badge ${market.forecasts[1].forecastChange >= 0 ? "up" : "down"}`}>
+                  {market.forecasts[1].forecastChange >= 0 ? "+" : ""}{market.forecasts[1].forecastChange}% 30d
+                </span>
+              </div>
             </div>
-            <div className="market-forecast-grid">
-              {market.forecasts.map((forecast) => (
-                <div key={forecast.label} className="market-forecast-card">
-                  <strong>{forecast.label}</strong>
-                  <span>Current Price</span>
-                  <h3>{formatRwf(forecast.currentPrice)}</h3>
-                  <span>Predicted Price</span>
-                  <h4>{formatRwf(forecast.predictedPrice)}</h4>
-                  <p>
-                    Forecast Change: {forecast.forecastChange >= 0 ? "+" : ""}
-                    {forecast.forecastChange}%
-                  </p>
-                  <small>{forecast.confidence}% confidence</small>
+            <div className="mk-chart-body">
+              <div className="mk-chart-visual">
+                <div className="mk-chart-area">
+                  <div className="mk-chart-target-line" style={{ bottom: `${Math.min((Number(targetPrice) / (market.currentPrice || 1)) * 50, 90)}%` }}>
+                    <span className="mk-chart-target-label">Target: {formatRwf(Number(targetPrice))}</span>
+                  </div>
+                  <div className="mk-chart-today-line">
+                    <span className="mk-chart-today-label">Today</span>
+                  </div>
+                  <div className="mk-chart-bars-container">
+                    {market.trendBars.map((height, index) => (
+                      <div key={index} className="mk-chart-bar-wrap" style={{ flex: 1 }}>
+                        <div
+                          className={`mk-chart-bar ${index === market.trendBars.length - 1 ? "active" : ""} ${index >= market.trendBars.length - 3 ? "predicted" : ""}`}
+                          style={{ height: `${height}%` }}
+                          title={`${height}%`}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
-          </article>
-
-          <article className="prototype-panel prototype-market-table-panel">
-            <div className="prototype-market-panel-head">
-              <h2>Nearby Market Ranking</h2>
-              <span>Sorted by Market Opportunity Score</span>
-            </div>
-
-            <div className="prototype-market-table market-comparison-table">
-              <div className="prototype-market-table-head">
-                <span>Market</span>
-                <span>Distance</span>
-                <span>Current Price</span>
-                <span>Demand</span>
-                <span>Trend</span>
-                <span>Accessibility</span>
-                <span>Recommendation</span>
+                <div className="mk-chart-axis">
+                  <span>Start</span>
+                  <span>Mid</span>
+                  <span>Now</span>
+                </div>
               </div>
+              <div className="mk-chart-legend">
+                <span className="mk-legend-item"><span className="mk-legend-dot historical" /> Historical</span>
+                <span className="mk-legend-item"><span className="mk-legend-dot predicted" /> Predicted</span>
+                <span className="mk-legend-item"><span className="mk-legend-line target" /> Target Price</span>
+                <span className="mk-legend-item"><span className="mk-legend-dash today" /> Today</span>
+              </div>
+            </div>
+          </AppCard>
 
-              {market.markets.map((row, index) => (
-                <div key={row.id} className={`prototype-market-table-row market-module-row ${index === 0 ? "best-market" : ""}`}>
-                  <strong className="market-name-cell">
-                    <MapPinned size={17} />
-                    <span>{row.name}</span>
-                  </strong>
-                  <span>{row.distanceLabel}</span>
-                  <strong>{row.currentPriceLabel || `${formatRwf(row.currentPrice)} / kg`}</strong>
-                  <span>{row.demandLabel}</span>
-                  <span>{row.trendLabel}</span>
-                  <span>{row.accessibilityLabel}</span>
-                  <div className="market-recommendation-cell">
-                    <span className={`market-recommendation-pill ${row.recommendation.toLowerCase().replace(/\s+/g, "-")}`}>
-                      {row.recommendation}
+          <AppCard>
+            <div className="mk-card-head">
+              <Clock size={18} />
+              <h3>Price Forecasting</h3>
+            </div>
+            <div className="mk-forecast-grid">
+              {market.forecasts.map((forecast) => (
+                <div key={forecast.label} className="mk-forecast-card">
+                  <div className="mk-fc-head">
+                    <span className="mk-fc-label">{forecast.label}</span>
+                    <div className={`mk-fc-change ${forecast.forecastChange >= 0 ? "up" : "down"}`}>
+                      {forecast.forecastChange >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+                      <span>{forecast.forecastChange >= 0 ? "+" : ""}{forecast.forecastChange}%</span>
+                    </div>
+                  </div>
+                  <div className="mk-fc-prices">
+                    <div className="mk-fc-current">
+                      <span className="mk-fc-pricelabel">Current</span>
+                      <strong>{formatRwf(forecast.currentPrice)}</strong>
+                    </div>
+                    <ChevronRight size={14} className="mk-fc-arrow" />
+                    <div className="mk-fc-predicted">
+                      <span className="mk-fc-pricelabel">Predicted</span>
+                      <strong>{formatRwf(forecast.predictedPrice)}</strong>
+                    </div>
+                  </div>
+                  <div className="mk-fc-mini-chart">
+                    <div className="mk-fc-mini-bar-wrap">
+                      <div className="mk-fc-mini-bar current" style={{ height: "100%" }} />
+                    </div>
+                    <div className="mk-fc-mini-bar-wrap">
+                      <div className="mk-fc-mini-bar predicted" style={{ height: `${(forecast.predictedPrice / Math.max(forecast.currentPrice, forecast.predictedPrice)) * 100}%` }} />
+                    </div>
+                  </div>
+                  <div className="mk-fc-footer">
+                    <span className="mk-fc-confidence">{forecast.confidence}% confidence</span>
+                    <span className={`mk-fc-rec ${forecast.forecastChange >= 4 ? "buy" : forecast.forecastChange >= 0 ? "hold" : "sell"}`}>
+                      {forecast.forecastChange >= 4 ? "Buy" : forecast.forecastChange >= 0 ? "Hold" : "Sell"}
                     </span>
-                    <small>{row.opportunityScore}/100</small>
                   </div>
                 </div>
               ))}
             </div>
-          </article>
+          </AppCard>
 
-          <article className="prototype-panel market-logistics-upgraded">
-            <div className="prototype-market-panel-head">
-              <h2>Market Accessibility & Logistics Tips</h2>
-              <span>Distance, route, and field access awareness</span>
+          <AppCard>
+            <div className="mk-card-head">
+              <MapPinned size={18} />
+              <h3>Nearby Market Ranking</h3>
+              <span className="mk-card-subtitle">Sorted by opportunity score</span>
             </div>
-            <div className="prototype-market-logistics-grid">
-              {market.logisticsTips.map((tip) => (
-                <div key={tip} className="prototype-market-logistics-card">
-                  <ShipWheel size={18} />
-                  <p>{tip}</p>
+            <div className="mk-ranking-wrap">
+              <div className="mk-ranking-head">
+                <span className="mk-r-col-rank">#</span>
+                <span className="mk-r-col-market">Market</span>
+                <span className="mk-r-col-dist">Distance</span>
+                <span className="mk-r-col-price">Price</span>
+                <span className="mk-r-col-demand">Demand</span>
+                <span className="mk-r-col-trend">Trend</span>
+                <span className="mk-r-col-access">Access</span>
+                <span className="mk-r-col-score">Score</span>
+                <span className="mk-r-col-action" />
+              </div>
+              {market.markets.map((row, index) => (
+                <div key={row.id} className={`mk-ranking-row ${index === 0 ? "best" : ""}`}>
+                  <span className="mk-r-col-rank">{index === 0 ? <Award size={16} className="mk-best-icon" /> : index + 1}</span>
+                  <div className="mk-r-col-market">
+                    <MapPinned size={14} className="mk-r-market-icon" />
+                    <div className="mk-r-market-info">
+                      <strong>{row.name}</strong>
+                      <span className="mk-r-market-district">{row.district}</span>
+                    </div>
+                    {index === 0 && <span className="mk-best-badge">Best Choice</span>}
+                  </div>
+                  <span className="mk-r-col-dist">{row.distanceLabel}</span>
+                  <strong className="mk-r-col-price">{row.currentPriceLabel || formatRwf(row.currentPrice)}</strong>
+                  <span className={`mk-r-col-demand ${row.demandLabel === "High" ? "high" : row.demandLabel === "Medium" ? "mid" : "low"}`}>{row.demandLabel}</span>
+                  <span className={`mk-r-col-trend ${row.trendLabel === "Rising Fast" || row.trendLabel === "Rising" ? "up" : "down"}`}>{row.trendLabel}</span>
+                  <span className="mk-r-col-access">
+                    <div className="mk-access-bar-bg"><div className="mk-access-bar-fill" style={{ width: `${row.accessibilityScore}%` }} /></div>
+                    <span>{row.accessibilityScore}%</span>
+                  </span>
+                  <span className="mk-r-col-score">{row.opportunityScore}</span>
+                  <span className="mk-r-col-action">
+                    <a href={`https://www.google.com/maps/search/?api=1&query=${row.coordinates.lat},${row.coordinates.lng}`} target="_blank" rel="noreferrer" className="mk-view-map-btn" title="View on map">
+                      <Navigation size={14} />
+                    </a>
+                  </span>
                 </div>
               ))}
             </div>
-          </article>
+          </AppCard>
+
+          <AppCard>
+            <div className="mk-card-head">
+              <Globe size={18} />
+              <h3>Farm &amp; Markets Map</h3>
+              <div className="mk-card-head-right">
+                {market.bestMarket && <span className="mk-map-distance">{market.bestMarket.distanceLabel} to best market</span>}
+              </div>
+            </div>
+            <div className="mk-map-body">
+              <div className="mk-map-embed">
+                <iframe title="Nearby market map" src={market.mapUrl} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+              </div>
+              <div className="mk-map-footer">
+                <div className="mk-map-legend-row">
+                  <span className="mk-map-legend-item"><MapPinned size={12} /> Farm</span>
+                  <span className="mk-map-legend-item"><Navigation size={12} /> Markets</span>
+                </div>
+                <div className="mk-map-actions">
+                  {market.bestMarket ? (
+                    <>
+                      <a className="mk-map-link" href={`https://www.google.com/maps/search/?api=1&query=${market.bestMarket.coordinates.lat},${market.bestMarket.coordinates.lng}`} target="_blank" rel="noreferrer"><Eye size={14} /><span>View</span></a>
+                      <a className="mk-map-link primary" href={`https://www.google.com/maps/dir/?api=1&origin=${selectedFarm?.location?.lat ?? selectedFarm?.latitude ?? -1.9441},${selectedFarm?.location?.lng ?? selectedFarm?.longitude ?? 30.0619}&destination=${market.bestMarket.coordinates.lat},${market.bestMarket.coordinates.lng}`} target="_blank" rel="noreferrer"><Navigation size={14} /><span>Directions</span></a>
+                      <a className="mk-map-link" href={`https://www.google.com/maps/dir/?api=1&origin=${selectedFarm?.location?.lat ?? selectedFarm?.latitude ?? -1.9441},${selectedFarm?.location?.lng ?? selectedFarm?.longitude ?? 30.0619}&destination=${market.bestMarket.coordinates.lat},${market.bestMarket.coordinates.lng}&travelmode=driving`} target="_blank" rel="noreferrer"><Maximize2 size={14} /><span>Full Map</span></a>
+                    </>
+                  ) : (
+                    <a className="mk-map-link primary" href={`https://www.google.com/maps/search/?api=1&query=${selectedFarm?.location?.lat ?? -1.9441},${selectedFarm?.location?.lng ?? 30.0619}`} target="_blank" rel="noreferrer"><Maximize2 size={14} /><span>Open Map</span></a>
+                  )}
+                </div>
+              </div>
+            </div>
+          </AppCard>
         </div>
 
-        <div className="prototype-market-side">
-          <article className="prototype-market-insight-card upgraded-advisory">
-            <div className="prototype-market-insight-head">
-              <div className="prototype-market-insight-icon">
-                <Bot size={18} />
-              </div>
+        <div className="mk-main-right">
+
+          <div className="mk-ai-card">
+            <div className="mk-ai-head">
+              <Bot size={22} />
               <div>
-                <strong>AI Selling Recommendation</strong>
+                <h3>AI Selling Recommendation</h3>
                 <span>Location-aware market advisory</span>
               </div>
             </div>
-
-            <div className="prototype-market-insight-box">
-              <span>Recommendation</span>
-              <h3>{market.aiDecision}</h3>
-            </div>
-
-            <p>{market.aiReason}</p>
-
-            <div className="prototype-market-confidence">
-              <div className="prototype-market-confidence-top">
-                <span>Confidence</span>
-                <strong>{market.aiConfidence}%</strong>
+            <div className="mk-ai-body">
+              <div className="mk-ai-decision-row">
+                <span className="mk-ai-label">Recommended Action</span>
+                <strong className="mk-ai-decision">{market.aiDecision}</strong>
               </div>
-              <div className="prototype-market-confidence-track">
-                <div className="prototype-market-confidence-fill" style={{ width: `${market.aiConfidence}%` }} />
-              </div>
-            </div>
-          </article>
-
-          <article className="prototype-panel prototype-market-stats-card">
-            <h3>Market Opportunity Snapshot</h3>
-            <div className="prototype-market-stats-grid expanded">
-              <div className="prototype-market-stat-box">
-                <span>Best Market</span>
-                <strong>{market.bestMarket?.name || "--"}</strong>
-              </div>
-              <div className="prototype-market-stat-box">
-                <span>Top Crop Price</span>
-                <strong>{formatRwf(market.currentPrice)}</strong>
-              </div>
-              <div className="prototype-market-stat-box">
-                <span>Demand Forecast</span>
-                <strong>{market.demandForecast}/100</strong>
-              </div>
-              <div className="prototype-market-stat-box positive">
-                <span>Best Score</span>
-                <strong>{market.bestMarket?.opportunityScore || "--"}</strong>
-              </div>
-            </div>
-          </article>
-
-          <article className="prototype-panel prototype-market-map-card upgraded">
-            <div className="prototype-market-map-visual">
-              <iframe
-                title="Nearby market map"
-                src={market.mapUrl}
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-              />
-              <span className="prototype-market-map-badge">
-                {market.bestMarket ? `${market.bestMarket.distanceLabel} to best market` : "Nearby"}
-              </span>
-            </div>
-            <div className="prototype-market-map-copy">
-              <strong>Farm & Nearby Markets Map</strong>
-              <p>
-                Markets are generated from the selected farm district and sorted by distance and opportunity.
-              </p>
-            </div>
-            <div className="market-map-actions">
-              {market.bestMarket ? (
-                <>
-                  <a
-                    className="prototype-market-map-link"
-                    href={`https://www.google.com/maps/search/?api=1&query=${market.bestMarket.coordinates.lat},${market.bestMarket.coordinates.lng}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    View Market
-                  </a>
-                  <a
-                    className="prototype-market-map-link"
-                    href={`https://www.google.com/maps/dir/?api=1&origin=${selectedFarm?.location?.lat ?? selectedFarm?.latitude ?? -1.9441},${selectedFarm?.location?.lng ?? selectedFarm?.longitude ?? 30.0619}&destination=${market.bestMarket.coordinates.lat},${market.bestMarket.coordinates.lng}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Open Map
-                  </a>
-                </>
-              ) : null}
-            </div>
-          </article>
-
-          <article className="prototype-panel prototype-market-alerts-card">
-            <div className="prototype-market-export-head">
-              <TrendingUp size={18} />
-              <h3>Price Alerts</h3>
-            </div>
-            <div className="prototype-market-alert-list upgraded">
-              {visibleAlerts.length ? (
-                visibleAlerts.map((alert) => (
-                  <div key={alert.id} className="prototype-market-alert-row detailed">
-                    <strong>{alert.crop}</strong>
-                    <span>Created: {new Date(alert.createdAt).toLocaleDateString("en-ZA")}</span>
-                    <span>Target Price: {formatRwf(alert.targetPrice)}</span>
-                    <span>Current Price: {formatRwf(alert.currentPrice)}</span>
-                    {alert.bestMarketName ? <span>Best Market: {alert.bestMarketName}</span> : null}
-                    <small>{alert.status}</small>
-                  </div>
-                ))
-              ) : (
-                <p className="prototype-market-empty-copy">No price alerts yet. Set a target price to start notifications.</p>
+              {market.bestMarket && (
+                <div className="mk-ai-row">
+                  <Store size={14} />
+                  <span>Best market: <strong>{market.bestMarket.name}</strong></span>
+                </div>
               )}
+              <div className="mk-ai-row">
+                <DollarSign size={14} />
+                <span>Expected price: <strong>{formatRwf(market.bestMarket?.currentPrice || market.currentPrice)}</strong></span>
+              </div>
+              <p className="mk-ai-reason">{market.aiReason}</p>
+              <div className="mk-ai-conf-section">
+                <div className="mk-ai-conf-top">
+                  <span>AI Confidence</span>
+                  <strong>{market.aiConfidence}%</strong>
+                </div>
+                <div className="mk-ai-conf-track"><div className="mk-ai-conf-fill" style={{ width: `${market.aiConfidence}%` }} /></div>
+              </div>
             </div>
-          </article>
+            <button type="button" className="mk-ai-cta">
+              <ChevronRight size={16} />
+              <span>Generate Full Selling Advisory</span>
+            </button>
+          </div>
 
-          <article id="market-platforms" className="prototype-panel prototype-market-export-card">
-            <div className="prototype-market-export-head">
+          <AppCard>
+            <div className="mk-card-head">
+              <Truck size={18} />
+              <h3>Logistics &amp; Accessibility</h3>
+            </div>
+            <div className="mk-logistics-grid">
+              <div className="mk-logi-card">
+                <Route size={18} />
+                <strong>Route Accessibility</strong>
+                <p>{market.logisticsTips[0]}</p>
+              </div>
+              <div className="mk-logi-card">
+                <Truck size={18} />
+                <strong>Transport Recommendation</strong>
+                <p>{market.logisticsTips[1]}</p>
+              </div>
+              <div className="mk-logi-card">
+                <ShipWheel size={18} />
+                <strong>Bulk Selling Advice</strong>
+                <p>{market.logisticsTips[2]}</p>
+              </div>
+            </div>
+          </AppCard>
+
+          <AppCard>
+            <div className="mk-card-head">
+              <Warehouse size={18} />
+              <h3>Wholesale &amp; Export</h3>
+            </div>
+            <div className="mk-export-grid">
+              <div className="mk-export-card">
+                <Store size={16} />
+                <strong>Wholesale Price</strong>
+                <span className="mk-export-value">{bestMarketWholesaleLabel}</span>
+                <div className="mk-export-meta">
+                  <span>Buyer demand: <strong>{getDemandLabel(market.demandForecast)}</strong></span>
+                </div>
+              </div>
+              <div className="mk-export-card">
+                <Globe size={16} />
+                <strong>Export Benchmark</strong>
+                <span className="mk-export-value">{bestMarketExportLabel}</span>
+                <div className="mk-export-meta">
+                  <span>Best channel: <strong>{market.aiDecision?.includes("Export") ? "Export" : "Local Wholesale"}</strong></span>
+                </div>
+              </div>
+            </div>
+          </AppCard>
+
+          <AppCard>
+            <div className="mk-card-head">
               <PackageCheck size={18} />
               <h3>Market Platforms</h3>
             </div>
-            <div className="prototype-market-export-list upgraded">
+            <div className="mk-platforms-list">
               {market.platforms.map((platform) => (
-                <div key={platform.title} className="market-platform-card">
-                  <strong>{platform.title}</strong>
-                  <span>{platform.description}</span>
-                  <a href={platform.href} target="_blank" rel="noreferrer" className="prototype-market-platform-link">
-                    <ExternalLink size={15} />
-                    <span>{platform.actionLabel}</span>
-                  </a>
-                </div>
+                <a key={platform.title} href={platform.href} target="_blank" rel="noreferrer" className="mk-platform-card">
+                  <div className="mk-platform-body">
+                    <strong>{platform.title}</strong>
+                    <span>{platform.description}</span>
+                  </div>
+                  <ExternalLink size={14} className="mk-platform-icon" />
+                </a>
               ))}
             </div>
-          </article>
+          </AppCard>
 
-          <article className="prototype-panel prototype-market-export-card">
-            <div className="prototype-market-export-head">
-              <Route size={18} />
-              <h3>Wholesale & Export Information</h3>
+          <AppCard>
+            <div className="mk-card-head">
+              <Bell size={18} />
+              <h3>Price Alerts</h3>
             </div>
-            <div className="prototype-market-export-list">
-              <div>
-                <strong>Wholesale Benchmark</strong>
-                <span>{bestMarketWholesaleLabel} for the current crop window.</span>
-              </div>
-              <div>
-                <strong>Export Benchmark</strong>
-                <span>{bestMarketExportLabel} if crop quality and volume meet export channel thresholds.</span>
-              </div>
+            <div className="mk-alerts-list">
+              {visibleAlerts.length ? (
+                visibleAlerts.map((alert) => (
+                  <div key={alert.id} className="mk-alert-item">
+                    <div className="mk-alert-top">
+                      <strong>{alert.crop}</strong>
+                      <StatusBadge variant={alert.status === "Target reached" ? "success" : "default"}>
+                        {alert.status}
+                      </StatusBadge>
+                    </div>
+                    <div className="mk-alert-details">
+                      <span>Target: {formatRwf(alert.targetPrice)}</span>
+                      <span>Current: {formatRwf(alert.currentPrice)}</span>
+                    </div>
+                    <small>{new Date(alert.createdAt).toLocaleDateString("en-ZA")}</small>
+                  </div>
+                ))
+              ) : (
+                <p className="mk-empty">No price alerts yet. Enter a target price above.</p>
+              )}
             </div>
-          </article>
+          </AppCard>
         </div>
       </div>
-    </section>
+    </PageShell>
   );
 }

@@ -6,6 +6,7 @@ import { AuthProvider } from "./context/AuthContext";
 import { FarmerDataProvider } from "./context/FarmerDataContext";
 import { MobileSupportProvider } from "./context/MobileSupportContext";
 import "./styles/index.css";
+import "./styles/design-system.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

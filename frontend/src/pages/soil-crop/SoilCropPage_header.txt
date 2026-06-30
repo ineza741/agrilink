@@ -1,0 +1,1196 @@
+import {
+  AlertTriangle, X, Download, FileClock, Filter, FlaskConical, Leaf, MapPinned,
+  RotateCcw, Search, Sprout, TestTubeDiagonal, Upload, CircleHelp,
+  Activity, ArrowDown, ArrowUp, BarChart3, Check, CheckCircle, ChevronDown,
+  Clock, Cloud, CloudSun, Combine, Crosshair, Droplets, Eye, GripVertical,
+  Layers, Minimize2, Navigation, Plus, RefreshCw, Shield, Sun, Target,
+  Thermometer, TrendingUp, Tractor, Wind,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import ImageWithFallback from "../../components/common/ImageWithFallback";
+import { useFarmerData } from "../../context/FarmerDataContext";
+import { apiClient } from "../../services/api";
+import { isBackendSessionActive, phase1BackendService } from "../../services/phase1Backend";
+import { downloadJsonFile, downloadTextFile } from "../../utils/actions";
+import { PageShell } from "../../components/common/PageShell";
+import { PageHeader } from "../../components/common/PageHeader";
+import { AppCard } from "../../components/common/AppCard";
+import { SectionCard } from "../../components/common/SectionCard";
+import { ActionButton } from "../../components/common/ActionButton";
+import { StatusBadge } from "../../components/common/StatusBadge";
+import { MetricCard } from "../../components/common/MetricCard";
+import { getCropImageUrl } from "../../data/cropImages";
+
+const cropLibrary = [
+  {
+    name: "Winter Wheat",
+    season: "Cool Season",
+    region: "Northern Highlands",
+    soilTypes: ["Loamy", "Clay Loam"],
+    phRange: [6.0, 7.2],
+    npk: { n: 42, p: 24, k: 20 },
+    organicMatterMin: 2.4,
+    rotationTag: "Low Water Need",
+    cycle: "4-5 Mo Cycle",
+    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/5/54/Wheat_close-up.JPG",
+  },
+  {
+    name: "Maize (Corn)",
+    season: "Warm Season",
+    region: "Northern Highlands",
+    soilTypes: ["Loamy", "Sandy Loam"],
+    phRange: [5.8, 7.0],
+    npk: { n: 55, p: 28, k: 26 },
+    organicMatterMin: 2.8,
+    rotationTag: "Moderate Water",
+    cycle: "3-4 Mo Cycle",
+    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/0/0c/Maize_by_David_Monniaux.jpg",
+  },
+  {
+    name: "Soybean",
+    season: "Warm Season",
+    region: "Eastern Delta",
+    soilTypes: ["Loamy", "Silty"],
+    phRange: [6.0, 7.4],
+    npk: { n: 22, p: 18, k: 20 },
+    organicMatterMin: 2.2,
+    rotationTag: "Nitrogen Fixing",
+    cycle: "3 Mo Cycle",
+    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/8/8b/Soybean.USDA.jpg",
+  },
+  {
+    name: "Sorghum",
+    season: "Dry Season",
+    region: "Southern Plains",
+    soilTypes: ["Sandy Loam", "Loamy"],
+    phRange: [5.6, 7.5],
+    npk: { n: 30, p: 18, k: 16 },
+    organicMatterMin: 1.8,
+    rotationTag: "Drought Tolerant",
+    cycle: "4 Mo Cycle",
+    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/8/82/Sorghum_bicolor03.jpg",
+  },
+  {
+    name: "Irish Potato",
+    season: "Cool Season",
+    region: "Western Valley",
+    soilTypes: ["Sandy Loam", "Loamy"],
+    phRange: [5.2, 6.6],
+    npk: { n: 38, p: 30, k: 36 },
+    organicMatterMin: 3.0,
+    rotationTag: "High Potassium",
+    cycle: "3-4 Mo Cycle",
+    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/a/ab/Patates.jpg",
+  },
+  {
+    name: "Beans",
+    season: "Rainy Season",
+    region: "Eastern Delta",
+    soilTypes: ["Silty", "Loamy"],
+    phRange: [6.0, 7.2],
+    npk: { n: 20, p: 16, k: 18 },
+    organicMatterMin: 2.0,
+    rotationTag: "Rotation Friendly",
+    cycle: "2-3 Mo Cycle",
+    imageUrl: "https://upload.wikimedia.org/wikipedia/commons/8/8c/Phaseolus_vulgaris_-_haricots_verts.jpg",
+  },
+];
+
+const textureOptions = ["Loamy", "Sandy Loam", "Clay Loam", "Silty"];
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function scoreState(value, healthyThreshold, moderateThreshold) {
+  if (value >= healthyThreshold) return "Sufficient";
+  if (value >= moderateThreshold) return "Moderate";
+  return "Deficient";
+}
+
+function average(array) {
+  return array.reduce((sum, value) => sum + value, 0) / Math.max(array.length, 1);
+}
+
+function inferTextureFromFractions({ clay, sand, silt }) {
+  if (clay >= sand && clay >= silt) return "Clay Loam";
+  if (silt >= clay && silt >= sand) return "Silty";
+  if (sand >= 45) return "Sandy Loam";
+  return "Loamy";
+}
+
+function normalisePh(rawValue) {
+  if (rawValue == null) return 6.3;
+  return rawValue > 14 ? rawValue / 10 : rawValue;
+}
+
+function convertSoilOrganicMatter(rawSoc) {
+  if (rawSoc == null) return 2.4;
+  const socBase = rawSoc > 20 ? rawSoc / 10 : rawSoc;
+  return clamp(Number((socBase * 0.1724).toFixed(1)), 1.2, 5.2);
+}
+
+function convertNitrogenEstimate(rawNitrogen, organicMatter) {
+  if (rawNitrogen == null) {
+    return clamp(Math.round(18 + organicMatter * 8), 18, 48);
+  }
+
+  const scaled =
+    rawNitrogen < 5 ? rawNitrogen * 10 + 8 : rawNitrogen > 100 ? rawNitrogen / 10 : rawNitrogen;
+  return clamp(Math.round(scaled), 12, 56);
+}
+
+function parseSoilGridsValue(payload, propertyName) {
+  const layers = Array.isArray(payload?.properties?.layers)
+    ? payload.properties.layers
+    : Array.isArray(payload?.properties)
+      ? payload.properties
+      : [];
+
+  const layer =
+    layers.find((item) => item.name === propertyName || item.property === propertyName) ||
+    payload?.properties?.[propertyName];
+
+  if (!layer) return null;
+
+  const depth =
+    (Array.isArray(layer.depths) && layer.depths[0]) ||
+    layer.depth ||
+    {};
+  const values = depth.values || layer.values || {};
+
+  return values.mean ?? values.median ?? values["Q0.5"] ?? null;
+}
+
+function parseSoilGridsEstimate(payload) {
+  const ph = normalisePh(parseSoilGridsValue(payload, "phh2o"));
+  const soc = parseSoilGridsValue(payload, "soc");
+  const nitrogenRaw = parseSoilGridsValue(payload, "nitrogen");
+  const clay = Number(parseSoilGridsValue(payload, "clay") || 28);
+  const sand = Number(parseSoilGridsValue(payload, "sand") || 36);
+  const silt = Number(parseSoilGridsValue(payload, "silt") || 36);
+  const cec = Number(parseSoilGridsValue(payload, "cec") || 12);
+
+  const organicMatter = convertSoilOrganicMatter(soc);
+  const nitrogen = convertNitrogenEstimate(nitrogenRaw, organicMatter);
+  const phosphorus = clamp(Math.round(14 + cec * 0.65 + organicMatter * 1.4), 12, 28);
+  const potassium = clamp(Math.round(12 + clay * 0.12 + cec * 0.75), 14, 34);
+  const texture = inferTextureFromFractions({ clay, sand, silt });
+
+  return {
+    ph: Number(ph.toFixed(1)),
+    nitrogen,
+    phosphorus,
+    potassium,
+    organicMatter,
+    texture,
+    meta: {
+      clay,
+      sand,
+      silt,
+      cec,
+    },
+  };
+}
+
+function deriveSeasonFromWeather(weatherContext) {
+  if (!weatherContext) return "Warm Season";
+  if (weatherContext.weeklyRain >= 22 || weatherContext.maxRainProbability >= 55) return "Rainy Season";
+  if (weatherContext.averageMaxTemp >= 25.5) return "Warm Season";
+  if (weatherContext.averageMinTemp <= 15.5) return "Cool Season";
+  return "Dry Season";
+}
+
+function deriveCropStage(selectedFarm, seasonLabel) {
+  if (selectedFarm?.primaryCrop) {
+    if (seasonLabel === "Rainy Season") return "vegetative growth stage";
+    if (seasonLabel === "Dry Season") return "water-stress management stage";
+    if (seasonLabel === "Cool Season") return "maturity and disease-watch stage";
+  }
+
+  return "field monitoring stage";
+}
+
+function getSeasonCompatibilityBonus(crop, seasonLabel) {
+  if (crop.season === seasonLabel) return 14;
+  if (seasonLabel === "Rainy Season" && crop.season === "Warm Season") return 8;
+  if (seasonLabel === "Warm Season" && crop.season === "Dry Season") return 6;
+  if (seasonLabel === "Cool Season" && crop.season === "Warm Season") return 4;
+  return 0;
+}
+
+function getWeatherFitScore(crop, climate) {
+  if (!climate) return 14;
+
+  let score = 12;
+
+  if (crop.rotationTag.includes("Drought") && climate.weeklyRain <= 12) score += 12;
+  if (crop.rotationTag.includes("Low Water") && climate.weeklyRain <= 18) score += 10;
+  if (crop.rotationTag.includes("Moderate Water") && climate.weeklyRain >= 10 && climate.weeklyRain <= 35) score += 8;
+  if (crop.rotationTag.includes("Nitrogen Fixing") && climate.averageMaxTemp >= 22 && climate.averageMaxTemp <= 29) score += 8;
+  if (crop.name.includes("Potato") && climate.averageMaxTemp <= 26) score += 12;
+  if (crop.name.includes("Beans") && climate.maxRainProbability >= 25 && climate.maxRainProbability <= 70) score += 8;
+
+  if (climate.et0 >= 5.5 && crop.rotationTag.includes("Moderate Water")) score -= 4;
+  if (climate.et0 >= 5.8 && crop.name.includes("Potato")) score -= 6;
+
+  return clamp(Math.round(score), 4, 24);
+}
+
+function buildClimateContext(forecast, selectedFarm) {
+  const current = forecast?.current || {};
+  const daily = forecast?.daily || {};
+  const maxTemps = daily.temperature_2m_max || [];
+  const minTemps = daily.temperature_2m_min || [];
+  const rainSums = daily.precipitation_sum || [];
+  const rainProbabilities = daily.precipitation_probability_max || [];
+  const et0Values = daily.et0_fao_evapotranspiration || [];
+
+  const weeklyRain = Number(rainSums.reduce((sum, value) => sum + (value || 0), 0).toFixed(1));
+  const averageMaxTemp = Number(average(maxTemps.length ? maxTemps : [current.temperature_2m || 24]).toFixed(1));
+  const averageMinTemp = Number(average(minTemps.length ? minTemps : [current.temperature_2m || 16]).toFixed(1));
+  const averageEt0 = Number(average(et0Values.length ? et0Values : [current.et0_fao_evapotranspiration || 3.4]).toFixed(1));
+  const seasonLabel = deriveSeasonFromWeather({
+    weeklyRain,
+    maxRainProbability: Math.max(...(rainProbabilities.length ? rainProbabilities : [0])),
+    averageMaxTemp,
+    averageMinTemp,
+  });
+
+  return {
+    currentTemp: current.temperature_2m || averageMaxTemp,
+    humidity: current.relative_humidity_2m || 58,
+    pressure: current.pressure_msl || 1014,
+    wind: current.wind_speed_10m || 9,
+    soilMoisture: current.soil_moisture_0_to_1cm || 0,
+    et0: current.et0_fao_evapotranspiration || averageEt0,
+    averageEt0,
+    averageMaxTemp,
+    averageMinTemp,
+    weeklyRain,
+    maxRainProbability: Math.max(...(rainProbabilities.length ? rainProbabilities : [0])),
+    seasonLabel,
+    cropStage: deriveCropStage(selectedFarm, seasonLabel),
+  };
+}
+
+function createSoilImprovementInsights(values, form, healthScore) {
+  const lacks = [];
+  const actions = [];
+
+  if (values.ph < 6.0) {
+    lacks.push("soil pH is slightly acidic");
+    actions.push("Apply agricultural lime gradually to move pH closer to the ideal 6.2-6.8 range.");
+  } else if (values.ph > 7.2) {
+    lacks.push("soil pH is above the best crop range");
+    actions.push("Use acid-forming fertilizers and add organic matter to slowly rebalance pH.");
+  }
+
+  if (values.nitrogen < 32) {
+    lacks.push("nitrogen is below the preferred level");
+    actions.push("Increase nitrogen using composted manure, legumes, or a split nitrogen fertilizer program.");
+  }
+
+  if (values.phosphorus < 20) {
+    lacks.push("phosphorus is limiting root development");
+    actions.push("Add phosphorus sources like DAP or TSP and place them near the planting zone.");
+  }
+
+  if (values.potassium < 20) {
+    lacks.push("potassium is too low for strong stalk and drought resilience");
+    actions.push("Apply muriate or sulphate of potash before planting and retain crop residues.");
+  }
+
+  if (values.organicMatter < 2.5) {
+    lacks.push("organic matter is not high enough");
+    actions.push("Add compost, mulch, and a legume cover crop to improve structure and moisture retention.");
+  }
+
+  if (form.texture === "Sandy Loam") {
+    actions.push("Use mulching and smaller split fertilizer applications because sandy soils lose nutrients faster.");
+  }
+
+  if (form.texture === "Clay Loam") {
+    actions.push("Improve drainage timing and avoid working the soil when overly wet to reduce compaction.");
+  }
+
+  if (healthScore >= 95) {
+    return {
+      summary: "Excellent soil condition. This field is already well balanced for productive cropping.",
+      lacks: [],
+      actions: [
+        "Maintain the current fertility program, keep crop residues on the field, and rotate with legumes to preserve the score.",
+      ],
+    };
+  }
+
+  return {
+    summary:
+      lacks.length > 0
+        ? `This score is mainly being reduced because ${lacks.join(", ")}.`
+        : "The soil is reasonably balanced, but a few targeted adjustments can still improve performance.",
+    lacks,
+    actions,
+  };
+}
+
+function buildRecommendationDescription(crop, analysis, selectedFarm) {
+  if (!crop) return null;
+
+  const values = analysis.values;
+  const concerns = [];
+  const actions = [];
+
+  if (values.ph < crop.phRange[0]) {
+    concerns.push(`pH is below ${crop.name}'s preferred range of ${crop.phRange[0]}-${crop.phRange[1]}`);
+    actions.push("Correct soil acidity before planting so nutrient uptake is not restricted.");
+  } else if (values.ph > crop.phRange[1]) {
+    concerns.push(`pH is above ${crop.name}'s preferred range of ${crop.phRange[0]}-${crop.phRange[1]}`);
+    actions.push("Use soil-acidifying nutrition and added organic matter before establishment.");
+  }
+
+  if (values.nitrogen < crop.npk.n) {
+    concerns.push("nitrogen is lower than this crop ideally needs");
+    actions.push(`Raise nitrogen closer to ${crop.npk.n} using split applications around early growth.`);
+  }
+
+  if (values.phosphorus < crop.npk.p) {
+    concerns.push("phosphorus is slightly limiting");
+    actions.push(`Boost phosphorus toward ${crop.npk.p} for stronger rooting and early vigor.`);
+  }
+
+  if (values.potassium < crop.npk.k) {
+    concerns.push("potassium is below the preferred level");
+    actions.push(`Increase potassium toward ${crop.npk.k} to support water balance and crop strength.`);
+  }
+
+  if (values.organicMatter < crop.organicMatterMin) {
+    concerns.push("organic matter is under the crop's preferred threshold");
+    actions.push("Build organic matter with compost and crop residues before the next planting cycle.");
+  }
+
+  if (!crop.soilTypes.includes(selectedFarm.landType || selectedFarm.soilType || "Loamy")) {
+    actions.push(`Monitor this plot carefully because ${crop.name} performs best on ${crop.soilTypes.join(" or ")} soils.`);
+  }
+
+  const summary =
+    crop.match >= 85
+      ? `${crop.name} is a strong fit for ${selectedFarm.name} because the current soil profile already supports most of its nutrient and pH requirements during the ${analysis.climateContext?.seasonLabel?.toLowerCase() || "current"} window.`
+      : crop.match >= 70
+        ? `${crop.name} can perform well on ${selectedFarm.name}, but a few nutrient and soil-balance adjustments should be made before planting in the current ${analysis.climateContext?.seasonLabel?.toLowerCase() || "seasonal"} conditions.`
+        : `${crop.name} is still possible on ${selectedFarm.name}, but the soil needs clear correction steps before this crop becomes a safe choice.`;
+
+  return {
+    summary,
+    concerns,
+    actions: actions.length
+      ? actions
+      : ["Maintain current soil fertility and continue monitoring moisture, pH, and nutrient balance during the season."],
+  };
+}
+
+function createDefaultFarm() {
+  return {
+    id: "soil-default-farm",
+    name: "Primary Demonstration Farm",
+    region: "Northern Highlands",
+    primaryCrop: "Maize",
+    landType: "Loamy",
+    sizeHectares: 12,
+    location: { mapX: 52, mapY: 46, label: "Default soil-testing sector" },
+    history: [],
+  };
+}
+
+function mapSoilRecordToForm(soilTest) {
+  if (!soilTest) return null;
+
+  return {
+    ph: String(soilTest.ph ?? "6.5"),
+    nitrogen: String(soilTest.nitrogen ?? "38"),
+    phosphorus: String(soilTest.phosphorus ?? "21"),
+    potassium: String(soilTest.potassium ?? "17"),
+    organicMatter: String(soilTest.organicMatter ?? "2.7"),
+    texture: soilTest.texture || "Loamy",
+  };
+}
+
+function buildBackendSoilPayload(form, selectedFarm, labFileName) {
+  return {
+    farmId: selectedFarm.id,
+    sourceType: labFileName ? "uploaded" : "manual",
+    ph: Number(form.ph || 0),
+    nitrogen: Number(form.nitrogen || 0),
+    phosphorus: Number(form.phosphorus || 0),
+    potassium: Number(form.potassium || 0),
+    organicMatter: Number(form.organicMatter || 0),
+    texture: form.texture,
+    notes: `Frontend soil analysis submitted for ${selectedFarm.name}.`,
+    ...(labFileName
+      ? {
+          labReport: {
+            fileName: labFileName,
+            fileType: "application/octet-stream",
+            storageMode: "demo-local",
+          },
+        }
+      : {}),
+  };
+}
+
+function areSoilFormsEqual(left, right) {
+  if (!left || !right) return false;
+
+  return (
+    String(left.ph ?? "") === String(right.ph ?? "") &&
+    String(left.nitrogen ?? "") === String(right.nitrogen ?? "") &&
+    String(left.phosphorus ?? "") === String(right.phosphorus ?? "") &&
+    String(left.potassium ?? "") === String(right.potassium ?? "") &&
+    String(left.organicMatter ?? "") === String(right.organicMatter ?? "") &&
+    String(left.texture ?? "") === String(right.texture ?? "")
+  );
+}
+
+function formatSoilTimestamp(value) {
+  if (!value) return "Not available";
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Not available";
+
+  return parsed.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatSoilDate(value) {
+  if (!value) return "Not available";
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Not available";
+
+  return parsed.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function getSoilSourceLabel(sourceType) {
+  switch (sourceType) {
+    case "uploaded":
+      return "Uploaded Lab Data";
+    case "estimated":
+      return "SoilGrids Estimate";
+    case "backend":
+      return "Backend Soil Test";
+    case "manual":
+      return "Manual Soil Entry";
+    default:
+      return "Local Soil Data";
+  }
+}
+
+function getHealthLabelFromScore(score) {
+  if (score >= 80) return "Excellent";
+  if (score >= 65) return "Good";
+  if (score >= 50) return "Moderate";
+  return "Low";
+}
+
+function mapBackendSuitabilityToCropCard(result) {
+  if (!result) return null;
+
+  const cropMeta = cropLibrary.find((crop) => crop.name === result.cropName);
+
+  return {
+    ...(cropMeta || {}),
+    name: result.cropName,
+    match: Number(result.suitabilityScore || 0),
+    note: result.recommendationSummary || "Backend suitability result is available for this crop.",
+    rotationTag: cropMeta?.rotationTag || result.suitabilityBand || "Backend advisory",
+    cycle: cropMeta?.cycle || "Backend analysis",
+    limitingFactors: Array.isArray(result.limitingFactors) ? result.limitingFactors : [],
+  };
+}
+
+function mapBackendFertilizerToRows(recommendation) {
+  if (!recommendation) return [];
+
+  const buildState = (value) => (value <= 0 ? "Sufficient" : value <= 24 ? "Moderate" : "Deficient");
+  const buildTone = (value) => (value <= 0 ? "green" : value <= 24 ? "amber" : "red");
+
+  return [
+    {
+      nutrient: "Nitrogen (N)",
+      state: buildState(recommendation.nitrogenKgHa),
+      fertilizer: recommendation.recommendedBlend || "Backend nutrient blend",
+      dosage: recommendation.nitrogenKgHa,
+      tone: buildTone(recommendation.nitrogenKgHa),
+      weatherAdjustment:
+        recommendation.applicationTiming || recommendation.recommendationSummary || "Backend fertilizer guidance available.",
+    },
+    {
+      nutrient: "Phosphorus (P)",
+      state: buildState(recommendation.phosphorusKgHa),
+      fertilizer: recommendation.recommendedBlend || "Backend nutrient blend",
+      dosage: recommendation.phosphorusKgHa,
+      tone: buildTone(recommendation.phosphorusKgHa),
+      weatherAdjustment:
+        recommendation.budgetNote || recommendation.recommendationSummary || "Backend fertilizer guidance available.",
+    },
+    {
+      nutrient: "Potassium (K)",
+      state: buildState(recommendation.potassiumKgHa),
+      fertilizer: recommendation.recommendedBlend || "Backend nutrient blend",
+      dosage: recommendation.potassiumKgHa,
+      tone: buildTone(recommendation.potassiumKgHa),
+      weatherAdjustment:
+        recommendation.recommendationSummary || recommendation.applicationTiming || "Backend fertilizer guidance available.",
+    },
+  ];
+}
+
+function buildLocalSoilHistoryEntry(selectedFarm, analysis, submittedForm, sourceMode, sourceStatus, labFileName) {
+  return {
+    id: `local-${selectedFarm.id}`,
+    farmId: selectedFarm.id,
+    sourceType: sourceMode || "manual",
+    analysisStatus: "Local Analysis",
+    ph: Number(submittedForm.ph || 0),
+    nitrogen: Number(submittedForm.nitrogen || 0),
+    phosphorus: Number(submittedForm.phosphorus || 0),
+    potassium: Number(submittedForm.potassium || 0),
+    organicMatter: Number(submittedForm.organicMatter || 0),
+    texture: submittedForm.texture,
+    notes: sourceStatus,
+    healthScore: analysis.healthScore,
+    healthLabel: analysis.healthLabel,
+    suitabilityResults: analysis.suitableCrops.map((crop) => ({
+      cropName: crop.name,
+      suitabilityScore: crop.match,
+      suitabilityBand: crop.match >= 85 ? "Best Fit" : crop.match >= 70 ? "Good Fit" : "Needs Adjustment",
+      recommendationSummary: crop.note,
+      limitingFactors: [],
+    })),
+    fertilizerRecommendation: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    analyzedAt: new Date().toISOString(),
+    labReport: labFileName
+      ? {
+          fileName: labFileName,
+          fileType: "application/octet-stream",
+          storageMode: "local-demo",
+        }
+      : null,
+  };
+}
+
+function getHistoryTopCrop(record) {
+  if (!record) return "No ranking";
+
+  const first = Array.isArray(record.suitabilityResults) ? record.suitabilityResults[0] : null;
+  return first?.cropName || first?.name || "No ranking";
+}
+
+function calculateSoilAnalysis(form, selectedFarm, climateContext, soilSourceMode) {
+  const values = {
+    ph: Number(form.ph || 0),
+    nitrogen: Number(form.nitrogen || 0),
+    phosphorus: Number(form.phosphorus || 0),
+    potassium: Number(form.potassium || 0),
+    organicMatter: Number(form.organicMatter || 0),
+  };
+
+  const phScore = 100 - Math.min(Math.abs(values.ph - 6.5) * 18, 42);
+  const nScore = clamp((values.nitrogen / 55) * 100, 0, 100);
+  const pScore = clamp((values.phosphorus / 30) * 100, 0, 100);
+  const kScore = clamp((values.potassium / 35) * 100, 0, 100);
+  const omScore = clamp((values.organicMatter / 4.2) * 100, 0, 100);
+  const textureBonus =
+    form.texture === "Loamy" ? 10 : form.texture === "Sandy Loam" ? 6 : form.texture === "Clay Loam" ? 4 : 3;
+
+  const healthScore = Math.round(clamp(average([phScore, nScore, pScore, kScore, omScore]) + textureBonus, 18, 96));
+  const degradationAlerts = [];
+
+  if (values.organicMatter < 2) {
+    degradationAlerts.push("Organic matter is low. Soil structure may degrade under repeated tillage.");
+  }
+  if (values.ph < 5.7 || values.ph > 7.5) {
+    degradationAlerts.push("Soil pH is outside the recommended band for most field crops.");
+  }
+  if (values.potassium < 18) {
+    degradationAlerts.push("Low potassium can increase drought sensitivity and poor stem strength.");
+  }
+
+  if (climateContext?.maxRainProbability >= 70 && values.nitrogen < 32) {
+    degradationAlerts.push(
+      `High rain probability during the ${climateContext.cropStage} could increase nitrogen loss. Use split applications and avoid a single heavy dose.`
+    );
+  }
+
+  if (climateContext?.et0 >= 5.2 && values.potassium < 20) {
+    degradationAlerts.push(
+      `High evapotranspiration with low potassium may stress ${selectedFarm.primaryCrop || "the current crop"} during the ${climateContext.cropStage}.`
+    );
+  }
+
+  if (climateContext?.weeklyRain <= 8 && values.organicMatter < 2.5) {
+    degradationAlerts.push(
+      `Low recent rainfall plus low organic matter increases moisture loss risk. Mulching and residue cover are strongly recommended.`
+    );
+  }
+
+  const suitableCrops = cropLibrary
+    .map((crop) => {
+      const soilTypeBonus = crop.soilTypes.includes(form.texture) ? 18 : 0;
+      const regionBonus = crop.region === selectedFarm.region ? 14 : 0;
+      const seasonBonus = getSeasonCompatibilityBonus(crop, climateContext?.seasonLabel || "Warm Season");
+      const weatherBonus = getWeatherFitScore(crop, climateContext);
+      const phFit = values.ph >= crop.phRange[0] && values.ph <= crop.phRange[1] ? 24 : 10;
+      const npkFit =
+        average([
+          clamp(100 - Math.abs(values.nitrogen - crop.npk.n) * 1.6, 20, 100),
+          clamp(100 - Math.abs(values.phosphorus - crop.npk.p) * 2.1, 20, 100),
+          clamp(100 - Math.abs(values.potassium - crop.npk.k) * 1.9, 20, 100),
+        ]) * 0.34;
+      const organicMatterFit = values.organicMatter >= crop.organicMatterMin ? 18 : 8;
+      const totalScore = Math.round(
+        clamp(soilTypeBonus + regionBonus + seasonBonus + weatherBonus + phFit + npkFit + organicMatterFit, 35, 98)
+      );
+
+      return {
+        ...crop,
+        match: totalScore,
+        note:
+          totalScore >= 85
+            ? `Strong fit for ${selectedFarm.region} under current soil, season, and weather conditions.`
+            : totalScore >= 70
+              ? "Usable with moderate nutrient adjustment, weather monitoring, and timing discipline."
+              : "Possible crop option, but nutrient balancing and seasonal timing are needed before planting.",
+      };
+    })
+    .sort((a, b) => b.match - a.match);
+
+  const nitrogenWeatherFactor =
+    climateContext?.maxRainProbability >= 65 ? 1.08 : climateContext?.weeklyRain <= 8 ? 0.94 : 1;
+  const phosphorusWeatherFactor =
+    climateContext?.maxRainProbability >= 70 ? 1.05 : 1;
+  const potassiumWeatherFactor =
+    climateContext?.et0 >= 5.2 ? 1.1 : 1;
+
+  const fertilizerRows = [
+    {
+      nutrient: "Nitrogen (N)",
+      state: scoreState(values.nitrogen, 42, 24),
+      fertilizer:
+        values.nitrogen >= 42 ? "No additional N needed" : values.nitrogen >= 24 ? "Urea top-dress" : "Urea + compost manure",
+      dosage: Math.max(0, Number((clamp((42 - values.nitrogen) * 1.35 * nitrogenWeatherFactor, 0, 68)).toFixed(1))),
+      tone: values.nitrogen >= 42 ? "green" : values.nitrogen >= 24 ? "amber" : "red",
+      weatherAdjustment:
+        climateContext?.maxRainProbability >= 65
+          ? "Rainfall risk is high, so split nitrogen into smaller applications."
+          : climateContext?.weeklyRain <= 8
+            ? "Dry conditions favor precise smaller doses with irrigation support."
+            : "Apply on schedule and monitor crop color during early growth.",
+    },
+    {
+      nutrient: "Phosphorus (P)",
+      state: scoreState(values.phosphorus, 24, 16),
+      fertilizer:
+        values.phosphorus >= 24
+          ? "Maintenance phosphorus only"
+          : values.phosphorus >= 16
+            ? "Diammonium Phosphate (DAP)"
+            : "Triple Super Phosphate (TSP)",
+      dosage: Math.max(0, Number((clamp((24 - values.phosphorus) * 1.25 * phosphorusWeatherFactor, 0, 52)).toFixed(1))),
+      tone: values.phosphorus >= 24 ? "green" : values.phosphorus >= 16 ? "amber" : "red",
+      weatherAdjustment:
+        climateContext?.maxRainProbability >= 70
+          ? "Place phosphorus close to the root zone before heavy rain to reduce losses."
+          : "Focus phosphorus at planting to improve rooting and crop establishment.",
+    },
+    {
+      nutrient: "Potassium (K)",
+      state: scoreState(values.potassium, 22, 16),
+      fertilizer:
+        values.potassium >= 22
+          ? "Balanced K maintenance"
+          : values.potassium >= 16
+            ? "Muriate of Potash (MOP)"
+            : "Sulphate of Potash + organic mulch",
+      dosage: Math.max(0, Number((clamp((22 - values.potassium) * 1.9 * potassiumWeatherFactor, 0, 60)).toFixed(1))),
+      tone: values.potassium >= 22 ? "green" : values.potassium >= 16 ? "amber" : "red",
+      weatherAdjustment:
+        climateContext?.et0 >= 5.2
+          ? "High evapotranspiration makes potassium more important for stress tolerance."
+          : "Maintain potassium before peak demand to support crop water balance.",
+    },
+    {
+      nutrient: "Organic Matter",
+      state: values.organicMatter >= 3 ? "Optimal" : values.organicMatter >= 2 ? "Moderate" : "Low",
+      fertilizer:
+        values.organicMatter >= 3
+          ? "Residue retention only"
+          : values.organicMatter >= 2
+            ? "Compost mulch"
+            : "Compost + cover crop residues",
+      dosage: Math.max(0, Number((clamp((3 - values.organicMatter) * 70, 0, 180)).toFixed(1))),
+      tone: values.organicMatter >= 3 ? "green" : values.organicMatter >= 2 ? "amber" : "red",
+      weatherAdjustment:
+        climateContext?.weeklyRain <= 10
+          ? "Low rainfall makes organic matter especially valuable for moisture retention."
+          : "Organic matter will improve structure and nutrient buffering through the season.",
+    },
+  ];
+
+  const recommendationPanel = {
+    primary: suitableCrops[0],
+    secondary: suitableCrops[1],
+    recommendation:
+      suitableCrops[0]?.match >= 85
+        ? `Prioritize ${suitableCrops[0].name} on ${selectedFarm.name} and rotate with ${suitableCrops[1]?.name || "legumes"} next season.`
+        : `Apply nutrient corrections before planting. ${suitableCrops[0]?.name} is currently the strongest fit after soil balancing.`,
+  };
+
+  const cropRotationPlan = [
+    `${selectedFarm.primaryCrop || suitableCrops[0].name} -> ${suitableCrops[1]?.name || "Soybean"} -> Cover crop`,
+    values.organicMatter < 2.5
+      ? "Include legumes or cover crops next cycle to rebuild soil organic matter."
+      : "Maintain residue return to preserve current soil structure.",
+    climateContext
+      ? `Current planning window: ${climateContext.seasonLabel}. Stage signal for ${selectedFarm.primaryCrop || "the active field"} is ${climateContext.cropStage}.`
+      : "Weather-linked planning will become more precise once live climate data is available.",
+  ];
+
+  return {
+    values,
+    healthScore,
+    healthLabel: healthScore >= 80 ? "Excellent" : healthScore >= 65 ? "Good" : healthScore >= 50 ? "Moderate" : "Low",
+    scoreInsights: createSoilImprovementInsights(values, form, healthScore),
+    suitableCrops,
+    fertilizerRows,
+    degradationAlerts,
+    recommendationPanel,
+    cropRotationPlan,
+    climateContext,
+    soilSourceMode,
+  };
+}
+
+export function SoilCropPage() {
+  const { currentFarms } = useFarmerData();
+  const fallbackFarm = useMemo(() => createDefaultFarm(), []);
+  const farms = currentFarms.length ? currentFarms : [fallbackFarm];
+  const backendMode = isBackendSessionActive();
+  const [selectedFarmId, setSelectedFarmId] = useState(farms[0]?.id || "soil-default-farm");
+  const [libraryFilters, setLibraryFilters] = useState({
+    search: "",
+    season: "All",
+    region: "All",
+    soilType: "All",
+  });
+  const [labFileName, setLabFileName] = useState("");
+  const [soilEstimate, setSoilEstimate] = useState(null);
+  const [weatherContext, setWeatherContext] = useState(null);
+  const [sourceStatus, setSourceStatus] = useState("Loading location-based soil estimate...");
+  const [sourceMode, setSourceMode] = useState("estimated");
+  const [formDirty, setFormDirty] = useState(false);
+  const [externalWarning, setExternalWarning] = useState("");
+  const [backendSoilHistory, setBackendSoilHistory] = useState([]);
+  const [backendLatestSoilTest, setBackendLatestSoilTest] = useState(null);
+  const [backendSoilMode, setBackendSoilMode] = useState("local");
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [form, setForm] = useState({
+    ph: "6.5",
+    nitrogen: "38",
+    phosphorus: "21",
+    potassium: "17",
+    organicMatter: "2.7",
+    texture: "Loamy",
+  });
+  const [submittedForm, setSubmittedForm] = useState(form);
+  const [selectedRecommendationName, setSelectedRecommendationName] = useState("");
+
+  useEffect(() => {
+    if (!farms.some((farm) => farm.id === selectedFarmId)) {
+      setSelectedFarmId(farms[0]?.id || "soil-default-farm");
+    }
+  }, [farms, selectedFarmId]);
+
+  const selectedFarm = useMemo(
+    () => farms.find((farm) => farm.id === selectedFarmId) || farms[0],
+    [farms, selectedFarmId]
+  );
+  const selectedFarmCoordinates = `${selectedFarm?.location?.lat || 0}:${selectedFarm?.location?.lng || 0}`;
+  const selectedFarmRegion = selectedFarm?.region || "";
+  const selectedFarmName = selectedFarm?.name || "";
+  const selectedFarmPrimaryCrop = selectedFarm?.primaryCrop || "";
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadBackendSoilState() {
+      if (!backendMode || !selectedFarm?.id || selectedFarm.id === "soil-default-farm") {
+        if (active) {
+          setBackendSoilHistory([]);
+          setBackendLatestSoilTest(null);
+          setBackendSoilMode("local");
+        }
+        return;
+      }
+
+      try {
+        const [historyRows, suitabilityPayload] = await Promise.all([
+          phase1BackendService.soil.listByFarm(selectedFarm.id),
+          phase1BackendService.soil.getSuitabilityByFarm(selectedFarm.id),
+        ]);
+
+        if (!active) return;
+
+        const latestSoilTest = suitabilityPayload?.latestSoilTest || historyRows[0] || null;
+        setBackendSoilHistory(historyRows);
+        setBackendLatestSoilTest(latestSoilTest);
+        setBackendSoilMode(latestSoilTest ? "backend" : "local");
+
+        if (!formDirty && !labFileName && latestSoilTest) {
+          const hydratedForm = mapSoilRecordToForm(latestSoilTest);
+          if (hydratedForm && !areSoilFormsEqual(form, hydratedForm)) {
+            setForm(hydratedForm);
+          }
+          if (hydratedForm && !areSoilFormsEqual(submittedForm, hydratedForm)) {
+            setSubmittedForm(hydratedForm);
+            setSourceMode(latestSoilTest.sourceType || "manual");
+            setSourceStatus("Using backend soil test data with live weather context.");
+          }
+        }
+      } catch {
+        if (!active) return;
+        setBackendSoilHistory([]);
+        setBackendLatestSoilTest(null);
+        setBackendSoilMode("local");
+      }
+    }
+
+    loadBackendSoilState();
+
+    return () => {
+      active = false;
+    };
+  }, [backendMode, form, formDirty, labFileName, selectedFarm?.id, submittedForm]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadEnvironmentalInputs() {
+      const lat = selectedFarm?.location?.lat;
+      const lng = selectedFarm?.location?.lng;
+
+      if (!lat || !lng) {
+        if (active) {
+          setSourceStatus("Using manual soil test data. Location estimate is unavailable for this farm.");
+          setExternalWarning("Add precise farm coordinates to unlock SoilGrids fallback and live weather-linked soil guidance.");
+        }
+        return;
+      }
+
+      try {
+        setExternalWarning("");
+        const [soilResult, weatherResult] = await Promise.allSettled([
+          apiClient.soil.estimate(lat, lng),
+          apiClient.weather.forecast(lat, lng),
+        ]);
+
+        if (!active) return;
+
+        const soilLoaded = soilResult.status === "fulfilled";
+        const weatherLoaded = weatherResult.status === "fulfilled";
+
+        const estimate = soilLoaded ? parseSoilGridsEstimate(soilResult.value) : null;
+        const climate = weatherLoaded ? buildClimateContext(weatherResult.value, selectedFarm) : null;
+
+        setSoilEstimate(estimate);
+        setWeatherContext(climate);
+
+        if (!labFileName && !formDirty && estimate && backendSoilMode !== "backend") {
+          const estimatedForm = {
+            ph: String(estimate.ph),
+            nitrogen: String(estimate.nitrogen),
+            phosphorus: String(estimate.phosphorus),
+            potassium: String(estimate.potassium),
+            organicMatter: String(estimate.organicMatter),
+            texture: estimate.texture,
+          };
+
+          if (!areSoilFormsEqual(form, estimatedForm)) {
+            setForm(estimatedForm);
+          }
+          if (!areSoilFormsEqual(submittedForm, estimatedForm)) {
+            setSubmittedForm(estimatedForm);
+          }
+          setSourceMode("estimated");
+        } else if (labFileName) {
+          setSourceMode("uploaded");
+        } else {
+          setSourceMode("manual");
+        }
+
+        if (labFileName) {
+          setSourceStatus("Using uploaded lab data. Estimated location data is only supporting the map and context.");
+        } else if (backendSoilMode === "backend" && backendLatestSoilTest) {
+          setSourceStatus("Using backend soil test data with live weather context.");
+        } else if (!formDirty && soilLoaded && weatherLoaded) {
+          setSourceStatus("Using estimated soil data from location (SoilGrids fallback) with live weather context.");
+        } else if (!formDirty && soilLoaded) {
+          setSourceStatus("Using estimated soil data from location. Live weather context is temporarily unavailable.");
+        } else if (formDirty && soilLoaded && weatherLoaded) {
+          setSourceStatus("Using manual soil test data. SoilGrids fallback and live weather context are both available.");
+        } else if (formDirty && weatherLoaded) {
+          setSourceStatus("Using manual soil test data with live weather context.");
+        } else if (formDirty && soilLoaded) {
+          setSourceStatus("Using manual soil test data. SoilGrids fallback is available for reference.");
+        } else {
+          setSourceStatus("Using manual soil test data.");
+        }
+
+        if (!soilLoaded && !weatherLoaded) {
+          setExternalWarning("Live SoilGrids and weather data could not be loaded, so the module is using the current entered values only.");
+        } else if (!soilLoaded) {
+          setExternalWarning("SoilGrids fallback could not be loaded right now, so soil estimation from location is temporarily unavailable.");
+        } else if (!weatherLoaded) {
+          setExternalWarning("Live weather context could not be loaded right now, so recommendations are using soil and regional logic without weather refinement.");
+        } else {
+          setExternalWarning("");
+        }
+      } catch (error) {
+        if (!active) return;
+        setExternalWarning("Online support data could not be loaded, so the module is using the current entered values only.");
+        setSourceStatus(labFileName ? "Using uploaded lab data." : "Using manual soil test data.");
+      }
+    }
+
+    loadEnvironmentalInputs();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    backendLatestSoilTest?.id,
+    backendSoilMode,
+    form,
+    formDirty,
+    labFileName,
+    selectedFarm?.id,
+    selectedFarmCoordinates,
+    selectedFarmName,
+    selectedFarmPrimaryCrop,
+    submittedForm,
+  ]);
+
+  useEffect(() => {
+    if (labFileName) {
+      setSourceMode("uploaded");
+      setSourceStatus("Using uploaded lab data. Estimated location data is only supporting the map and context.");
+    } else if (sourceMode === "uploaded") {
+      setSourceMode(formDirty ? "manual" : backendSoilMode === "backend" ? "manual" : soilEstimate ? "estimated" : "manual");
+      setSourceStatus(
+        backendSoilMode === "backend" && !formDirty
+          ? "Using backend soil test data with live weather context."
+          : soilEstimate && !formDirty
+          ? "Using estimated soil data from location (SoilGrids fallback) with live weather context."
+          : "Using manual soil test data."
+      );
+    }
+  }, [backendSoilMode, formDirty, labFileName, soilEstimate, sourceMode]);
+
+  const analysis = useMemo(
+    () => calculateSoilAnalysis(submittedForm, selectedFarm, weatherContext, sourceMode),
+    [selectedFarm, submittedForm, weatherContext, sourceMode]
+  );
+
+  const effectiveSuitableCrops = useMemo(() => {
+    if (backendLatestSoilTest?.suitabilityResults?.length) {
+      const backendCards = backendLatestSoilTest.suitabilityResults.map(mapBackendSuitabilityToCropCard).filter(Boolean);
+      if (backendCards.length) return backendCards;
+    }
+
+    return analysis.suitableCrops;
+  }, [analysis.suitableCrops, backendLatestSoilTest]);
+
+  const effectiveFertilizerRows = useMemo(() => {
+    const backendRows = mapBackendFertilizerToRows(backendLatestSoilTest?.fertilizerRecommendation);
+    return backendRows.length ? backendRows : analysis.fertilizerRows;
+  }, [analysis.fertilizerRows, backendLatestSoilTest]);
+
+  const effectiveHealthScore =
+    backendLatestSoilTest?.healthScore && backendSoilMode === "backend"
+      ? backendLatestSoilTest.healthScore
+      : analysis.healthScore;
+  const effectiveHealthLabel =
+    backendLatestSoilTest?.healthLabel && backendSoilMode === "backend"
+      ? backendLatestSoilTest.healthLabel
+      : analysis.healthLabel;
+
+  useEffect(() => {
+    setSelectedRecommendationName((current) =>
+      effectiveSuitableCrops.some((crop) => crop.name === current)
+        ? current
+        : effectiveSuitableCrops[0]?.name || ""
+    );
+  }, [effectiveSuitableCrops]);
+
+  const selectedRecommendation = useMemo(
+    () => effectiveSuitableCrops.find((crop) => crop.name === selectedRecommendationName) || effectiveSuitableCrops[0] || null,
+    [effectiveSuitableCrops, selectedRecommendationName]
+  );
+
+  const selectedRecommendationDetails = useMemo(
+    () => buildRecommendationDescription(selectedRecommendation, analysis, selectedFarm),
+    [analysis, selectedFarm, selectedRecommendation]
+  );
+
+  const cropLibraryView = useMemo(() => {
+    return cropLibrary.filter((crop) => {
+      const matchesSearch =
+        !libraryFilters.search ||
+        crop.name.toLowerCase().includes(libraryFilters.search.toLowerCase()) ||
+        crop.rotationTag.toLowerCase().includes(libraryFilters.search.toLowerCase());
+      const matchesSeason = libraryFilters.season === "All" || crop.season === libraryFilters.season;
+      const matchesRegion = libraryFilters.region === "All" || crop.region === libraryFilters.region;
+      const matchesSoilType =
+        libraryFilters.soilType === "All" || crop.soilTypes.includes(libraryFilters.soilType);
+
+      return matchesSearch && matchesSeason && matchesRegion && matchesSoilType;
+    });
+  }, [libraryFilters]);
+
+  const suitabilityMatrix = useMemo(() => {
+    return cropLibraryView.slice(0, 6).map((crop) => ({
+      name: crop.name,
+      compatibility:
+        effectiveSuitableCrops.find((item) => item.name === crop.name)?.match ||
+        0,
+    }));
+  }, [cropLibraryView, effectiveSuitableCrops]);
+
+  const historyRecords = useMemo(() => {
+    if (backendSoilHistory.length > 0) return backendSoilHistory;
+    return [buildLocalSoilHistoryEntry(selectedFarm, analysis, submittedForm, sourceMode, sourceStatus, labFileName)];
+  }, [analysis, backendSoilHistory, labFileName, selectedFarm, sourceMode, sourceStatus, submittedForm]);
+
+  const currentLabMetadata = useMemo(() => {
+    if (backendLatestSoilTest?.labReport) {
+      return {
+        ...backendLatestSoilTest.labReport,
+        sourceLabel: getSoilSourceLabel(backendLatestSoilTest.sourceType || "backend"),
+        analysisStatus: backendLatestSoilTest.analysisStatus || "Analyzed",
+        capturedAt: backendLatestSoilTest.analyzedAt || backendLatestSoilTest.updatedAt || backendLatestSoilTest.createdAt,
+      };
+    }
+
+    if (labFileName) {
+      return {
+        fileName: labFileName,
+        fileType: "application/octet-stream",
+        storageMode: "local-demo",
+        sourceLabel: "Uploaded Lab Data",
+        analysisStatus: "Pending local analysis",
+        capturedAt: new Date().toISOString(),
+      };
+    }
+
+    return {
+      fileName: "No uploaded file",
+      fileType: backendSoilMode === "backend" ? "Database record" : "Local fallback",
+      storageMode: backendSoilMode === "backend" ? "backend" : "frontend-demo",
+      sourceLabel: getSoilSourceLabel(backendSoilMode === "backend" ? "backend" : sourceMode),
+      analysisStatus: backendLatestSoilTest?.analysisStatus || "Ready",
+      capturedAt: backendLatestSoilTest?.updatedAt || backendLatestSoilTest?.createdAt || null,
+    };
+  }, [backendLatestSoilTest, backendSoilMode, labFileName, sourceMode]);
+
+  const handleHistorySelect = (record) => {
+    const hydratedForm = mapSoilRecordToForm(record);
+    if (!hydratedForm) return;
+
+    setForm(hydratedForm);
+    setSubmittedForm(hydratedForm);
+    setFormDirty(false);
+    setLabFileName(record?.labReport?.fileName || "");
+    setSourceMode(record?.sourceType || "manual");
+    setSourceStatus(
+      record?.sourceType === "uploaded"
+        ? "Using uploaded lab data from record history with live weather context."
+        : record?.id?.startsWith?.("local-")
+        ? "Using local soil history entry."
+        : "Using backend soil test data from record history with live weather context."
+    );
+
+    if (!record?.id?.startsWith?.("local-")) {
+      setBackendLatestSoilTest(record);
+      setBackendSoilMode("backend");
+    }
+
+    setIsHistoryOpen(false);
+  };
+
+  const handleAnalyze = async () => {
+    setSourceMode(labFileName ? "uploaded" : "manual");
+    setSourceStatus(
+      labFileName
+        ? "Using uploaded lab data. Estimated location data is only supporting the map and context."
+        : "Using manual soil test data."
+    );
+    setSubmittedForm(form);
+
+    if (!backendMode || !selectedFarm?.id || selectedFarm.id === "soil-default-farm") {
+      return;
+    }
+
+    try {
+      const payload = buildBackendSoilPayload(form, selectedFarm, labFileName);
+      const savedRecord = backendLatestSoilTest?.id
+        ? await phase1BackendService.soil.update(backendLatestSoilTest.id, payload)
+        : await phase1BackendService.soil.create(payload);
+
+      const analyzed = await phase1BackendService.soil.analyze(savedRecord.id);
+      const historyRows = await phase1BackendService.soil.listByFarm(selectedFarm.id);
+
+      setBackendSoilHistory(historyRows);
+      setBackendLatestSoilTest(analyzed.soilTest || savedRecord);
+      setBackendSoilMode("backend");
+      setSourceStatus(
+        labFileName
+          ? "Using uploaded lab data with backend soil persistence and live weather context."
+          : "Using backend soil test data with live weather context."
+      );
+    } catch {
+      setBackendSoilMode("local");
+    }
+  };
+
+  const exportAnalysis = () => {
+    downloadTextFile(
+      `${selectedFarm.name.toLowerCase().replace(/\s+/g, "-")}-soil-analysis.txt`,
+      `Soil & Crop Analysis\nFarm: ${selectedFarm.name}\nSource: ${sourceStatus}\nHealth Score: ${analysis.healthScore} (${analysis.healthLabel})\nSelected Recommendation: ${selectedRecommendation?.name || "N/A"}\n\nDegradation Alerts:\n- ${analysis.degradationAlerts.join("\n- ") || "None"}`
+    );
+  };
+
+  const exportHistory = () => {
+    downloadJsonFile("soil-analysis-history.json", {
+      farm: selectedFarm,
+      sourceStatus,
+      backendSoilMode,
+      backendLatestSoilTest,
+      backendSoilHistory,
+      submittedForm,
+      analysis,
+      selectedRecommendation,
+      selectedRecommendationDetails,
+    });
+  };
+

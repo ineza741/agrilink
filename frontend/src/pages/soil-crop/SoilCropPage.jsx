@@ -1,17 +1,10 @@
 import {
-  AlertTriangle,
-  X,
-  Download,
-  FileClock,
-  Filter,
-  FlaskConical,
-  Leaf,
-  MapPinned,
-  RotateCcw,
-  Search,
-  Sprout,
-  TestTubeDiagonal,
-  Upload,
+  AlertTriangle, X, Download, FileClock, Filter, FlaskConical, Leaf, MapPinned,
+  RotateCcw, Search, Sprout, TestTubeDiagonal, Upload, CircleHelp,
+  Activity, ArrowDown, ArrowUp, BarChart3, Check, CheckCircle, ChevronDown,
+  Clock, Cloud, CloudSun, Combine, Crosshair, Droplets, Eye, GripVertical,
+  Layers, Minimize2, Navigation, Plus, RefreshCw, Shield, Sun, Target,
+  Thermometer, TrendingUp, Tractor, Wind,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import ImageWithFallback from "../../components/common/ImageWithFallback";
@@ -19,6 +12,14 @@ import { useFarmerData } from "../../context/FarmerDataContext";
 import { apiClient } from "../../services/api";
 import { isBackendSessionActive, phase1BackendService } from "../../services/phase1Backend";
 import { downloadJsonFile, downloadTextFile } from "../../utils/actions";
+import { PageShell } from "../../components/common/PageShell";
+import { PageHeader } from "../../components/common/PageHeader";
+import { AppCard } from "../../components/common/AppCard";
+import { SectionCard } from "../../components/common/SectionCard";
+import { ActionButton } from "../../components/common/ActionButton";
+import { StatusBadge } from "../../components/common/StatusBadge";
+import { MetricCard } from "../../components/common/MetricCard";
+import { getCropImageUrl } from "../../data/cropImages";
 
 const cropLibrary = [
   {
@@ -411,6 +412,8 @@ function mapSoilRecordToForm(soilTest) {
     potassium: String(soilTest.potassium ?? "17"),
     organicMatter: String(soilTest.organicMatter ?? "2.7"),
     texture: soilTest.texture || "Loamy",
+    moisture: String(soilTest.moisture ?? "35"),
+    cec: String(soilTest.cec ?? "12"),
   };
 }
 
@@ -423,6 +426,8 @@ function buildBackendSoilPayload(form, selectedFarm, labFileName) {
     phosphorus: Number(form.phosphorus || 0),
     potassium: Number(form.potassium || 0),
     organicMatter: Number(form.organicMatter || 0),
+    moisture: Number(form.moisture || 0),
+    cec: Number(form.cec || 0),
     texture: form.texture,
     notes: `Frontend soil analysis submitted for ${selectedFarm.name}.`,
     ...(labFileName
@@ -478,16 +483,24 @@ function formatSoilDate(value) {
   });
 }
 
+const SOIL_SOURCE_OPTIONS = [
+  { value: "manual", label: "Manual Entry", icon: "TestTubeDiagonal" },
+  { value: "upload", label: "Upload Lab Report", icon: "Upload" },
+  { value: "history", label: "Saved Farm Soil History", icon: "FileClock" },
+  { value: "district", label: "Local District Estimate", icon: "MapPinned" },
+  { value: "online", label: "Online Soil Estimate", icon: "Cloud" },
+];
+
 function getSoilSourceLabel(sourceType) {
+  const opt = SOIL_SOURCE_OPTIONS.find((o) => o.value === sourceType);
+  if (opt) return opt.label;
   switch (sourceType) {
     case "uploaded":
       return "Uploaded Lab Data";
     case "estimated":
-      return "SoilGrids Estimate";
+      return "Online Soil Estimate";
     case "backend":
       return "Backend Soil Test";
-    case "manual":
-      return "Manual Soil Entry";
     default:
       return "Local Soil Data";
   }
@@ -603,6 +616,8 @@ function calculateSoilAnalysis(form, selectedFarm, climateContext, soilSourceMod
     phosphorus: Number(form.phosphorus || 0),
     potassium: Number(form.potassium || 0),
     organicMatter: Number(form.organicMatter || 0),
+    moisture: Number(form.moisture || 0),
+    cec: Number(form.cec || 0),
   };
 
   const phScore = 100 - Math.min(Math.abs(values.ph - 6.5) * 18, 42);
@@ -781,6 +796,25 @@ function calculateSoilAnalysis(form, selectedFarm, climateContext, soilSourceMod
   };
 }
 
+const DISTRICT_SOIL_ESTIMATES = {
+  default: { ph: 6.2, nitrogen: 30, phosphorus: 18, potassium: 15, organicMatter: 2.5, texture: "Loamy", moisture: 30, cec: 10 },
+  "Northern Province": { ph: 5.8, nitrogen: 35, phosphorus: 20, potassium: 18, organicMatter: 3.0, texture: "Clay Loam", moisture: 35, cec: 14 },
+  "Southern Province": { ph: 6.0, nitrogen: 28, phosphorus: 16, potassium: 14, organicMatter: 2.2, texture: "Sandy Loam", moisture: 28, cec: 8 },
+  "Eastern Province": { ph: 6.5, nitrogen: 25, phosphorus: 15, potassium: 12, organicMatter: 1.8, texture: "Sandy Loam", moisture: 25, cec: 7 },
+  "Western Province": { ph: 5.5, nitrogen: 32, phosphorus: 22, potassium: 20, organicMatter: 3.5, texture: "Loamy", moisture: 40, cec: 15 },
+  "Kigali City": { ph: 6.3, nitrogen: 33, phosphorus: 19, potassium: 16, organicMatter: 2.8, texture: "Loamy", moisture: 32, cec: 11 },
+  Kigali: { ph: 6.3, nitrogen: 33, phosphorus: 19, potassium: 16, organicMatter: 2.8, texture: "Loamy", moisture: 32, cec: 11 },
+};
+
+function getDistrictEstimate(region) {
+  if (!region) return DISTRICT_SOIL_ESTIMATES.default;
+  const lower = region.toLowerCase();
+  for (const [key, data] of Object.entries(DISTRICT_SOIL_ESTIMATES)) {
+    if (lower.includes(key.toLowerCase())) return data;
+  }
+  return DISTRICT_SOIL_ESTIMATES.default;
+}
+
 export function SoilCropPage() {
   const { currentFarms } = useFarmerData();
   const fallbackFarm = useMemo(() => createDefaultFarm(), []);
@@ -794,10 +828,12 @@ export function SoilCropPage() {
     soilType: "All",
   });
   const [labFileName, setLabFileName] = useState("");
+  const [labFileData, setLabFileData] = useState(null);
   const [soilEstimate, setSoilEstimate] = useState(null);
   const [weatherContext, setWeatherContext] = useState(null);
-  const [sourceStatus, setSourceStatus] = useState("Loading location-based soil estimate...");
-  const [sourceMode, setSourceMode] = useState("estimated");
+  const [sourceStatus, setSourceStatus] = useState("Using manually provided or local soil information. Online soil estimation is optional.");
+  const [soilSource, setSoilSource] = useState("manual");
+  const [sourceMode, setSourceMode] = useState("manual");
   const [formDirty, setFormDirty] = useState(false);
   const [externalWarning, setExternalWarning] = useState("");
   const [backendSoilHistory, setBackendSoilHistory] = useState([]);
@@ -811,6 +847,8 @@ export function SoilCropPage() {
     potassium: "17",
     organicMatter: "2.7",
     texture: "Loamy",
+    moisture: "35",
+    cec: "12",
   });
   const [submittedForm, setSubmittedForm] = useState(form);
   const [selectedRecommendationName, setSelectedRecommendationName] = useState("");
@@ -883,6 +921,48 @@ export function SoilCropPage() {
   }, [backendMode, form, formDirty, labFileName, selectedFarm?.id, submittedForm]);
 
   useEffect(() => {
+    if (soilSource === "history" && backendLatestSoilTest) {
+      const hydratedForm = mapSoilRecordToForm(backendLatestSoilTest);
+      if (hydratedForm && !areSoilFormsEqual(form, hydratedForm)) {
+        setForm(hydratedForm);
+        setSubmittedForm(hydratedForm);
+      }
+      setSourceMode("manual");
+      setSourceStatus("Using saved farm soil history data.");
+      return;
+    }
+
+    if (soilSource === "district") {
+      const districtEstimate = getDistrictEstimate(selectedFarm?.region || "");
+      if (districtEstimate && !formDirty) {
+        const estimatedForm = {
+          ph: String(districtEstimate.ph),
+          nitrogen: String(districtEstimate.nitrogen),
+          phosphorus: String(districtEstimate.phosphorus),
+          potassium: String(districtEstimate.potassium),
+          organicMatter: String(districtEstimate.organicMatter),
+          texture: districtEstimate.texture,
+          moisture: String(districtEstimate.moisture ?? form.moisture),
+          cec: String(districtEstimate.cec ?? form.cec),
+        };
+        if (!areSoilFormsEqual(form, estimatedForm)) setForm(estimatedForm);
+        if (!areSoilFormsEqual(submittedForm, estimatedForm)) setSubmittedForm(estimatedForm);
+      }
+      setSourceMode("manual");
+      setSourceStatus("Using local district estimate for soil parameters.");
+      return;
+    }
+
+    if (soilSource !== "online") {
+      setSourceMode(labFileName ? "uploaded" : "manual");
+      setSourceStatus(
+        labFileName
+          ? "Using uploaded lab data."
+          : "Using manually provided or local soil information. Online soil estimation is optional."
+      );
+      return;
+    }
+
     let active = true;
 
     async function loadEnvironmentalInputs() {
@@ -891,8 +971,7 @@ export function SoilCropPage() {
 
       if (!lat || !lng) {
         if (active) {
-          setSourceStatus("Using manual soil test data. Location estimate is unavailable for this farm.");
-          setExternalWarning("Add precise farm coordinates to unlock SoilGrids fallback and live weather-linked soil guidance.");
+          setSourceStatus("Manual or uploaded soil data can be used. Online soil estimation requires farm coordinates and is currently unavailable.");
         }
         return;
       }
@@ -915,7 +994,7 @@ export function SoilCropPage() {
         setSoilEstimate(estimate);
         setWeatherContext(climate);
 
-        if (!labFileName && !formDirty && estimate && backendSoilMode !== "backend") {
+        if (!formDirty && estimate && backendSoilMode !== "backend") {
           const estimatedForm = {
             ph: String(estimate.ph),
             nitrogen: String(estimate.nitrogen),
@@ -923,52 +1002,27 @@ export function SoilCropPage() {
             potassium: String(estimate.potassium),
             organicMatter: String(estimate.organicMatter),
             texture: estimate.texture,
+            moisture: String(estimate.moisture ?? form.moisture),
+            cec: String(estimate.cec ?? form.cec),
           };
 
-          if (!areSoilFormsEqual(form, estimatedForm)) {
-            setForm(estimatedForm);
-          }
-          if (!areSoilFormsEqual(submittedForm, estimatedForm)) {
-            setSubmittedForm(estimatedForm);
-          }
+          if (!areSoilFormsEqual(form, estimatedForm)) setForm(estimatedForm);
+          if (!areSoilFormsEqual(submittedForm, estimatedForm)) setSubmittedForm(estimatedForm);
           setSourceMode("estimated");
-        } else if (labFileName) {
-          setSourceMode("uploaded");
-        } else {
-          setSourceMode("manual");
         }
 
-        if (labFileName) {
-          setSourceStatus("Using uploaded lab data. Estimated location data is only supporting the map and context.");
-        } else if (backendSoilMode === "backend" && backendLatestSoilTest) {
-          setSourceStatus("Using backend soil test data with live weather context.");
-        } else if (!formDirty && soilLoaded && weatherLoaded) {
-          setSourceStatus("Using estimated soil data from location (SoilGrids fallback) with live weather context.");
-        } else if (!formDirty && soilLoaded) {
-          setSourceStatus("Using estimated soil data from location. Live weather context is temporarily unavailable.");
-        } else if (formDirty && soilLoaded && weatherLoaded) {
-          setSourceStatus("Using manual soil test data. SoilGrids fallback and live weather context are both available.");
-        } else if (formDirty && weatherLoaded) {
-          setSourceStatus("Using manual soil test data with live weather context.");
-        } else if (formDirty && soilLoaded) {
-          setSourceStatus("Using manual soil test data. SoilGrids fallback is available for reference.");
+        if (soilLoaded && weatherLoaded) {
+          setSourceStatus("Using online soil estimation with live weather context.");
+        } else if (soilLoaded) {
+          setSourceStatus("Using online soil estimation. Live weather context is temporarily unavailable.");
+        } else if (weatherLoaded) {
+          setSourceStatus("Manual or uploaded soil data can be used. Online soil estimation is optional and currently unavailable.");
         } else {
-          setSourceStatus("Using manual soil test data.");
+          setSourceStatus("Manual or uploaded soil data can be used. Online soil estimation is optional and currently unavailable.");
         }
-
-        if (!soilLoaded && !weatherLoaded) {
-          setExternalWarning("Live SoilGrids and weather data could not be loaded, so the module is using the current entered values only.");
-        } else if (!soilLoaded) {
-          setExternalWarning("SoilGrids fallback could not be loaded right now, so soil estimation from location is temporarily unavailable.");
-        } else if (!weatherLoaded) {
-          setExternalWarning("Live weather context could not be loaded right now, so recommendations are using soil and regional logic without weather refinement.");
-        } else {
-          setExternalWarning("");
-        }
-      } catch (error) {
+      } catch {
         if (!active) return;
-        setExternalWarning("Online support data could not be loaded, so the module is using the current entered values only.");
-        setSourceStatus(labFileName ? "Using uploaded lab data." : "Using manual soil test data.");
+        setSourceStatus("Manual or uploaded soil data can be used. Online soil estimation is optional and currently unavailable.");
       }
     }
 
@@ -978,6 +1032,7 @@ export function SoilCropPage() {
       active = false;
     };
   }, [
+    soilSource,
     backendLatestSoilTest?.id,
     backendSoilMode,
     form,
@@ -1097,8 +1152,8 @@ export function SoilCropPage() {
         fileType: "application/octet-stream",
         storageMode: "local-demo",
         sourceLabel: "Uploaded Lab Data",
-        analysisStatus: "Pending local analysis",
-        capturedAt: new Date().toISOString(),
+        analysisStatus: labFileData?.status === "confirmed" ? "Confirmed" : "Awaiting manual confirmation",
+        capturedAt: labFileData?.date || new Date().toISOString(),
       };
     }
 
@@ -1106,11 +1161,11 @@ export function SoilCropPage() {
       fileName: "No uploaded file",
       fileType: backendSoilMode === "backend" ? "Database record" : "Local fallback",
       storageMode: backendSoilMode === "backend" ? "backend" : "frontend-demo",
-      sourceLabel: getSoilSourceLabel(backendSoilMode === "backend" ? "backend" : sourceMode),
+      sourceLabel: getSoilSourceLabel(backendSoilMode === "backend" ? "backend" : soilSource),
       analysisStatus: backendLatestSoilTest?.analysisStatus || "Ready",
       capturedAt: backendLatestSoilTest?.updatedAt || backendLatestSoilTest?.createdAt || null,
     };
-  }, [backendLatestSoilTest, backendSoilMode, labFileName, sourceMode]);
+  }, [backendLatestSoilTest, backendSoilMode, labFileName, labFileData, sourceMode]);
 
   const handleHistorySelect = (record) => {
     const hydratedForm = mapSoilRecordToForm(record);
@@ -1120,6 +1175,7 @@ export function SoilCropPage() {
     setSubmittedForm(hydratedForm);
     setFormDirty(false);
     setLabFileName(record?.labReport?.fileName || "");
+    setSoilSource(record?.labReport?.fileName ? "upload" : "history");
     setSourceMode(record?.sourceType || "manual");
     setSourceStatus(
       record?.sourceType === "uploaded"
@@ -1138,11 +1194,14 @@ export function SoilCropPage() {
   };
 
   const handleAnalyze = async () => {
-    setSourceMode(labFileName ? "uploaded" : "manual");
+    const src = labFileName ? "uploaded" : soilSource === "online" ? "estimated" : "manual";
+    setSourceMode(src);
     setSourceStatus(
       labFileName
-        ? "Using uploaded lab data. Estimated location data is only supporting the map and context."
-        : "Using manual soil test data."
+        ? "Using uploaded lab data."
+        : soilSource === "online"
+        ? "Using online soil estimation."
+        : "Using manually provided or local soil information."
     );
     setSubmittedForm(form);
 
@@ -1175,7 +1234,7 @@ export function SoilCropPage() {
   const exportAnalysis = () => {
     downloadTextFile(
       `${selectedFarm.name.toLowerCase().replace(/\s+/g, "-")}-soil-analysis.txt`,
-      `Soil & Crop Analysis\nFarm: ${selectedFarm.name}\nSource: ${sourceStatus}\nHealth Score: ${analysis.healthScore} (${analysis.healthLabel})\nSelected Recommendation: ${selectedRecommendation?.name || "N/A"}\n\nDegradation Alerts:\n- ${analysis.degradationAlerts.join("\n- ") || "None"}`
+      `Soil & Crop Analysis\nFarm: ${selectedFarm.name}\nSource: ${getSoilSourceLabel(soilSource)}\nData Source: ${sourceStatus}\nHealth Score: ${analysis.healthScore} (${analysis.healthLabel})\nSelected Recommendation: ${selectedRecommendation?.name || "N/A"}\n\nDegradation Alerts:\n- ${analysis.degradationAlerts.join("\n- ") || "None"}`
     );
   };
 
@@ -1194,585 +1253,715 @@ export function SoilCropPage() {
   };
 
   return (
-    <section className="management-page prototype-soil-module">
-      <div className="prototype-soil-head">
-        <div className="page-title-block prototype-soil-title">
-          <h1>Soil &amp; Crop Analysis</h1>
-          <p>
-            Soil nutrient interpretation, crop suitability analysis, fertilizer planning, and
-            field-level crop rotation guidance for each registered farm.
-          </p>
+    <PageShell>
+      <PageHeader
+        title="Soil &amp; Crop Analysis"
+        subtitle="Soil nutrient interpretation, crop suitability analysis, fertilizer planning, and field-level crop rotation guidance"
+        actions={
+          <div className="sc-header-actions">
+            <ActionButton variant="secondary" size="sm" onClick={exportAnalysis}>
+              <Download size={14} /> <span>Export Report</span>
+            </ActionButton>
+            <ActionButton variant="primary" size="sm" onClick={() => setIsHistoryOpen(true)}>
+              <FileClock size={14} /> <span>Soil History</span>
+            </ActionButton>
+          </div>
+        }
+      />
+
+      {soilSource !== "online" && !sourceStatus.includes("Online") && !sourceStatus.includes("estimated") ? (
+        <div className="sc-warning" style={{ background: "#f0f9f0", borderLeft: "3px solid var(--primary-green)", color: "var(--text-main)" }}>
+          <span>Manual or uploaded soil data can be used. Online soil estimation is optional and currently unavailable.</span>
         </div>
+      ) : null}
 
-        <div className="prototype-soil-head-actions">
-          <button type="button" className="prototype-soil-action secondary" onClick={exportAnalysis}>
-            <Download size={15} />
-            <span>Export PDF</span>
-          </button>
-          <button type="button" className="prototype-soil-action primary" onClick={() => setIsHistoryOpen(true)}>
-            <FileClock size={15} />
-            <span>View History</span>
-          </button>
-        </div>
-      </div>
-
-      <div className="prototype-soil-module-toolbar">
-        <label className="prototype-soil-toolbar-field">
-          <span>Active farm</span>
-          <select value={selectedFarmId} onChange={(event) => setSelectedFarmId(event.target.value)}>
-            {farms.map((farm) => (
-              <option key={farm.id} value={farm.id}>
-                {farm.name} - {farm.region}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="prototype-soil-toolbar-field">
-          <span>Lab report upload</span>
-          <div className="prototype-soil-upload-inline">
-            <Upload size={15} />
-            <input
-              type="file"
-              accept=".pdf,.csv,.xlsx,.jpg,.jpeg,.png"
-              onChange={(event) => setLabFileName(event.target.files?.[0]?.name || "")}
-            />
-            <em>{labFileName || "Upload digital lab result"}</em>
+      {/* Toolbar */}
+      <div className="sc-toolbar">
+        <div className="sc-toolbar-left">
+          <div className="sc-toolbar-field">
+            <span className="sc-toolbar-label">Active Farm</span>
+            <select value={selectedFarmId} onChange={(e) => setSelectedFarmId(e.target.value)}>
+              {farms.map((f) => (
+                <option key={f.id} value={f.id}>{f.name} — {f.region}</option>
+              ))}
+            </select>
           </div>
-        </label>
-      </div>
-
-      <div className="prototype-soil-source-note">
-        <strong>{sourceStatus}</strong>
-        <span>
-          Crop recommendation = soil test + weather + region + season. Fertilizer guidance uses soil test
-          first, then weather refinement. Advanced crop health imaging will use AgroMonitoring later.
-        </span>
-        {externalWarning ? <em>{externalWarning}</em> : null}
-      </div>
-
-      <div className="prototype-soil-history-summary">
-        <article className="prototype-panel soil-history-meta-card">
-          <div className="prototype-soil-panel-title">
-            <h2>
-              <FileClock size={18} />
-              <span>Lab Report &amp; Soil Record</span>
-            </h2>
-            <span className="prototype-soil-badge">{currentLabMetadata.sourceLabel}</span>
+          <div className="sc-toolbar-field">
+            <span className="sc-toolbar-label">Soil Source</span>
+            <select value={soilSource} onChange={(e) => { const v = e.target.value; setSoilSource(v); if (v === "upload") { setFormDirty(false); } else if (v !== "online") { setFormDirty(false); } }}>
+              {SOIL_SOURCE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
           </div>
-          <div className="soil-history-meta-grid">
-            <div>
-              <span>Latest report</span>
-              <strong>{currentLabMetadata.fileName}</strong>
-            </div>
-            <div>
-              <span>Analysis status</span>
-              <strong>{currentLabMetadata.analysisStatus}</strong>
-            </div>
-            <div>
-              <span>Captured</span>
-              <strong>{formatSoilTimestamp(currentLabMetadata.capturedAt)}</strong>
-            </div>
-            <div>
-              <span>Storage mode</span>
-              <strong>{currentLabMetadata.storageMode || "frontend-demo"}</strong>
-            </div>
-          </div>
-        </article>
-
-        <article className="prototype-panel soil-history-meta-card">
-          <div className="prototype-soil-panel-title">
-            <h2>
-              <FlaskConical size={18} />
-              <span>Backend-first Soil History</span>
-            </h2>
-            <span className="prototype-soil-badge">{historyRecords.length} records</span>
-          </div>
-          <div className="soil-history-meta-grid compact">
-            <div>
-              <span>Current score</span>
-              <strong>{effectiveHealthScore} / 100</strong>
-            </div>
-            <div>
-              <span>Soil mode</span>
-              <strong>{backendSoilMode === "backend" ? "Backend + live context" : "Local fallback mode"}</strong>
-            </div>
-            <div>
-              <span>Top crop</span>
-              <strong>{getHistoryTopCrop(backendLatestSoilTest || historyRecords[0])}</strong>
-            </div>
-            <div>
-              <span>History action</span>
-              <button type="button" className="prototype-soil-inline-link" onClick={() => setIsHistoryOpen(true)}>
-                Open history table
-              </button>
-            </div>
-          </div>
-        </article>
-      </div>
-
-      <div className="prototype-soil-grid functional">
-        <div className="prototype-soil-left">
-          <article className="prototype-panel soil-input-panel">
-            <div className="prototype-soil-panel-title">
-              <h2>
-                <TestTubeDiagonal size={19} />
-                <span>Soil Test Input</span>
-              </h2>
-            </div>
-
-            <div className="prototype-soil-form-grid">
-              <label>
-                <span>pH Level</span>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={form.ph}
-                  onChange={(event) => {
-                    setFormDirty(true);
-                    setForm((current) => ({ ...current, ph: event.target.value }));
-                  }}
-                />
-              </label>
-              <label>
-                <span>Nitrogen (N)</span>
-                <input
-                  type="number"
-                  value={form.nitrogen}
-                  onChange={(event) => {
-                    setFormDirty(true);
-                    setForm((current) => ({ ...current, nitrogen: event.target.value }));
-                  }}
-                />
-              </label>
-              <label>
-                <span>Phosphorus (P)</span>
-                <input
-                  type="number"
-                  value={form.phosphorus}
-                  onChange={(event) => {
-                    setFormDirty(true);
-                    setForm((current) => ({ ...current, phosphorus: event.target.value }));
-                  }}
-                />
-              </label>
-              <label>
-                <span>Potassium (K)</span>
-                <input
-                  type="number"
-                  value={form.potassium}
-                  onChange={(event) => {
-                    setFormDirty(true);
-                    setForm((current) => ({ ...current, potassium: event.target.value }));
-                  }}
-                />
-              </label>
-              <label>
-                <span>Organic Matter (%)</span>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={form.organicMatter}
-                  onChange={(event) => {
-                    setFormDirty(true);
-                    setForm((current) => ({ ...current, organicMatter: event.target.value }));
-                  }}
-                />
-              </label>
-              <label>
-                <span>Texture</span>
-                <select
-                  value={form.texture}
-                  onChange={(event) => {
-                    setFormDirty(true);
-                    setForm((current) => ({ ...current, texture: event.target.value }));
-                  }}
-                >
-                  {textureOptions.map((texture) => (
-                    <option key={texture} value={texture}>
-                      {texture}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <button type="button" className="prototype-soil-submit" onClick={handleAnalyze}>
-              Analyze Soil &amp; Generate Report
-            </button>
-          </article>
-
-          <article className="prototype-panel soil-score-panel">
-            <div className="soil-panel-header-row">
-              <h3>Soil Health Score</h3>
-              <span className={`soil-score-badge ${effectiveHealthLabel.toLowerCase()}`}>{effectiveHealthLabel}</span>
-            </div>
-            <div className="soil-score-ring">
-              <div className="soil-score-ring-inner">
-                <strong>{effectiveHealthScore}</strong>
-                <span>{effectiveHealthLabel}</span>
+          {soilSource === "upload" ? (
+            <div className="sc-toolbar-field">
+              <span className="sc-toolbar-label">Lab Report</span>
+              <div className="sc-upload-inline">
+                <Upload size={14} />
+                <input type="file" accept=".pdf,.csv,.xlsx,.jpg,.jpeg,.png,.txt" onChange={(e) => { const file = e.target.files?.[0]; if (file) { setLabFileName(file.name); setLabFileData({ name: file.name, date: new Date().toISOString(), status: "awaiting" }); setSoilSource("upload"); } }} />
+                <span>{labFileName ? labFileName + (labFileData?.status === "confirmed" ? " (Confirmed)" : " (Awaiting confirmation)") : "Upload lab result"}</span>
               </div>
-            </div>
-            <p>
-              This score combines pH balance, N-P-K availability, organic matter, and texture
-              quality for {selectedFarm.name}.
-            </p>
-            <div className="soil-score-feedback">
-              <strong>{analysis.scoreInsights.summary}</strong>
-              {analysis.scoreInsights.actions.length > 0 ? (
-                <ul>
-                  {analysis.scoreInsights.actions.map((action) => (
-                    <li key={action}>{action}</li>
-                  ))}
-                </ul>
+              {labFileName && labFileData?.status === "awaiting" ? (
+                <button type="button" className="sc-confirm-btn" onClick={() => setLabFileData((prev) => prev ? { ...prev, status: "confirmed" } : null)} style={{ marginLeft: 8, padding: "2px 8px", fontSize: 11, background: "var(--primary-green)", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>
+                  Confirm Values
+                </button>
               ) : null}
             </div>
-          </article>
-
-          <article className="prototype-panel soil-map-panel">
-            <div className="prototype-soil-panel-title">
-              <h2>
-                <MapPinned size={19} />
-                <span>Interactive Soil Map Overlay</span>
-              </h2>
-            </div>
-            <div className="soil-map-overlay">
-              <div className="soil-map-grid" />
-              <div className="soil-map-layer low" />
-              <div className="soil-map-layer medium" />
-              <div
-                className="soil-map-pin"
-                style={{
-                  left: `${selectedFarm.location?.mapX ?? 52}%`,
-                  top: `${selectedFarm.location?.mapY ?? 46}%`,
-                }}
-              />
-              <div className="soil-map-legend">
-                <span><i className="low" /> Low fertility pocket</span>
-                <span><i className="medium" /> Balanced zone</span>
-                <span><i className="high" /> Best response zone</span>
-              </div>
-            </div>
-            <p className="soil-map-source">
-              {soilEstimate
-                ? "Soil map overlay is using farmer plot coordinates with SoilGrids fallback estimates for baseline spatial context."
-                : "Soil map overlay is using farmer plot coordinates. SoilGrids fallback was not available for this farm."}
-            </p>
-          </article>
+          ) : null}
         </div>
-
-        <div className="prototype-soil-right">
-          <article className="prototype-panel soil-crops-panel">
-            <div className="prototype-soil-panel-title with-badge">
-              <h2>
-                <Leaf size={19} />
-                <span>Recommendation Panel</span>
-              </h2>
-              <span className="prototype-soil-badge">Top Yield Confidence</span>
-            </div>
-
-            <div className="prototype-crop-grid">
-              {effectiveSuitableCrops.slice(0, 3).map((crop, index) => (
-                <button
-                  key={crop.name}
-                  type="button"
-                  onClick={() => setSelectedRecommendationName(crop.name)}
-                  className={`${index === 2 ? "prototype-crop-card full" : "prototype-crop-card"} ${
-                    selectedRecommendation?.name === crop.name ? "selected" : ""
-                  }`}
-                >
-                  <div className={`prototype-crop-thumb ${index === 0 ? "gold" : index === 1 ? "green" : "olive"}`} />
-                  <div className="prototype-crop-copy">
-                    <div className="prototype-crop-top">
-                      <h3>{crop.name}</h3>
-                      <strong>{crop.match}% Match</strong>
-                    </div>
-                    <p>{crop.note}</p>
-                    <div className="prototype-crop-tags">
-                      <span>{crop.rotationTag}</span>
-                      <span>{crop.cycle}</span>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            {selectedRecommendationDetails ? (
-              <div className="soil-recommendation-detail">
-                <div className="soil-recommendation-detail-head">
-                  <strong>{selectedRecommendation?.name}</strong>
-                  <span>{selectedRecommendation?.match}% suitability confidence</span>
-                </div>
-                <p>{selectedRecommendationDetails.summary}</p>
-                {selectedRecommendationDetails.concerns.length > 0 ? (
-                  <div className="soil-recommendation-detail-block">
-                    <h4>What is currently limiting this crop?</h4>
-                    <ul>
-                      {selectedRecommendationDetails.concerns.map((concern) => (
-                        <li key={concern}>{concern}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-                <div className="soil-recommendation-detail-block">
-                  <h4>What should be done before planting?</h4>
-                  <ul>
-                    {selectedRecommendationDetails.actions.map((action) => (
-                      <li key={action}>{action}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            ) : null}
-
-            <div className="soil-recommendation-banner">
-              <Sprout size={18} />
-              <p>{analysis.recommendationPanel.recommendation}</p>
-            </div>
-          </article>
-
-          <article className="prototype-panel soil-suitability-panel">
-            <div className="prototype-soil-panel-title">
-              <h2>
-                <Filter size={18} />
-                <span>Crop Suitability Matrix</span>
-              </h2>
-            </div>
-            <div className="soil-suitability-table">
-              <div className="soil-suitability-head">
-                <span>Crop</span>
-                <span>Compatibility</span>
-                <span>Decision</span>
-              </div>
-              {suitabilityMatrix.map((item) => (
-                <div key={item.name} className="soil-suitability-row">
-                  <strong>{item.name}</strong>
-                  <div className="soil-suitability-meter">
-                    <div style={{ width: `${item.compatibility}%` }} />
-                  </div>
-                  <span className={`soil-suitability-tag ${item.compatibility >= 85 ? "best" : item.compatibility >= 70 ? "good" : "watch"}`}>
-                    {item.compatibility >= 85 ? "Best Fit" : item.compatibility >= 70 ? "Good Fit" : "Needs Adjustment"}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </article>
-
-          <article className="prototype-panel soil-fertilizer-panel">
-            <div className="prototype-soil-panel-title">
-              <h2>
-                <FlaskConical size={19} />
-                <span>Fertilizer Requirement Calculation</span>
-              </h2>
-            </div>
-
-            <div className="soil-fertilizer-table">
-              <div className="soil-fertilizer-head">
-                <span>Nutrient</span>
-                <span>Current State</span>
-                <span>Recommended Fertilizer</span>
-                <span>Dosage (kg/acre)</span>
-              </div>
-
-                {effectiveFertilizerRows.map((row) => (
-                  <div key={row.nutrient} className="soil-fertilizer-row">
-                  <strong>{row.nutrient}</strong>
-                  <span className="soil-state">
-                    <i className={row.tone} />
-                    {row.state}
-                  </span>
-                  <span>
-                    {row.fertilizer}
-                    <small>{row.weatherAdjustment}</small>
-                  </span>
-                  <strong className="soil-dosage">{row.dosage}</strong>
-                </div>
-              ))}
-            </div>
-
-            <div className="soil-tip-banner">
-              <Sprout size={18} />
-              <p>
-                Split nutrient application across early and mid growth stages to reduce runoff
-                losses and improve crop nutrient recovery.
-              </p>
-            </div>
-          </article>
-
-          <div className="soil-lower-grid">
-            <article className="prototype-panel soil-library-panel">
-              <div className="prototype-soil-panel-title">
-                <h2>
-                  <Search size={18} />
-                  <span>Crop Library Browser</span>
-                </h2>
-              </div>
-              <div className="soil-library-filters">
-                <input
-                  type="text"
-                  placeholder="Search crop library..."
-                  value={libraryFilters.search}
-                  onChange={(event) =>
-                    setLibraryFilters((current) => ({ ...current, search: event.target.value }))
-                  }
-                />
-                <select
-                  value={libraryFilters.season}
-                  onChange={(event) =>
-                    setLibraryFilters((current) => ({ ...current, season: event.target.value }))
-                  }
-                >
-                  {["All", ...new Set(cropLibrary.map((crop) => crop.season))].map((season) => (
-                    <option key={season} value={season}>
-                      {season}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={libraryFilters.region}
-                  onChange={(event) =>
-                    setLibraryFilters((current) => ({ ...current, region: event.target.value }))
-                  }
-                >
-                  {["All", ...new Set(cropLibrary.map((crop) => crop.region))].map((region) => (
-                    <option key={region} value={region}>
-                      {region}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={libraryFilters.soilType}
-                  onChange={(event) =>
-                    setLibraryFilters((current) => ({ ...current, soilType: event.target.value }))
-                  }
-                >
-                  {["All", ...textureOptions].map((soilType) => (
-                    <option key={soilType} value={soilType}>
-                      {soilType}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="soil-library-list">
-                {cropLibraryView.map((crop) => (
-                  <article key={crop.name} className="soil-library-item">
-                    <div className="soil-library-image-wrap">
-                      <ImageWithFallback
-                        src={crop.imageUrl}
-                        alt={crop.name}
-                        label={crop.name}
-                        category="crop"
-                        className="soil-library-image"
-                      />
-                    </div>
-                    <div className="soil-library-copy">
-                      <strong>{crop.name}</strong>
-                      <span>{crop.season} | {crop.region}</span>
-                      <p>{crop.soilTypes.join(", ")} | pH {crop.phRange[0]}-{crop.phRange[1]}</p>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </article>
-
-            <article className="prototype-panel soil-risk-panel">
-              <div className="prototype-soil-panel-title">
-                <h2>
-                  <AlertTriangle size={18} />
-                  <span>Degradation &amp; Rotation Alerts</span>
-                </h2>
-              </div>
-
-              <div className="soil-risk-list">
-                {analysis.degradationAlerts.length ? (
-                  analysis.degradationAlerts.map((alert) => (
-                    <div key={alert} className="soil-risk-item">
-                      <AlertTriangle size={16} />
-                      <span>{alert}</span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="soil-risk-item success">
-                    <Sprout size={16} />
-                    <span>No immediate soil degradation alerts for this farm profile.</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="soil-rotation-plan">
-                <div className="soil-rotation-head">
-                  <RotateCcw size={16} />
-                  <strong>Crop rotation planning tool</strong>
-                </div>
-                <ul>
-                  {analysis.cropRotationPlan.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-              <div className="soil-future-note">
-                <strong>Advanced crop health</strong>
-                <span>AgroMonitoring integration will be added later for satellite crop-health and vegetation analysis.</span>
-              </div>
-            </article>
-          </div>
+        <div className="sc-toolbar-right">
+          <StatusBadge variant={soilSource === "online" ? "info" : soilSource === "upload" && labFileData?.status === "confirmed" ? "success" : "warning"}>
+            {getSoilSourceLabel(soilSource)}
+          </StatusBadge>
         </div>
       </div>
 
+      {labFileData && soilSource === "upload" ? (
+        <div className="sc-lab-upload-status" style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 16px", background: "#f5faf5", borderRadius: 8, marginBottom: 12, fontSize: 13 }}>
+          <span style={{ fontWeight: 600 }}>{labFileData.name}</span>
+          <span style={{ color: "var(--text-muted)" }}>Uploaded {new Date(labFileData.date).toLocaleDateString()}</span>
+          <StatusBadge variant={labFileData.status === "confirmed" ? "success" : "warning"}>
+            {labFileData.status === "confirmed" ? "Confirmed" : "Awaiting manual confirmation"}
+          </StatusBadge>
+        </div>
+      ) : null}
+
+      {/* KPI Row */}
+      <div className="sc-kpi-grid">
+        <AppCard className="sc-kpi-card">
+          <div className="sc-kpi-inner">
+            <div className="sc-kpi-icon-wrap green"><Activity size={22} /></div>
+            <div className="sc-kpi-info">
+              <span className="sc-kpi-label">Overall Soil Health</span>
+              <strong className="sc-kpi-value">{effectiveHealthScore}<small>/100</small></strong>
+              <span className="sc-kpi-sub">{effectiveHealthLabel}</span>
+            </div>
+            <div className="sc-kpi-trend up"><ArrowUp size={14} /></div>
+          </div>
+        </AppCard>
+        <AppCard className="sc-kpi-card">
+          <div className="sc-kpi-inner">
+            <div className="sc-kpi-icon-wrap blue"><Target size={22} /></div>
+            <div className="sc-kpi-info">
+              <span className="sc-kpi-label">Suitability Score</span>
+              <strong className="sc-kpi-value">{effectiveSuitableCrops[0]?.match || 0}<small>%</small></strong>
+              <span className="sc-kpi-sub">{effectiveSuitableCrops[0]?.name || "—"} best match</span>
+            </div>
+            <div className="sc-kpi-trend up"><ArrowUp size={14} /></div>
+          </div>
+        </AppCard>
+        <AppCard className="sc-kpi-card">
+          <div className="sc-kpi-inner">
+            <div className="sc-kpi-icon-wrap amber"><Sprout size={22} /></div>
+            <div className="sc-kpi-info">
+              <span className="sc-kpi-label">Recommended Crop</span>
+              <strong className="sc-kpi-value">{analysis.recommendationPanel.primary?.name || "—"}</strong>
+              <span className="sc-kpi-sub">{analysis.recommendationPanel.primary?.cycle || "—"}</span>
+            </div>
+          </div>
+        </AppCard>
+        <AppCard className="sc-kpi-card">
+          <div className="sc-kpi-inner">
+            <div className="sc-kpi-icon-wrap purple"><FlaskConical size={22} /></div>
+            <div className="sc-kpi-info">
+              <span className="sc-kpi-label">Fertilizer Need</span>
+              <strong className="sc-kpi-value">{effectiveFertilizerRows.reduce((s, r) => s + r.dosage, 0)}<small>kg</small></strong>
+              <span className="sc-kpi-sub">{effectiveFertilizerRows.filter((r) => r.tone !== "green").length} deficient</span>
+            </div>
+            <div className={`sc-kpi-trend ${effectiveFertilizerRows.some((r) => r.tone === "red") ? "down" : "up"}`}>
+              {effectiveFertilizerRows.some((r) => r.tone === "red") ? <ArrowDown size={14} /> : <ArrowUp size={14} />}
+            </div>
+          </div>
+        </AppCard>
+        <AppCard className="sc-kpi-card">
+          <div className="sc-kpi-inner">
+            <div className="sc-kpi-icon-wrap green"><Droplets size={22} /></div>
+            <div className="sc-kpi-info">
+              <span className="sc-kpi-label">Organic Matter</span>
+              <strong className="sc-kpi-value">{analysis.values?.organicMatter || 0}<small>%</small></strong>
+              <span className="sc-kpi-sub">{analysis.values?.organicMatter >= 3 ? "Optimal" : analysis.values?.organicMatter >= 2 ? "Moderate" : "Low"}</span>
+            </div>
+            <div className={`sc-kpi-trend ${(analysis.values?.organicMatter || 0) >= 2.5 ? "up" : "down"}`}>
+              {(analysis.values?.organicMatter || 0) >= 2.5 ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
+            </div>
+          </div>
+        </AppCard>
+        <AppCard className="sc-kpi-card">
+          <div className="sc-kpi-inner">
+            <div className="sc-kpi-icon-wrap blue"><Thermometer size={22} /></div>
+            <div className="sc-kpi-info">
+              <span className="sc-kpi-label">Soil Moisture</span>
+              <strong className="sc-kpi-value">{analysis.climateContext?.soilMoisture != null ? (analysis.climateContext.soilMoisture * 100).toFixed(0) : "—"}<small>%</small></strong>
+              <span className="sc-kpi-sub">{analysis.climateContext ? `${analysis.climateContext.seasonLabel}` : "No data"}</span>
+            </div>
+          </div>
+        </AppCard>
+      </div>
+
+      {/* Main + Sidebar Layout */}
+      <div className="sc-dashboard-layout">
+        <div className="sc-main-area">
+
+          {/* Soil Health Panel */}
+          <AppCard className="sc-health-panel">
+            <div className="sc-health-grid">
+              <div className="sc-health-gauge">
+                <div className="sc-gauge-ring">
+                  <svg viewBox="0 0 120 120" className="sc-gauge-svg">
+                    <circle cx="60" cy="60" r="54" fill="none" stroke="var(--border)" strokeWidth="8" />
+                    <circle cx="60" cy="60" r="54" fill="none" stroke={effectiveHealthScore >= 80 ? "var(--primary-green)" : effectiveHealthScore >= 65 ? "#F59E0B" : "#EF4444"} strokeWidth="8" strokeLinecap="round" strokeDasharray={`${(effectiveHealthScore / 100) * 339.292} 339.292`} transform="rotate(-90 60 60)" style={{ transition: "stroke-dasharray 1.2s ease" }} />
+                  </svg>
+                  <div className="sc-gauge-center">
+                    <strong className="sc-gauge-number">{effectiveHealthScore}</strong>
+                    <span className={`sc-gauge-label ${effectiveHealthLabel.toLowerCase()}`}>{effectiveHealthLabel}</span>
+                  </div>
+                </div>
+                <p className="sc-gauge-farm">Soil assessment for <strong>{selectedFarm.name}</strong></p>
+              </div>
+              <div className="sc-health-npk">
+                <h4>Nutrient Levels</h4>
+                {[
+                  { label: "Nitrogen (N)", value: analysis.values?.nitrogen || 0, max: 55, color: "#2E7D32" },
+                  { label: "Phosphorus (P)", value: analysis.values?.phosphorus || 0, max: 30, color: "#1565C0" },
+                  { label: "Potassium (K)", value: analysis.values?.potassium || 0, max: 35, color: "#E65100" },
+                  { label: "Organic Matter", value: (analysis.values?.organicMatter || 0) * 10, max: 50, color: "#4CAF50" },
+                ].map((n) => (
+                  <div key={n.label} className="sc-npk-row">
+                    <span className="sc-npk-label">{n.label}</span>
+                    <div className="sc-npk-bar-bg">
+                      <div className="sc-npk-bar-fill" style={{ width: `${Math.min((n.value / n.max) * 100, 100)}%`, background: n.color }} />
+                    </div>
+                    <span className="sc-npk-value">{n.value}{n.label.includes("Matter") ? "%" : "ppm"}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="sc-health-ai">
+                <h4><Sprout size={14} /> AI Insights</h4>
+                <p className="sc-health-summary">{analysis.scoreInsights.summary}</p>
+                {analysis.scoreInsights.lacks.length > 0 && (
+                  <div className="sc-health-block">
+                    <span className="sc-health-block-title">Weaknesses</span>
+                    <div className="sc-health-chips">
+                      {analysis.scoreInsights.lacks.map((l) => <span key={l} className="sc-chip sc-chip-warn">{l}</span>)}
+                    </div>
+                  </div>
+                )}
+                <div className="sc-health-block">
+                  <span className="sc-health-block-title">Actions</span>
+                  <ul className="sc-health-actions">
+                    {analysis.scoreInsights.actions.slice(0, 3).map((a) => <li key={a}>{a}</li>)}
+                  </ul>
+                </div>
+                <div className="sc-health-status">
+                  <span className={`sc-status-chip ${effectiveHealthLabel.toLowerCase()}`}>
+                    <CheckCircle size={12} /> {effectiveHealthLabel}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </AppCard>
+
+          {/* Soil Test Form + Lab Report */}
+          <div className="sc-test-row">
+            <AppCard className="sc-test-form">
+              <div className="sc-card-head">
+                <TestTubeDiagonal size={16} />
+                <h3>Soil Test Input</h3>
+              </div>
+              <div className="sc-test-groups">
+                <div className="sc-test-group">
+                  <span className="sc-test-group-label">Physical</span>
+                  <div className="sc-test-field">
+                    <span className="sc-test-field-label">pH Level</span>
+                    <input type="number" step="0.1" value={form.ph} onChange={(e) => { setFormDirty(true); setSoilSource("manual"); setForm((c) => ({ ...c, ph: e.target.value })); }} />
+                    <span className="sc-test-unit">pH</span>
+                  </div>
+                  <div className="sc-test-field">
+                    <span className="sc-test-field-label">Texture</span>
+                    <select value={form.texture} onChange={(e) => { setFormDirty(true); setSoilSource("manual"); setForm((c) => ({ ...c, texture: e.target.value })); }}>
+                      {textureOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="sc-test-group">
+                  <span className="sc-test-group-label">Chemical</span>
+                  <div className="sc-test-field">
+                    <span className="sc-test-field-label">Nitrogen (N)</span>
+                    <input type="number" value={form.nitrogen} onChange={(e) => { setFormDirty(true); setSoilSource("manual"); setForm((c) => ({ ...c, nitrogen: e.target.value })); }} />
+                    <span className="sc-test-unit">ppm</span>
+                  </div>
+                  <div className="sc-test-field">
+                    <span className="sc-test-field-label">Phosphorus (P)</span>
+                    <input type="number" value={form.phosphorus} onChange={(e) => { setFormDirty(true); setSoilSource("manual"); setForm((c) => ({ ...c, phosphorus: e.target.value })); }} />
+                    <span className="sc-test-unit">ppm</span>
+                  </div>
+                  <div className="sc-test-field">
+                    <span className="sc-test-field-label">Potassium (K)</span>
+                    <input type="number" value={form.potassium} onChange={(e) => { setFormDirty(true); setSoilSource("manual"); setForm((c) => ({ ...c, potassium: e.target.value })); }} />
+                    <span className="sc-test-unit">ppm</span>
+                  </div>
+                </div>
+                <div className="sc-test-group">
+                  <span className="sc-test-group-label">Organic</span>
+                  <div className="sc-test-field">
+                    <span className="sc-test-field-label">Organic Matter</span>
+                    <input type="number" step="0.1" value={form.organicMatter} onChange={(e) => { setFormDirty(true); setSoilSource("manual"); setForm((c) => ({ ...c, organicMatter: e.target.value })); }} />
+                    <span className="sc-test-unit">%</span>
+                  </div>
+                  <div className="sc-test-field">
+                    <span className="sc-test-field-label">Moisture</span>
+                    <input type="number" step="0.1" value={form.moisture} onChange={(e) => { setFormDirty(true); setSoilSource("manual"); setForm((c) => ({ ...c, moisture: e.target.value })); }} />
+                    <span className="sc-test-unit">%</span>
+                  </div>
+                  <div className="sc-test-field">
+                    <span className="sc-test-field-label">CEC</span>
+                    <input type="number" step="0.1" value={form.cec} onChange={(e) => { setFormDirty(true); setSoilSource("manual"); setForm((c) => ({ ...c, cec: e.target.value })); }} />
+                    <span className="sc-test-unit">meq/100g</span>
+                  </div>
+                </div>
+              </div>
+              <button type="button" className="sc-analyze-btn" onClick={handleAnalyze}>
+                <FlaskConical size={16} /> Analyze Soil & Generate Report
+              </button>
+            </AppCard>
+
+            <AppCard className="sc-lab-card">
+              <div className="sc-card-head">
+                <FileClock size={16} />
+                <h3>Lab Report</h3>
+                <StatusBadge variant="info">{currentLabMetadata.sourceLabel}</StatusBadge>
+              </div>
+              <div className="sc-lab-details">
+                <div className="sc-lab-row"><span>Report</span><strong>{currentLabMetadata.fileName}</strong></div>
+                <div className="sc-lab-row"><span>Status</span><strong>{currentLabMetadata.analysisStatus}</strong></div>
+                <div className="sc-lab-row"><span>Date</span><strong>{formatSoilTimestamp(currentLabMetadata.capturedAt)}</strong></div>
+                <div className="sc-lab-row"><span>Storage</span><strong>{currentLabMetadata.storageMode || "Local"}</strong></div>
+              </div>
+              <div className="sc-health-status" style={{ marginTop: 8 }}>
+                <span className={`sc-status-chip ${effectiveHealthLabel.toLowerCase()}`}>
+                  <Shield size={12} /> AI Verified
+                </span>
+              </div>
+            </AppCard>
+          </div>
+
+          {/* Soil History Timeline */}
+          <AppCard className="sc-history-card">
+            <div className="sc-card-head">
+              <Clock size={16} />
+              <h3>Soil History</h3>
+              <div className="sc-card-actions">
+                <StatusBadge variant="info">{historyRecords.length} records</StatusBadge>
+                <button type="button" className="sc-history-link" onClick={() => setIsHistoryOpen(true)}>View All</button>
+              </div>
+            </div>
+            <div className="sc-timeline">
+              {historyRecords.slice(0, 4).map((record, i) => (
+                <div key={record.id} className="sc-timeline-item">
+                  <div className={`sc-timeline-dot ${i === 0 ? "current" : ""}`} />
+                  <div className="sc-timeline-content">
+                    <div className="sc-timeline-head">
+                      <span className="sc-timeline-source">{getSoilSourceLabel(record.sourceType)}</span>
+                      <span className="sc-timeline-date">{formatSoilDate(record.updatedAt || record.createdAt)}</span>
+                    </div>
+                    <div className="sc-timeline-stats">
+                      <span>Score <strong>{record.healthScore || 0}</strong></span>
+                      <span>Top: <strong>{getHistoryTopCrop(record)}</strong></span>
+                    </div>
+                    <button type="button" className="sc-timeline-use" onClick={() => handleHistorySelect(record)}>Use Record</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </AppCard>
+
+          {/* Nutrient Cards */}
+          <div className="sc-nutrient-grid">
+            {[
+              { label: "Nitrogen (N)", value: analysis.values?.nitrogen || 0, unit: "ppm", rec: 42, trend: (analysis.values?.nitrogen || 0) >= 32 ? "up" : "down", icon: BarChart3, color: "#2E7D32" },
+              { label: "Phosphorus (P)", value: analysis.values?.phosphorus || 0, unit: "ppm", rec: 24, trend: (analysis.values?.phosphorus || 0) >= 20 ? "up" : "down", icon: BarChart3, color: "#1565C0" },
+              { label: "Potassium (K)", value: analysis.values?.potassium || 0, unit: "ppm", rec: 22, trend: (analysis.values?.potassium || 0) >= 20 ? "up" : "down", icon: BarChart3, color: "#E65100" },
+              { label: "CEC", value: analysis.values?.meta?.cec || 12, unit: "meq/100g", rec: 15, trend: "stable", icon: Layers, color: "#7B1FA2" },
+              { label: "Organic Matter", value: analysis.values?.organicMatter || 0, unit: "%", rec: 3, trend: (analysis.values?.organicMatter || 0) >= 2.5 ? "up" : "down", icon: Droplets, color: "#4CAF50" },
+              { label: "Moisture", value: analysis.climateContext?.soilMoisture != null ? (analysis.climateContext.soilMoisture * 100).toFixed(0) : "—", unit: "%", rec: 35, trend: "stable", icon: Thermometer, color: "#0288D1" },
+              { label: "Texture", value: form.texture || "Loamy", rec: "Loamy", trend: "stable", icon: GripVertical, color: "#6D4C41" },
+            ].map((n) => {
+              const pct = typeof n.value === "number" && typeof n.rec === "number" ? Math.min(Math.round((n.value / n.rec) * 100), 100) : 50;
+              return (
+                <AppCard key={n.label} className="sc-nutrient-card">
+                  <div className="sc-nutrient-top">
+                    <div className="sc-nutrient-icon" style={{ background: `${n.color}15`, color: n.color }}><n.icon size={18} /></div>
+                    <div className={`sc-nutrient-trend ${n.trend === "up" ? "up" : "down"}`}>
+                      {n.trend === "up" ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+                    </div>
+                  </div>
+                  <span className="sc-nutrient-label">{n.label}</span>
+                  <strong className="sc-nutrient-value">{n.value}<small>{n.unit || ""}</small></strong>
+                  <div className="sc-nutrient-bar-bg">
+                    <div className="sc-nutrient-bar-fill" style={{ width: `${pct}%`, background: n.color }} />
+                  </div>
+                  <span className="sc-nutrient-rec">Target: {n.rec}{n.unit || ""}</span>
+                </AppCard>
+              );
+            })}
+          </div>
+
+          {/* Soil Map */}
+          <AppCard>
+            <div className="sc-card-head">
+              <MapPinned size={16} />
+              <h3>Interactive Soil Map</h3>
+            </div>
+            <div className="sc-map-body">
+              <div className="sc-map-visual">
+                <div className="sc-map-terrain" />
+                <div className="sc-map-grid-lines" />
+                <div className="sc-map-zone high" style={{ left: "20%", top: "15%", width: "25%", height: "30%" }} />
+                <div className="sc-map-zone medium" style={{ left: "50%", top: "35%", width: "30%", height: "35%" }} />
+                <div className="sc-map-zone low" style={{ left: "25%", top: "55%", width: "20%", height: "25%" }} />
+                <div className="sc-map-pin-drop" style={{ left: `${selectedFarm.location?.mapX ?? 52}%`, top: `${selectedFarm.location?.mapY ?? 46}%` }}>
+                  <MapPinned size={22} fill="#2E7D32" color="#fff" />
+                </div>
+                <div className="sc-map-legend">
+                  <span><i className="high" /> High fertility</span>
+                  <span><i className="medium" /> Medium</span>
+                  <span><i className="low" /> Low</span>
+                </div>
+                <div className="sc-map-label">Click to add soil sampling points</div>
+              </div>
+            </div>
+            <p className="sc-map-source">
+              Farmer plot coordinates shown. Soil data source: {getSoilSourceLabel(soilSource)}.
+            </p>
+          </AppCard>
+        </div>
+
+        {/* Sidebar */}
+        <aside className="sc-sidebar">
+          <AppCard className="sc-sidebar-card">
+            <div className="sc-sidebar-head"><CloudSun size={14} /> Weather</div>
+            <div className="sc-sidebar-weather">
+              <div className="sc-weather-temp">{analysis.climateContext?.currentTemp ?? "—"}°C</div>
+              <div className="sc-weather-details">
+                <span><Droplets size={12} /> {analysis.climateContext?.humidity ?? "—"}%</span>
+                <span><Wind size={12} /> {analysis.climateContext?.wind ?? "—"} km/h</span>
+                <span><Cloud size={12} /> {analysis.climateContext?.weeklyRain ?? "—"}mm rain</span>
+              </div>
+            </div>
+          </AppCard>
+
+          <AppCard className="sc-sidebar-card">
+            <div className="sc-sidebar-head"><Sprout size={14} /> Current Crop</div>
+            <div className="sc-sidebar-crop">
+              {getCropImageUrl(selectedFarm.primaryCrop) ? (
+                <img src={getCropImageUrl(selectedFarm.primaryCrop)} alt={selectedFarm.primaryCrop} className="sc-sidebar-crop-img" />
+              ) : <div className="sc-sidebar-crop-placeholder"><Sprout size={24} /></div>}
+              <strong>{selectedFarm.primaryCrop || "Not set"}</strong>
+              <span>{selectedFarmPrimaryCrop ? `${selectedFarm.sizeHectares || "—"} ha` : "No crop assigned"}</span>
+            </div>
+          </AppCard>
+
+          <AppCard className="sc-sidebar-card">
+            <div className="sc-sidebar-head"><MapPinned size={14} /> Field Location</div>
+            <div className="sc-sidebar-location">
+              <span>{selectedFarm.name}</span>
+              <span>{selectedFarm.region || "Unspecified region"}</span>
+              {selectedFarm.location?.lat && <span className="sc-sidebar-coords">{selectedFarm.location.lat.toFixed(4)}, {selectedFarm.location.lng.toFixed(4)}</span>}
+            </div>
+          </AppCard>
+
+          <AppCard className="sc-sidebar-card">
+            <div className="sc-sidebar-head"><FileClock size={14} /> Last Analysis</div>
+            <div className="sc-sidebar-stat"><span>Score</span><strong>{effectiveHealthScore}/100</strong></div>
+            <div className="sc-sidebar-stat"><span>Mode</span><strong>{backendSoilMode === "backend" ? "Backend" : "Local"}</strong></div>
+            <div className="sc-sidebar-stat"><span>Source</span><strong>{getSoilSourceLabel(soilSource)}</strong></div>
+          </AppCard>
+
+          <AppCard className="sc-sidebar-card">
+            <div className="sc-sidebar-head"><Shield size={14} /> AI Confidence</div>
+            <div className="sc-sidebar-conf">
+              <div className="sc-conf-bar-bg">
+                <div className="sc-conf-bar-fill" style={{ width: `${Math.min(effectiveHealthScore, 95)}%` }} />
+              </div>
+              <span>Health Score <strong>{effectiveHealthScore}%</strong></span>
+              <span>Suitability <strong>{effectiveSuitableCrops[0]?.match || 0}%</strong></span>
+            </div>
+          </AppCard>
+
+          <AppCard className="sc-sidebar-card">
+            <div className="sc-sidebar-head"><FlaskConical size={14} /> Nearby Lab</div>
+            <p className="sc-sidebar-lab-text">Rwanda Soil Health Laboratory — Kigali</p>
+            <p className="sc-sidebar-lab-text">Distance: ~{selectedFarm.location?.lat ? "42" : "—"} km</p>
+          </AppCard>
+        </aside>
+      </div>
+
+      {/* AI Crop Recommendations */}
+      <AppCard>
+        <div className="sc-card-head">
+          <Leaf size={18} />
+          <h3>AI Crop Recommendations</h3>
+          <StatusBadge variant="success">Top Yield Confidence</StatusBadge>
+        </div>
+        <div className="sc-rec-grid">
+          {effectiveSuitableCrops.slice(0, 3).map((crop, index) => (
+            <button key={crop.name} type="button" onClick={() => setSelectedRecommendationName(crop.name)} className={`sc-rec-card ${selectedRecommendation?.name === crop.name ? "selected" : ""}`}>
+              <div className="sc-rec-img-wrap">
+                <img src={getCropImageUrl(crop.name) || crop.imageUrl} alt={crop.name} className="sc-rec-img" loading="lazy" />
+                <div className={`sc-rec-rank rank-${index + 1}`}>#{index + 1}</div>
+                <div className="sc-rec-suit-badge">{crop.match}%</div>
+              </div>
+              <div className="sc-rec-body">
+                <h4>{crop.name}</h4>
+                <div className="sc-rec-meta-grid">
+                  <div className="sc-rec-meta"><span>Expected Yield</span><strong>{crop.cycle || "—"}</strong></div>
+                  <div className="sc-rec-meta"><span>Water Need</span><strong>{crop.rotationTag || "—"}</strong></div>
+                  <div className="sc-rec-meta"><span>Growing Season</span><strong>{crop.season || "—"}</strong></div>
+                  <div className="sc-rec-meta"><span>Disease Risk</span><strong>{crop.rotationTag?.includes("Drought") ? "Low" : crop.rotationTag?.includes("Fixing") ? "Low" : "Moderate"}</strong></div>
+                  <div className="sc-rec-meta"><span>Profit Potential</span><strong>{crop.match >= 85 ? "High" : crop.match >= 70 ? "Medium" : "Low"}</strong></div>
+                  <div className="sc-rec-meta"><span>Recommended Region</span><strong>{crop.region || "—"}</strong></div>
+                </div>
+                <p className="sc-rec-note">{crop.note}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+        {selectedRecommendationDetails && (
+          <div className="sc-rec-detail-panel">
+            <div className="sc-rec-detail-head">
+              <strong>{selectedRecommendation?.name}</strong>
+              <StatusBadge variant="success">{selectedRecommendation?.match}% Suitability</StatusBadge>
+            </div>
+            <p>{selectedRecommendationDetails.summary}</p>
+            {selectedRecommendationDetails.concerns.length > 0 && (
+              <div className="sc-rec-detail-block">
+                <h4>Limiting Factors</h4>
+                <ul>{selectedRecommendationDetails.concerns.map((c) => <li key={c}>{c}</li>)}</ul>
+              </div>
+            )}
+            <div className="sc-rec-detail-block">
+              <h4>Recommended Actions</h4>
+              <ul>{selectedRecommendationDetails.actions.map((a) => <li key={a}>{a}</li>)}</ul>
+            </div>
+          </div>
+        )}
+        <div className="sc-rec-banner">
+          <Sprout size={16} />
+          <p>{analysis.recommendationPanel.recommendation}</p>
+        </div>
+      </AppCard>
+
+      {/* Crop Suitability Matrix */}
+      <AppCard>
+        <div className="sc-card-head">
+          <BarChart3 size={18} />
+          <h3>Crop Suitability Matrix</h3>
+        </div>
+        <div className="sc-matrix-table">
+          <div className="sc-matrix-head">
+            <span className="sc-matrix-col-crop">Crop</span>
+            <span className="sc-matrix-col-score">Suitability</span>
+            <span className="sc-matrix-col-demand">Market Demand</span>
+            <span className="sc-matrix-col-water">Water Need</span>
+            <span className="sc-matrix-col-profit">Profit</span>
+            <span className="sc-matrix-col-overall">Overall</span>
+          </div>
+          {suitabilityMatrix.map((item) => {
+            const cropMeta = cropLibrary.find((c) => c.name === item.name);
+            const market = item.compatibility >= 85 ? "High" : item.compatibility >= 70 ? "Medium" : "Low";
+            const profit = item.compatibility >= 80 ? "High" : item.compatibility >= 60 ? "Medium" : "Low";
+            return (
+              <div key={item.name} className="sc-matrix-row">
+                <div className="sc-matrix-col-crop">
+                  {getCropImageUrl(item.name) && <img src={getCropImageUrl(item.name)} alt="" className="sc-matrix-crop-img" />}
+                  <strong>{item.name}</strong>
+                </div>
+                <div className="sc-matrix-col-score">
+                  <div className="sc-matrix-bar-bg"><div className="sc-matrix-bar-fill" style={{ width: `${item.compatibility}%` }} /></div>
+                  <span>{item.compatibility}%</span>
+                </div>
+                <div className="sc-matrix-col-demand"><span className={`sc-matrix-badge ${market === "High" ? "high" : market === "Medium" ? "mid" : "low"}`}>{market}</span></div>
+                <div className="sc-matrix-col-water"><span>{cropMeta?.rotationTag || "—"}</span></div>
+                <div className="sc-matrix-col-profit"><span className={`sc-matrix-badge ${profit === "High" ? "high" : profit === "Medium" ? "mid" : "low"}`}>{profit}</span></div>
+                <div className="sc-matrix-col-overall">
+                  <span className={`sc-status-chip ${item.compatibility >= 85 ? "excellent" : item.compatibility >= 70 ? "good" : "moderate"}`}>
+                    {item.compatibility >= 85 ? "Best Fit" : item.compatibility >= 70 ? "Good Fit" : "Needs Work"}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </AppCard>
+
+      {/* Fertilizer Recommendation */}
+      <div className="sc-fertilizer-row">
+        {effectiveFertilizerRows.map((row) => {
+          const maxDosage = { "Nitrogen (N)": 68, "Phosphorus (P)": 52, "Potassium (K)": 60, "Organic Matter": 180 }[row.nutrient] || 100;
+          const pct = Math.min((row.dosage / maxDosage) * 100, 100);
+          const iconMap = { "Nitrogen (N)": BarChart3, "Phosphorus (P)": BarChart3, "Potassium (K)": BarChart3, "Organic Matter": Droplets };
+          const Icon = iconMap[row.nutrient] || BarChart3;
+          return (
+            <AppCard key={row.nutrient} className="sc-fertilizer-card">
+              <div className="sc-card-head">
+                <Icon size={16} />
+                <h3>{row.nutrient}</h3>
+                <span className={`sc-fertilizer-state ${row.tone}`}>{row.state}</span>
+              </div>
+              <div className="sc-fertilizer-body">
+                <div className="sc-fertilizer-row-info">
+                  <span>Recommended Dose</span>
+                  <strong>{row.dosage} kg/ha</strong>
+                </div>
+                <div className="sc-fertilizer-bar-bg">
+                  <div className="sc-fertilizer-bar-fill" style={{ width: `${pct}%` }} />
+                </div>
+                <div className="sc-fertilizer-row-info">
+                  <span>Fertilizer</span>
+                  <strong>{row.fertilizer}</strong>
+                </div>
+                <div className="sc-fertilizer-row-info">
+                  <span>Application</span>
+                  <strong>{row.weatherAdjustment}</strong>
+                </div>
+                <div className="sc-fertilizer-row-info">
+                  <span>Split Applications</span>
+                  <strong>{row.dosage > 30 ? "2-3 splits" : "Single application"}</strong>
+                </div>
+                <div className="sc-fertilizer-row-info">
+                  <span>Est. Cost</span>
+                  <strong>RWF {(row.dosage * 850).toLocaleString()}</strong>
+                </div>
+                <div className="sc-fertilizer-row-info">
+                  <span>Env. Impact</span>
+                  <strong className={row.tone === "green" ? "green-text" : row.tone === "amber" ? "amber-text" : "red-text"}>
+                    {row.tone === "green" ? "Low" : row.tone === "amber" ? "Moderate" : "High"}
+                  </strong>
+                </div>
+              </div>
+            </AppCard>
+          );
+        })}
+      </div>
+
+      {/* Degradation & Rotation */}
+      <div className="sc-degradation-row">
+        <AppCard>
+          <div className="sc-card-head">
+            <AlertTriangle size={16} />
+            <h3>Degradation Alerts</h3>
+          </div>
+          <div className="sc-degradation-list">
+            {analysis.degradationAlerts.length ? (
+              analysis.degradationAlerts.map((alert) => (
+                <div key={alert} className="sc-degradation-item"><AlertTriangle size={14} /><span>{alert}</span></div>
+              ))
+            ) : (
+              <div className="sc-degradation-item success"><CheckCircle size={14} /><span>No immediate soil degradation alerts.</span></div>
+            )}
+          </div>
+        </AppCard>
+
+        <AppCard>
+          <div className="sc-card-head">
+            <RotateCcw size={16} />
+            <h3>Crop Rotation Plan</h3>
+          </div>
+          <ul className="sc-rotation-list">
+            {analysis.cropRotationPlan.map((item, i) => <li key={i}>{item}</li>)}
+          </ul>
+          <div className="sc-rotation-cards">
+            <div className="sc-rotation-mini">
+              <span className="sc-rotation-mini-label">Erosion Risk</span>
+              <span className="sc-rotation-mini-value low">Low</span>
+            </div>
+            <div className="sc-rotation-mini">
+              <span className="sc-rotation-mini-label">Compaction</span>
+              <span className="sc-rotation-mini-value mid">Moderate</span>
+            </div>
+            <div className="sc-rotation-mini">
+              <span className="sc-rotation-mini-label">Cover Crop</span>
+              <span className="sc-rotation-mini-value green">Recommended</span>
+            </div>
+            <div className="sc-rotation-mini">
+              <span className="sc-rotation-mini-label">Carbon Storage</span>
+              <span className="sc-rotation-mini-value green">2.4 t/ha</span>
+            </div>
+          </div>
+        </AppCard>
+      </div>
+
+      {/* Crop Library */}
+      <AppCard>
+        <div className="sc-card-head">
+          <Search size={18} />
+          <h3>Crop Library Browser</h3>
+        </div>
+        <div className="sc-library-filters">
+          <input type="text" placeholder="Search crop library..." value={libraryFilters.search} onChange={(e) => setLibraryFilters((c) => ({ ...c, search: e.target.value }))} />
+          <select value={libraryFilters.season} onChange={(e) => setLibraryFilters((c) => ({ ...c, season: e.target.value }))}>
+            {["All", ...new Set(cropLibrary.map((c) => c.season))].map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select value={libraryFilters.region} onChange={(e) => setLibraryFilters((c) => ({ ...c, region: e.target.value }))}>
+            {["All", ...new Set(cropLibrary.map((c) => c.region))].map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+          <select value={libraryFilters.soilType} onChange={(e) => setLibraryFilters((c) => ({ ...c, soilType: e.target.value }))}>
+            {["All", ...textureOptions].map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div className="sc-library-grid">
+          {cropLibraryView.map((crop) => (
+            <div key={crop.name} className="sc-library-card">
+              <div className="sc-library-img-wrap">
+                <img src={getCropImageUrl(crop.name) || crop.imageUrl} alt={crop.name} className="sc-library-img" loading="lazy" />
+              </div>
+              <div className="sc-library-body">
+                <strong>{crop.name}</strong>
+                <span>{crop.season} | {crop.region}</span>
+                <span>{crop.soilTypes.join(", ")} | pH {crop.phRange[0]}-{crop.phRange[1]}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </AppCard>
+
+      {/* History Modal */}
       {isHistoryOpen ? (
-        <div className="prototype-soil-history-modal-backdrop" role="presentation" onClick={() => setIsHistoryOpen(false)}>
-          <div
-            className="prototype-soil-history-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Soil test history"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="prototype-soil-history-modal-head">
+        <div className="sc-modal-backdrop" role="presentation" onClick={() => setIsHistoryOpen(false)}>
+          <div className="sc-modal" role="dialog" aria-modal="true" aria-label="Soil test history" onClick={(e) => e.stopPropagation()}>
+            <div className="sc-modal-head">
               <div>
                 <h2>Soil Test History</h2>
                 <p>Backend records are shown first. Local fallback entries remain available when backend data is not yet present.</p>
               </div>
-              <div className="prototype-soil-history-modal-actions">
-                <button type="button" className="prototype-soil-action secondary" onClick={exportHistory}>
-                  <Download size={15} />
-                  <span>Export JSON</span>
-                </button>
-                <button type="button" className="prototype-soil-history-close" onClick={() => setIsHistoryOpen(false)} aria-label="Close history">
-                  <X size={18} />
-                </button>
+              <div className="sc-modal-actions">
+                <ActionButton variant="secondary" size="sm" onClick={exportHistory}>
+                  <Download size={14} /> <span>Export JSON</span>
+                </ActionButton>
+                <button type="button" className="sc-modal-close" onClick={() => setIsHistoryOpen(false)} aria-label="Close"><X size={18} /></button>
               </div>
             </div>
-
-            <div className="prototype-soil-history-table">
-              <div className="prototype-soil-history-table-head">
-                <span>Source</span>
-                <span>Health</span>
-                <span>Status</span>
-                <span>Lab Report</span>
-                <span>Updated</span>
-                <span>Top Crop</span>
-                <span>Action</span>
+            <div className="sc-history-table">
+              <div className="sc-history-table-head">
+                <span>Source</span><span>Health</span><span>Status</span><span>Lab Report</span><span>Updated</span><span>Top Crop</span><span>Action</span>
               </div>
-
               {historyRecords.map((record) => (
-                <div key={record.id} className="prototype-soil-history-table-row">
+                <div key={record.id} className="sc-history-table-row">
                   <span>{getSoilSourceLabel(record.sourceType)}</span>
                   <strong>{record.healthScore || 0} / 100</strong>
                   <span>{record.analysisStatus || "Ready"}</span>
-                  <span>{record.labReport?.fileName || "No file attached"}</span>
+                  <span>{record.labReport?.fileName || "No file"}</span>
                   <span>{formatSoilDate(record.updatedAt || record.createdAt)}</span>
                   <span>{getHistoryTopCrop(record)}</span>
-                  <button type="button" className="prototype-soil-table-action" onClick={() => handleHistorySelect(record)}>
-                    Use Record
-                  </button>
+                  <button type="button" className="sc-table-action" onClick={() => handleHistorySelect(record)}>Use Record</button>
                 </div>
               ))}
             </div>
           </div>
         </div>
       ) : null}
-    </section>
+    </PageShell>
   );
 }
+

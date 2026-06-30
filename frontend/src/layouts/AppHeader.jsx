@@ -160,6 +160,14 @@ export function AppHeader({ onToggleSidebar = () => {} }) {
   if (isAdmin) {
     return (
       <header className="prototype-header">
+        <button
+          type="button"
+          className="farmer-menu-button admin-menu-button"
+          aria-label="Open sidebar"
+          onClick={onToggleSidebar}
+        >
+          <Menu size={18} />
+        </button>
         {renderGlobalSearch("Search farmers, regions, or data records...")}
 
         <div className="header-tools">

@@ -1066,112 +1066,119 @@ function AdminRegionalDashboard({ state, setState, backendAdminMode, backendPayl
         .join("\n")
     );
   };
-
   return (
-    <section className="management-page">
-      <div className="page-title-block">
-        <h1>Regional Monitoring Dashboard</h1>
-        <p>
-          Frontend-only extension officer command center for district monitoring, outbreak escalation,
-          advisory publishing, market movement, and community field intelligence.
-        </p>
+    <section className="rm-page">
+      <div className="rm-header">
+        <div className="rm-header-row">
+          <div>
+            <h1>Regional Monitoring Dashboard</h1>
+            <p>Extension officer command center for district monitoring, outbreak escalation, advisory publishing, market movement, and community field intelligence.</p>
+          </div>
+          <span className="rm-inline-tag">{backendAdminMode ? "Backend + Demo Fallback" : "Demo + Local Data"}</span>
+        </div>
       </div>
 
       <SourceBadges />
 
-      {statusMessage ? <div className="community-inline-notice">{statusMessage}</div> : null}
+      {statusMessage ? <div className="rm-notice">{statusMessage}</div> : null}
 
-      {isLoading ? <div className="irrigation-state-banner">Loading backend regional monitoring data...</div> : null}
+      {isLoading ? <div className="rm-loading">Loading backend regional monitoring data...</div> : null}
 
-      <div className="management-toolbar">
-        <div className="toolbar-search">
-          <Search size={15} />
+      <div className="rm-toolbar">
+        <label className="rm-search">
+          <Search size={16} />
           <input type="text" placeholder="Search district, alert, outbreak, or advisory..." readOnly />
-        </div>
-        <label className="regional-farm-selector">
+        </label>
+        <label className="rm-district-select">
           <span>Monitored district</span>
           <select value={selectedDistrict} onChange={(event) => setSelectedDistrict(event.target.value)}>
             {districtOptions.map((district) => (
-              <option key={district} value={district}>
-                {district}
-              </option>
+              <option key={district} value={district}>{district}</option>
             ))}
           </select>
         </label>
       </div>
 
-      <div className="management-summary-grid">
-        <article className="mini-summary-card">
-          <div className="stat-icon tone-blue"><MapIcon size={16} /></div>
-          <div><span>Monitored Districts</span><strong>{DISTRICT_META.length}</strong></div>
+      <div className="rm-summary-grid">
+        <article className="rm-summary-card">
+          <div className="rm-summary-icon blue"><MapIcon size={18} /></div>
+          <div className="rm-summary-info">
+            <span>Monitored Districts</span>
+            <strong>{DISTRICT_META.length}</strong>
+          </div>
         </article>
-        <article className="mini-summary-card">
-          <div className="stat-icon tone-red"><TriangleAlert size={16} /></div>
-          <div><span>Active Regional Alerts</span><strong>{selectedProfile?.outbreaks.length + selectedProfile?.reports.length}</strong></div>
+        <article className="rm-summary-card">
+          <div className="rm-summary-icon red"><TriangleAlert size={18} /></div>
+          <div className="rm-summary-info">
+            <span>Active Regional Alerts</span>
+            <strong>{selectedProfile?.outbreaks.length + selectedProfile?.reports.length}</strong>
+          </div>
         </article>
-        <article className="mini-summary-card">
-          <div className="stat-icon tone-green"><Store size={16} /></div>
-          <div><span>Market Activity</span><strong>{scoreToSeverity(selectedProfile?.marketActivity || 0)}</strong></div>
+        <article className="rm-summary-card">
+          <div className="rm-summary-icon green"><Store size={18} /></div>
+          <div className="rm-summary-info">
+            <span>Market Activity</span>
+            <strong>{scoreToSeverity(selectedProfile?.marketActivity || 0)}</strong>
+          </div>
         </article>
-        <article className="mini-summary-card">
-          <div className="stat-icon tone-blue"><Users size={16} /></div>
-          <div><span>Farmer Activity</span><strong>{selectedProfile?.farmerActivity || 0}</strong></div>
+        <article className="rm-summary-card">
+          <div className="rm-summary-icon blue"><Users size={18} /></div>
+          <div className="rm-summary-info">
+            <span>Farmer Activity</span>
+            <strong>{selectedProfile?.farmerActivity || 0}</strong>
+          </div>
         </article>
-        <article className="mini-summary-card">
-          <div className="stat-icon tone-amber"><ShieldAlert size={16} /></div>
-          <div><span>Verification Rate</span><strong>{selectedProfile?.verificationRate || 0}%</strong></div>
+        <article className="rm-summary-card">
+          <div className="rm-summary-icon amber"><ShieldAlert size={18} /></div>
+          <div className="rm-summary-info">
+            <span>Verification Rate</span>
+            <strong>{selectedProfile?.verificationRate || 0}%</strong>
+          </div>
         </article>
         {state.iotDemoEnabled ? (
-          <article className="mini-summary-card">
-            <div className="stat-icon tone-green"><RadioTower size={16} /></div>
-            <div><span>Sensor Health</span><strong>91%</strong></div>
+          <article className="rm-summary-card">
+            <div className="rm-summary-icon green"><RadioTower size={18} /></div>
+            <div className="rm-summary-info">
+              <span>Sensor Health</span>
+              <strong>91%</strong>
+            </div>
           </article>
         ) : null}
       </div>
 
-      <div className="management-grid regional-admin-grid">
-        <article className="prototype-panel">
-          <div className="panel-toolbar">
+      <div className="rm-main-grid">
+        <article className="rm-card">
+          <div className="rm-card-header">
             <h2>Regional Risk Heatmap</h2>
-            <span className="regional-inline-tag">{backendAdminMode ? "Backend + Demo Fallback" : "Demo + Local Data"}</span>
+            <button type="button" className="fm-btn ghost" style={{ fontSize: 12, color: 'var(--primary-green)', fontWeight: 600 }} onClick={() => setState((current) => ({ ...current, iotDemoEnabled: !current.iotDemoEnabled }))}>
+              {state.iotDemoEnabled ? "Hide Sensor Demo" : "Enable IoT Demo"}
+            </button>
           </div>
-          <div className="regional-heatmap-grid">
+          <div className="rm-heatmap-grid">
             {districtProfiles.map((profile) => (
               <button
                 key={profile.district}
                 type="button"
-                className={`regional-heatmap-card ${profile.district === selectedDistrict ? "active" : ""}`}
+                className={`rm-heatmap-card ${profile.district === selectedDistrict ? "active" : ""}`}
                 onClick={() => setSelectedDistrict(profile.district)}
               >
-                <div className="regional-heatmap-top">
+                <div className="rm-heatmap-top">
                   <strong>{profile.district}</strong>
-                  <span className={`status-pill ${severityTone(scoreToSeverity(profile.overallRiskScore))}`}>
+                  <span className={`rm-severity-pill ${severityTone(scoreToSeverity(profile.overallRiskScore))}`}>
                     {scoreToSeverity(profile.overallRiskScore)}
                   </span>
                 </div>
-                <div className="regional-heatmap-meta">
+                <div className="rm-heatmap-meta">
                   <span>{profile.sector}</span>
                   <small>{profile.farmersCount} farmers · {profile.farmsCount} farms</small>
                 </div>
-                <div className="regional-heatmap-bars">
-                  <div>
-                    <span>Weather</span>
-                    <strong>{scoreToSeverity(profile.weatherRisk)}</strong>
-                  </div>
-                  <div>
-                    <span>Pests</span>
-                    <strong>{scoreToSeverity(profile.pestRisk)}</strong>
-                  </div>
-                  <div>
-                    <span>Market</span>
-                    <strong>{scoreToSeverity(profile.marketActivity)}</strong>
-                  </div>
-                  <div>
-                    <span>Farmer Activity</span>
-                    <strong>{profile.farmerActivity}</strong>
-                  </div>
+                <div className="rm-heatmap-bars">
+                  <div><span>Weather</span><strong className={`rm-severity-pill ${severityTone(scoreToSeverity(profile.weatherRisk))}`} style={{ fontSize: 11, padding: '1px 6px' }}>{scoreToSeverity(profile.weatherRisk)}</strong></div>
+                  <div><span>Pests</span><strong className={`rm-severity-pill ${severityTone(scoreToSeverity(profile.pestRisk))}`} style={{ fontSize: 11, padding: '1px 6px' }}>{scoreToSeverity(profile.pestRisk)}</strong></div>
+                  <div><span>Market</span><strong className={`rm-severity-pill ${severityTone(scoreToSeverity(profile.marketActivity))}`} style={{ fontSize: 11, padding: '1px 6px' }}>{scoreToSeverity(profile.marketActivity)}</strong></div>
+                  <div><span>Farmer Activity</span><strong style={{ fontSize: 12, fontWeight: 700, color: 'var(--dark-green)' }}>{profile.farmerActivity}</strong></div>
                 </div>
-                <div className="regional-heatmap-score">
+                <div className="rm-heatmap-score">
                   <span>Overall Risk Score</span>
                   <strong>{profile.overallRiskScore}/100</strong>
                 </div>
@@ -1180,203 +1187,202 @@ function AdminRegionalDashboard({ state, setState, backendAdminMode, backendPayl
           </div>
         </article>
 
-        <aside className="prototype-panel regional-insight-panel">
-          <div className="panel-toolbar">
+        <aside className="rm-card">
+          <div className="rm-card-header">
             <h2>Regional Summary Insight</h2>
-            <Activity size={16} color="#1ea4ff" />
+            <Activity size={16} color="var(--primary-green)" />
           </div>
-          <p className="regional-summary-copy">{insightMessage}</p>
-          <div className="regional-data-list">
-            <div className="regional-data-row">
-              <div>
+          <p className="rm-insight-copy">{insightMessage}</p>
+          <div className="rm-insight-list">
+            <div className="rm-insight-item">
+              <div className="rm-insight-item-left">
                 <strong>{selectedProfile?.district}</strong>
-                <span>Current focus area</span>
+                <small>Current focus area</small>
               </div>
-              <span className={`status-pill ${severityTone(scoreToSeverity(selectedProfile?.overallRiskScore || 0))}`}>
+              <span className={`rm-severity-pill ${severityTone(scoreToSeverity(selectedProfile?.overallRiskScore || 0))}`}>
                 {scoreToSeverity(selectedProfile?.overallRiskScore || 0)}
               </span>
             </div>
-            <div className="regional-data-row">
-              <div>
+            <div className="rm-insight-item">
+              <div className="rm-insight-item-left">
                 <strong>Accessibility</strong>
                 <small>Last-mile delivery context</small>
               </div>
               <span>{selectedProfile?.accessibility}</span>
             </div>
-            <div className="regional-data-row">
-              <div>
+            <div className="rm-insight-item">
+              <div className="rm-insight-item-left">
                 <strong>Extension advisory pressure</strong>
                 <small>Regional advisory workload</small>
               </div>
               <span>{selectedProfile?.advisories.length || 0} live</span>
             </div>
           </div>
-          <button
-            type="button"
-            className="text-link-button primary"
-            onClick={() => setState((current) => ({ ...current, iotDemoEnabled: !current.iotDemoEnabled }))}
-          >
-            {state.iotDemoEnabled ? "Hide Sensor Demo" : "Enable IoT Demo"}
-          </button>
         </aside>
       </div>
 
-      <div className="management-grid regional-admin-grid">
-        <article className="prototype-panel">
-          <div className="panel-toolbar">
+      <div className="rm-main-grid">
+        <article className="rm-card">
+          <div className="rm-card-header">
             <h2>District Monitoring Board</h2>
-            <span className="regional-inline-tag">{selectedDistrict}</span>
+            <span className="rm-inline-tag">{selectedDistrict}</span>
           </div>
-          <div className="signup-table management-table regional-monitoring-table">
-            <div className="signup-row signup-head regional-monitoring-head">
-              <span>Sector</span>
-              <span>Weather Risk</span>
-              <span>Pest Outbreak Intensity</span>
-              <span>Market Signal</span>
-              <span>Farmer Reports</span>
-              <span>Affected Farms</span>
-              <span>Trend</span>
-              <span>Action</span>
-            </div>
-            {monitoringRows.map((row) => (
-              <div key={row.sector} className="signup-row regional-monitoring-row">
-                <strong>{row.sector}</strong>
-                <span className={`status-pill ${severityTone(row.weatherRisk)}`}>{row.weatherRisk}</span>
-                <span className={`status-pill ${severityTone(row.pestIntensity)}`}>{row.pestIntensity}</span>
-                <span>{row.marketSignal}</span>
-                <span>{row.farmerReports}</span>
-                <span>{row.affectedFarms}</span>
-                <span>{row.trend}</span>
-                <div className="prototype-admin-action-cell regional-action-cell">
-                  <button type="button" className="prototype-admin-action-button action-view" onClick={() => setSelectedSector(row.sector)}>View Details</button>
-                  <button type="button" className="prototype-admin-action-button action-approve" onClick={() => { setSelectedSector(row.sector); setStatusMessage(`Advisory composer targeted ${row.sector}.`); }}>Issue Advisory</button>
-                  <button type="button" className="prototype-admin-action-button action-deactivate" onClick={() => exportSectorReport(row)}>Export Sector Report</button>
-                </div>
+          <div className="rm-table-wrap">
+            <div className="rm-table">
+              <div className="rm-table-head">
+                <span>Sector</span>
+                <span>Weather Risk</span>
+                <span>Pest Outbreak</span>
+                <span>Market Signal</span>
+                <span>Farmer Reports</span>
+                <span>Affected Farms</span>
+                <span>Trend</span>
+                <span>Action</span>
               </div>
-            ))}
+              {monitoringRows.map((row) => (
+                <div key={row.sector} className="rm-table-row">
+                  <strong>{row.sector}</strong>
+                  <span className={`rm-severity-pill ${severityTone(row.weatherRisk)}`}>{row.weatherRisk}</span>
+                  <span className={`rm-severity-pill ${severityTone(row.pestIntensity)}`}>{row.pestIntensity}</span>
+                  <span>{row.marketSignal}</span>
+                  <span>{row.farmerReports}</span>
+                  <span>{row.affectedFarms}</span>
+                  <span>{row.trend}</span>
+                  <div className="rm-action-cell">
+                    <button type="button" className="rm-action-btn blue" onClick={() => setSelectedSector(row.sector)}>View Details</button>
+                    <button type="button" className="rm-action-btn green" onClick={() => { setSelectedSector(row.sector); setStatusMessage(`Advisory composer targeted ${row.sector}.`); }}>Issue Advisory</button>
+                    <button type="button" className="rm-action-btn orange" onClick={() => exportSectorReport(row)}>Export Report</button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </article>
 
-        <aside className="prototype-panel regional-insight-panel">
-          <div className="panel-toolbar">
+        <aside className="rm-card">
+          <div className="rm-card-header">
             <h2>Issue Regional Advisory</h2>
-            <Send size={16} color="#1ea4ff" />
+            <Send size={16} color="var(--primary-green)" />
           </div>
-          <div className="regional-advisory-form">
-            <label className="prototype-admin-content-field">
-              <span>Advisory Title</span>
-              <input type="text" value={advisoryTitle} onChange={(event) => setAdvisoryTitle(event.target.value)} placeholder="Example: Escalate field scouting in Gatenga" />
-            </label>
-            <div className="regional-form-grid">
-              <label className="prototype-admin-content-field">
-                <span>District</span>
-                <select value={selectedDistrict} onChange={(event) => setSelectedDistrict(event.target.value)}>
-                  {districtOptions.map((district) => <option key={district}>{district}</option>)}
-                </select>
-              </label>
-              <label className="prototype-admin-content-field">
-                <span>Sector</span>
-                <input type="text" value={selectedSector} onChange={(event) => setSelectedSector(event.target.value)} />
-              </label>
+          <div className="rm-card-body" style={{ padding: '16px 20px' }}>
+            <div className="rm-form">
+              <div className="rm-form-field">
+                <label>Advisory Title</label>
+                <input type="text" value={advisoryTitle} onChange={(event) => setAdvisoryTitle(event.target.value)} placeholder="Example: Escalate field scouting in Gatenga" />
+              </div>
+              <div className="rm-form-row">
+                <div className="rm-form-field">
+                  <label>District</label>
+                  <select value={selectedDistrict} onChange={(event) => setSelectedDistrict(event.target.value)}>
+                    {districtOptions.map((district) => <option key={district}>{district}</option>)}
+                  </select>
+                </div>
+                <div className="rm-form-field">
+                  <label>Sector</label>
+                  <input type="text" value={selectedSector} onChange={(event) => setSelectedSector(event.target.value)} />
+                </div>
+              </div>
+              <div className="rm-form-row three">
+                <div className="rm-form-field">
+                  <label>Alert Category</label>
+                  <select value={category} onChange={(event) => setCategory(event.target.value)}>
+                    <option>Weather</option>
+                    <option>Pests & Diseases</option>
+                    <option>Market</option>
+                    <option>Irrigation</option>
+                    <option>Community</option>
+                  </select>
+                </div>
+                <div className="rm-form-field">
+                  <label>Severity</label>
+                  <select value={severity} onChange={(event) => setSeverity(event.target.value)}>
+                    <option>Low</option>
+                    <option>Medium</option>
+                    <option>High</option>
+                    <option>Critical</option>
+                  </select>
+                </div>
+                <div className="rm-form-field">
+                  <label>Delivery Channel</label>
+                  <select value={deliveryChannel} onChange={(event) => setDeliveryChannel(event.target.value)}>
+                    <option>In-App</option>
+                    <option>SMS</option>
+                    <option>Email</option>
+                  </select>
+                </div>
+              </div>
+              <div className="rm-form-field">
+                <label>Advisory Message</label>
+                <textarea rows="3" value={advisoryMessage} onChange={(event) => setAdvisoryMessage(event.target.value)} placeholder="Describe the regional issue and the advisory context..." />
+              </div>
+              <div className="rm-form-field">
+                <label>Recommended Farmer Action</label>
+                <textarea rows="2" value={recommendedAction} onChange={(event) => setRecommendedAction(event.target.value)} placeholder="What exactly should farmers do next?" />
+              </div>
+              <button type="button" className="rm-submit-btn" onClick={publishAdvisory}>
+                <Send size={15} />
+                <span>Issue Regional Advisory</span>
+              </button>
             </div>
-            <div className="regional-form-grid regional-form-grid-three">
-              <label className="prototype-admin-content-field">
-                <span>Alert Category</span>
-                <select value={category} onChange={(event) => setCategory(event.target.value)}>
-                  <option>Weather</option>
-                  <option>Pests & Diseases</option>
-                  <option>Market</option>
-                  <option>Irrigation</option>
-                  <option>Community</option>
-                </select>
-              </label>
-              <label className="prototype-admin-content-field">
-                <span>Severity</span>
-                <select value={severity} onChange={(event) => setSeverity(event.target.value)}>
-                  <option>Low</option>
-                  <option>Medium</option>
-                  <option>High</option>
-                  <option>Critical</option>
-                </select>
-              </label>
-              <label className="prototype-admin-content-field">
-                <span>Delivery Channel</span>
-                <select value={deliveryChannel} onChange={(event) => setDeliveryChannel(event.target.value)}>
-                  <option>In-App</option>
-                  <option>SMS</option>
-                  <option>Email</option>
-                </select>
-              </label>
-            </div>
-            <label className="prototype-admin-content-field">
-              <span>Advisory Message</span>
-              <textarea rows="4" value={advisoryMessage} onChange={(event) => setAdvisoryMessage(event.target.value)} placeholder="Describe the regional issue and the advisory context..." />
-            </label>
-            <label className="prototype-admin-content-field">
-              <span>Recommended Farmer Action</span>
-              <textarea rows="3" value={recommendedAction} onChange={(event) => setRecommendedAction(event.target.value)} placeholder="What exactly should farmers do next?" />
-            </label>
-            <button type="button" className="prototype-admin-primary-button full" onClick={publishAdvisory}>
-              <Send size={15} />
-              <span>Issue Regional Advisory</span>
-            </button>
           </div>
         </aside>
       </div>
 
-      <div className="management-grid regional-admin-grid">
-        <article className="prototype-panel">
-          <div className="panel-toolbar">
+      <div className="rm-main-grid">
+        <article className="rm-card">
+          <div className="rm-card-header">
             <h2>Advisory History</h2>
-            <button type="button" className="text-link-button primary" onClick={exportAdvisoryHistory}>
+            <button type="button" className="fm-btn ghost" style={{ color: 'var(--primary-green)', fontWeight: 600 }} onClick={exportAdvisoryHistory}>
               <Download size={15} />
               Export History
             </button>
           </div>
-          <div className="signup-table management-table regional-history-table">
-            <div className="signup-row signup-head regional-history-head">
-              <span>Title</span>
-              <span>District</span>
-              <span>Target Farmers</span>
-              <span>Date</span>
-              <span>Status</span>
-              <span>Channel</span>
-            </div>
-            {state.advisories.slice(0, 8).map((item) => (
-              <div key={item.id} className="signup-row regional-history-row">
-                <strong>{item.title}</strong>
-                <span>{item.district}</span>
-                <span>{item.targetFarmers}</span>
-                <span>{formatReadableDate(item.createdAt)}</span>
-                <span className={`status-pill ${statusTone(item.status)}`}>{item.status}</span>
-                <span>{item.channel}</span>
+          <div className="rm-table-wrap">
+            <div className="rm-history-table">
+              <div className="rm-history-head">
+                <span>Title</span>
+                <span>District</span>
+                <span>Target Farmers</span>
+                <span>Date</span>
+                <span>Status</span>
+                <span>Channel</span>
               </div>
-            ))}
+              {state.advisories.slice(0, 8).map((item) => (
+                <div key={item.id} className="rm-history-row">
+                  <strong>{item.title}</strong>
+                  <span>{item.district}</span>
+                  <span>{item.targetFarmers}</span>
+                  <span>{formatReadableDate(item.createdAt)}</span>
+                  <span className={`rm-severity-pill ${statusTone(item.status)}`}>{item.status}</span>
+                  <span>{item.channel}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </article>
 
-        <aside className="prototype-panel regional-insight-panel">
-          <div className="panel-toolbar">
+        <aside className="rm-card">
+          <div className="rm-card-header">
             <h2>Regional Command Tools</h2>
-            <BellRing size={16} color="#1ea4ff" />
+            <BellRing size={16} color="var(--primary-green)" />
           </div>
-          <div className="regional-command-list">
-            <div className="regional-command-item">
-              <Smartphone size={16} />
+          <div className="rm-command-list">
+            <div className="rm-command-item">
+              <Smartphone size={18} />
               <div>
                 <strong>In-App broadcast ready</strong>
                 <span>Use for quick district-level advisory confirmation.</span>
               </div>
             </div>
-            <div className="regional-command-item">
-              <MessageSquareText size={16} />
+            <div className="rm-command-item">
+              <MessageSquareText size={18} />
               <div>
                 <strong>SMS channel available</strong>
                 <span>Useful for urgent warnings to farmers with low-data access.</span>
               </div>
             </div>
-            <div className="regional-command-item">
-              <Mail size={16} />
+            <div className="rm-command-item">
+              <Mail size={18} />
               <div>
                 <strong>Email summary prepared</strong>
                 <span>Suitable for cooperatives, NGOs, and district reporting.</span>
@@ -1386,61 +1392,63 @@ function AdminRegionalDashboard({ state, setState, backendAdminMode, backendPayl
         </aside>
       </div>
 
-      <div className="management-grid regional-admin-grid">
-        <article className="prototype-panel">
-          <div className="panel-toolbar">
+      <div className="rm-main-grid">
+        <article className="rm-card">
+          <div className="rm-card-header">
             <h2>Community Reports</h2>
-            <button type="button" className="text-link-button primary" onClick={exportCommunityReports}>
+            <button type="button" className="fm-btn ghost" style={{ color: 'var(--primary-green)', fontWeight: 600 }} onClick={exportCommunityReports}>
               <Download size={15} />
               Export Reports
             </button>
           </div>
-          <div className="signup-table management-table regional-community-table">
-            <div className="signup-row signup-head regional-community-head">
-              <span>Report Title</span>
-              <span>Farmer</span>
-              <span>District / Sector</span>
-              <span>Category</span>
-              <span>Severity</span>
-              <span>Date</span>
-              <span>Status</span>
-            </div>
-            {state.communityReports.map((item) => (
-              <div key={item.id} className="signup-row regional-community-row">
-                <strong>{item.title}</strong>
-                <span>{item.author}</span>
-                <span>{item.district} · {item.sector}</span>
-                <span>{item.category}</span>
-                <span className={`status-pill ${severityTone(item.severity)}`}>{item.severity}</span>
-                <span>{formatReadableDate(item.createdAt)}</span>
-                <span className={`status-pill ${statusTone(item.status)}`}>{item.status}</span>
+          <div className="rm-table-wrap">
+            <div className="rm-community-table">
+              <div className="rm-community-head">
+                <span>Report Title</span>
+                <span>Farmer</span>
+                <span>District / Sector</span>
+                <span>Category</span>
+                <span>Severity</span>
+                <span>Date</span>
+                <span>Status</span>
               </div>
-            ))}
+              {state.communityReports.map((item) => (
+                <div key={item.id} className="rm-community-row">
+                  <strong>{item.title}</strong>
+                  <span>{item.author}</span>
+                  <span>{item.district} · {item.sector}</span>
+                  <span>{item.category}</span>
+                  <span className={`rm-severity-pill ${severityTone(item.severity)}`}>{item.severity}</span>
+                  <span>{formatReadableDate(item.createdAt)}</span>
+                  <span className={`rm-severity-pill ${statusTone(item.status)}`}>{item.status}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </article>
 
-        <aside className="prototype-panel regional-insight-panel">
-          <div className="panel-toolbar">
+        <aside className="rm-card">
+          <div className="rm-card-header">
             <h2>Regional Data Labels</h2>
-            <MapPin size={16} color="#1ea4ff" />
+            <MapPin size={16} color="var(--primary-green)" />
           </div>
-          <div className="regional-command-list">
-            <div className="regional-command-item">
-              <CloudRain size={16} />
+          <div className="rm-command-list">
+            <div className="rm-command-item">
+              <CloudRain size={18} />
               <div>
                 <strong>Live Weather Data</strong>
                 <span>Open-Meteo supports real weather context where available.</span>
               </div>
             </div>
-            <div className="regional-command-item">
-              <Sprout size={16} />
+            <div className="rm-command-item">
+              <Sprout size={18} />
               <div>
                 <strong>Demo + Local Advisory Data</strong>
                 <span>Regional outbreak, market, and extension activity run from demo/local sources.</span>
               </div>
             </div>
-            <div className="regional-command-item">
-              <Store size={16} />
+            <div className="rm-command-item">
+              <Store size={18} />
               <div>
                 <strong>Academic Presentation Ready</strong>
                 <span>All flows stay functional without backend APIs for demonstrations.</span>

@@ -25,7 +25,7 @@ export function AppSidebar({ isOpen = false, onClose = () => {} }) {
   const initials = initialsFromName(user?.name);
 
   return (
-    <aside className={isAdmin ? "prototype-sidebar" : isOpen ? "farmer-sidebar open" : "farmer-sidebar"}>
+    <aside className={isAdmin ? `prototype-sidebar${isOpen ? " open" : ""}` : isOpen ? "farmer-sidebar open" : "farmer-sidebar"}>
       <div className={isAdmin ? "sidebar-brand" : "farmer-sidebar-brand"}>
         <div className="farmer-brand-left">
           <div className="brand-mark">
@@ -36,16 +36,14 @@ export function AppSidebar({ isOpen = false, onClose = () => {} }) {
             {!isAdmin ? <span>{brandConfig.farmerSubtitle}</span> : null}
           </div>
         </div>
-        {!isAdmin ? (
-          <button
-            type="button"
-            className="farmer-close-button"
-            aria-label="Close sidebar"
-            onClick={onClose}
-          >
-            <X size={16} />
-          </button>
-        ) : null}
+        <button
+          type="button"
+          className="farmer-close-button"
+          aria-label="Close sidebar"
+          onClick={onClose}
+        >
+          <X size={16} />
+        </button>
       </div>
 
       <div className="sidebar-sections">

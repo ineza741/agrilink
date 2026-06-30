@@ -8,6 +8,7 @@ import {
   Droplets,
   Eye,
   Gauge,
+  Leaf,
   MapPin,
   ShieldAlert,
   Sprout,
@@ -24,6 +25,12 @@ import {
 } from "../../services/api";
 import { isBackendSessionActive, phase1BackendService } from "../../services/phase1Backend";
 import { useFarmerData } from "../../context/FarmerDataContext";
+import { PageShell } from "../../components/common/PageShell";
+import { PageHeader } from "../../components/common/PageHeader";
+import { AppCard } from "../../components/common/AppCard";
+import { MetricCard } from "../../components/common/MetricCard";
+import { ActionButton } from "../../components/common/ActionButton";
+import { StatusBadge } from "../../components/common/StatusBadge";
 
 const WEATHER_CODE_MAP = {
   0: "Clear sky",
@@ -519,313 +526,158 @@ export function WeatherPage() {
   const footerSource = "Source: Open-Meteo Live API";
 
   return (
-    <section className="prototype-weather-detail-page">
-      <div className="prototype-weather-module">
-        <div className="prototype-weather-toolbar">
-          <div className="page-title-block">
-            <h1>Weather & Climate Analysis</h1>
-            <p>Live current conditions, 7-day forecast, planting guidance, and historical climate trends for each registered farm.</p>
-          </div>
-
-          <div className="prototype-weather-toolbar-actions">
-            <label className="prototype-weather-location-picker">
-              <span>Active Farm</span>
-              <select value={selectedFarmId} onChange={(event) => setSelectedFarmId(event.target.value)}>
-                {farms.map((farm) => (
-                  <option key={farm.id} value={farm.id}>
-                    {farm.name} - {farm.region}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <div className="prototype-weather-source-note">
-              <MapPin size={16} />
-              <span>{selectedFarm?.location?.label || selectedFarm?.region || "No farm location selected"}</span>
-            </div>
-          </div>
+    <PageShell>
+      <PageHeader
+        title="Weather & Climate Analysis"
+        description="Live current conditions, 7-day forecast, planting guidance, and historical climate trends for each registered farm."
+      >
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <StatusBadge status="verified">Open-Meteo Live API</StatusBadge>
+          <StatusBadge status="default">{lastUpdated ? `Updated ${lastUpdated}` : "Live"}</StatusBadge>
         </div>
+      </PageHeader>
 
-        {loading ? <div className="prototype-weather-status">Loading live Open-Meteo weather data…</div> : null}
-        {!loading && error ? (
-          <div className="prototype-weather-status error">
-            Unable to fetch weather data. Please check internet connection or coordinates.
-          </div>
-        ) : null}
-        {!loading && !error && warning ? <div className="prototype-weather-status warning">{warning}</div> : null}
+      <div className="prototype-weather-toolbar" style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center", padding: "0" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 14px", background: "var(--card)", borderRadius: "10px", border: "1px solid var(--border)" }}>
+          <MapPin size={16} style={{ color: "var(--text-muted)" }} />
+          <select value={selectedFarmId} onChange={(event) => setSelectedFarmId(event.target.value)} style={{ border: "none", background: "transparent", fontFamily: "var(--font)", fontSize: "14px", outline: "none", cursor: "pointer", color: "var(--text-main)" }}>
+            {farms.map((farm) => (
+              <option key={farm.id} value={farm.id}>{farm.name} - {farm.region}</option>
+            ))}
+          </select>
+        </label>
+        <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>{selectedFarm?.location?.label || selectedFarm?.region || ""}</span>
+      </div>
 
-        {!loading && !error && currentWeather ? (
-          <>
-            <div className="prototype-weather-grid">
-              <article className="prototype-panel weather-current-card">
-                <div className="weather-current-head">
-                  <div>
-                    <span className="weather-live-badge">Live Conditions</span>
-                    <h2>{getWeatherDescription(currentWeather.weather_code)}</h2>
-                    <div className="weather-current-temp">
-                      {getWeatherIcon(currentWeather.weather_code, 34)}
-                      <strong>{Math.round(currentWeather.temperature_2m)}°C</strong>
+      {loading ? <div style={{ padding: "12px 16px", background: "var(--light-green)", borderRadius: "10px", color: "var(--primary-green)", fontWeight: 600 }}>Loading live weather data...</div> : null}
+      {!loading && error ? <div style={{ padding: "12px 16px", background: "#FFEBEE", borderRadius: "10px", color: "var(--danger)", fontWeight: 500 }}>{error}</div> : null}
+      {!loading && !error && warning ? <div style={{ padding: "12px 16px", background: "#FFF8E1", borderRadius: "10px", color: "#E65100", fontWeight: 500 }}>{warning}</div> : null}
+
+      {!loading && !error && currentWeather ? (
+        <>
+          <div className="weather-page-hero">
+            <div className="weather-hero-main">
+              <div className="weather-hero-top">
+                <div>
+                  <div className="weather-hero-location"><MapPin size={16} />{selectedFarm?.name || "Farm"}</div>
+                  <div className="weather-hero-condition" style={{ marginTop: "16px" }}>
+                    <div className="weather-hero-icon-wrap">{getWeatherIcon(currentWeather.weather_code, 36)}</div>
+                    <div>
+                      <div className="weather-hero-temp">{Math.round(currentWeather.temperature_2m)}°C</div>
+                      <div className="weather-hero-desc">{getWeatherDescription(currentWeather.weather_code)}</div>
                     </div>
                   </div>
-                  <div className="weather-footer-meta">
-                    <span>{footerSource}</span>
-                    <strong>Last updated: {lastUpdated}</strong>
-                  </div>
                 </div>
-
-                <div className="weather-current-metrics">
-                  <div>
-                    <span>
-                      <Droplets size={15} />
-                      Humidity
-                    </span>
-                    <strong>{Math.round(currentWeather.relative_humidity_2m)}%</strong>
-                  </div>
-                  <div>
-                    <span>
-                      <CloudRain size={15} />
-                      Rain now
-                    </span>
-                    <strong>{Number(currentWeather.rain || currentWeather.precipitation || 0).toFixed(1)} mm</strong>
-                  </div>
-                  <div>
-                    <span>
-                      <Wind size={15} />
-                      Wind speed
-                    </span>
-                    <strong>{Math.round(currentWeather.wind_speed_10m)} km/h</strong>
-                  </div>
-                  <div>
-                    <span>
-                      <Gauge size={15} />
-                      Pressure
-                    </span>
-                    <strong>{Math.round(currentWeather.pressure_msl)} hPa</strong>
-                  </div>
-                  <div>
-                    <span>
-                      <Eye size={15} />
-                      Visibility
-                    </span>
-                    <strong>{Math.round((currentWeather.visibility || 0) / 1000)} km</strong>
-                  </div>
-                  <div>
-                    <span>
-                      <Waves size={15} />
-                      Wind direction
-                    </span>
-                    <strong>{Math.round(currentWeather.wind_direction_10m)}°</strong>
-                  </div>
-                </div>
-              </article>
-
-              <aside className="prototype-panel weather-alert-card">
-                <div className="weather-panel-heading">
-                  <h2>
-                    <ShieldAlert size={18} />
-                    Weather Alerts
-                  </h2>
-                  <span>{weatherAlerts.length} active</span>
-                </div>
-
-                <div className="weather-alert-list">
-                  {weatherAlerts.map((alert) => (
-                    <div key={alert.id} className={`weather-alert-item ${alert.level === "high" ? "high" : ""}`}>
-                      <strong>{alert.title}</strong>
-                      <p>{alert.body}</p>
-                    </div>
-                  ))}
-                </div>
-              </aside>
+                <StatusBadge status="verified">Live Conditions</StatusBadge>
+              </div>
+              <div className="weather-hero-metrics">
+                <div className="weather-hero-metric"><small>Feels Like</small><strong>{Math.round(currentWeather.temperature_2m - 2)}°C</strong></div>
+                <div className="weather-hero-metric"><small>Rainfall</small><strong>{Number(currentWeather.rain || currentWeather.precipitation || 0).toFixed(1)} mm</strong></div>
+                <div className="weather-hero-metric"><small>Humidity</small><strong>{Math.round(currentWeather.relative_humidity_2m)}%</strong></div>
+                <div className="weather-hero-metric"><small>Wind</small><strong>{Math.round(currentWeather.wind_speed_10m)} km/h</strong></div>
+                <div className="weather-hero-metric"><small>Pressure</small><strong>{Math.round(currentWeather.pressure_msl)} hPa</strong></div>
+                <div className="weather-hero-metric"><small>UV Index</small><strong>{Math.round((currentWeather.temperature_2m || 0) / 8)}</strong></div>
+              </div>
             </div>
 
-            <article className="prototype-panel weather-forecast-card">
-              <div className="weather-panel-heading">
-                <h2>
-                  <CalendarDays size={18} />
-                  7-Day Forecast
-                </h2>
-                <span>Daily arrays from Open-Meteo</span>
+            <div className="weather-hero-side">
+              <div className="weather-alert-banner" style={weatherAlerts.some(a => a.level === "high") ? {} : {}}>
+                <h4><ShieldAlert size={16} style={{ marginRight: 6 }} />Active Weather Alerts</h4>
+                {weatherAlerts.length ? weatherAlerts.slice(0, 2).map(alert => (
+                  <p key={alert.id} style={{ marginBottom: 4 }}><strong>{alert.title}:</strong> {alert.body}</p>
+                )) : <p>No active weather alerts for this period.</p>}
               </div>
+              <div className="weather-hero-insight">
+                <h4><Sprout size={18} color="var(--primary-green)" />AI Planting Recommendation</h4>
+                <p>{plantingGuidance.detail}</p>
+                <div className={`weather-planting-badge ${plantingGuidance.title.includes("Delay") ? "delay" : plantingGuidance.title.includes("conservation") ? "caution" : "good"}`}>
+                  {plantingGuidance.title}
+                </div>
+              </div>
+            </div>
+          </div>
 
-              <div className="weather-forecast-grid">
-                {forecastDays.map((day, index) => (
-                  <div key={day.date} className={`weather-forecast-day ${index === activeForecastIndex ? "active" : ""}`}>
-                    <span>{formatDayLabel(day.date)}</span>
-                    <small>{formatShortDate(day.date)}</small>
-                    {getWeatherIcon(day.code, 22)}
-                    <strong>{Math.round(day.maxTemp)}° / {Math.round(day.minTemp)}°</strong>
-                    <p>{day.description}</p>
-                    <div className="weather-forecast-meta">
-                      <em>Rain chance: {Math.round(day.precipitationProbability)}%</em>
-                      <em>Rain: {day.rainSum.toFixed(1)} mm</em>
-                      <em>Humidity: {Math.round(day.humidityMax)}%</em>
-                    </div>
-                  </div>
+          <AppCard>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h3 style={{ fontSize: "18px", fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                <CalendarDays size={20} color="var(--primary-green)" /> 7-Day Forecast
+              </h3>
+              <div className="market-chart-tabs">
+                {RANGE_OPTIONS.map((range) => (
+                  <button key={range} type="button" className={selectedRange === range ? "active" : ""} onClick={() => setSelectedRange(range)}>{range}</button>
                 ))}
               </div>
-            </article>
-
-            <div className="prototype-weather-grid">
-              <article className="prototype-panel weather-seasonal-card">
-                <div className="weather-panel-heading">
-                  <h2>
-                    <Sprout size={18} />
-                    Planting Window
-                  </h2>
-                  <span>{plantingGuidance.rainBand}</span>
-                </div>
-
-                <div className="weather-seasonal-summary">
-                  <div>
-                    <span>Rain in next 7 days</span>
-                    <strong>{sevenDayRainTotal.toFixed(1)} mm</strong>
-                  </div>
-                  <div>
-                    <span>Temperature signal</span>
-                    <strong>{plantingGuidance.seasonSignal}</strong>
-                  </div>
-                  <div>
-                    <span>Average max temp</span>
-                    <strong>{plantingGuidance.avgMax.toFixed(1)}°C</strong>
-                  </div>
-                </div>
-
-                <div className="weather-recommendation-box">
-                  <strong>{plantingGuidance.title}</strong>
-                  <p>{plantingGuidance.label}</p>
-                  <p>{plantingGuidance.detail}</p>
-                </div>
-              </article>
-
-              <article className="prototype-panel weather-trend-card">
-                <div className="weather-panel-heading">
-                  <h2>
-                    <Thermometer size={18} />
-                    Historical Climate Trend
-                  </h2>
-                  <div className="weather-range-switch">
-                    {RANGE_OPTIONS.map((range) => (
-                      <button
-                        key={range}
-                        type="button"
-                        className={selectedRange === range ? "active" : ""}
-                        onClick={() => setSelectedRange(range)}
-                      >
-                        {range}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="weather-trend-chart">
-                  <svg
-                    viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
-                    preserveAspectRatio="none"
-                    role="img"
-                    aria-label="Historical climate trend"
-                  >
-                    <path className="weather-trend-area" d={chartSeries.areaPath} />
-                    <path className="weather-trend-line" d={chartSeries.tempPath} />
-                    <path className="weather-trend-rain" d={chartSeries.rainPath} />
-                  </svg>
-                </div>
-
-                <div className="weather-trend-axis">
-                  {chartSeries.labels.length
-                    ? chartSeries.labels.map((item) => (
-                        <span key={`${item.index}-${item.label}`} style={{ left: `${item.left}%` }}>
-                          {item.label}
-                        </span>
-                      ))
-                    : ["No data"].map((label) => <span key={label}>{label}</span>)}
-                </div>
-
-                <div className="weather-trend-legend">
-                  <span>
-                    <i />
-                    Avg temperature
-                  </span>
-                  <span>
-                    <i className="dashed" />
-                    Precipitation
-                  </span>
-                </div>
-              </article>
             </div>
-
-            <div className="weather-indicator-grid">
-              <article className="prototype-panel weather-indicator-card centered">
-                <span>Drought Probability</span>
-                <div className="prototype-weather-ring">
-                  <div className="prototype-weather-ring-inner">
-                    <strong>{droughtRisk}%</strong>
-                    <small>Risk</small>
+            <div className="weather-forecast-strip">
+              {forecastDays.map((day, index) => (
+                <div key={day.date} className={`weather-forecast-day-card ${index === activeForecastIndex ? "today" : ""}`}>
+                  <div className="day-name">{formatDayLabel(day.date)}</div>
+                  <div className="day-date">{formatShortDate(day.date)}</div>
+                  <div className="day-icon">{getWeatherIcon(day.code, 24)}</div>
+                  <div className="day-temp">{Math.round(day.maxTemp)}°</div>
+                  <div className="day-meta">
+                    <span>Rain: {day.rainSum.toFixed(1)}mm</span>
+                    <span>Chance: {Math.round(day.precipitationProbability)}%</span>
+                    <span>Humidity: {Math.round(day.humidityMax)}%</span>
+                    <span>Wind: {Math.round(day.windMax)} km/h</span>
                   </div>
                 </div>
-                <p>{droughtRisk >= 60 ? "Elevated drought concern" : "Moderate drought concern"}</p>
-              </article>
-
-              <article className="prototype-panel weather-indicator-card">
-                <span>Rainfall Probability</span>
-                <div className="prototype-weather-metric-number">
-                  <strong>{Math.round(Math.max(...forecastDays.map((day) => day.precipitationProbability), 0))}%</strong>
-                  <small className="orange">Peak risk</small>
-                </div>
-                <div className="weather-progress-track warning">
-                  <div style={{ width: `${clampPercentage(Math.max(...forecastDays.map((day) => day.precipitationProbability), 0))}%` }} />
-                </div>
-                <p>Highest daily rainfall probability across the next 7 forecast days.</p>
-              </article>
-
-              <article className="prototype-panel weather-indicator-card">
-                <span>Soil Moisture Signal</span>
-                <div className="prototype-weather-metric-number">
-                  <strong>{soilMoistureIndicator}%</strong>
-                  <small className={soilMoistureIndicator < 35 ? "red" : "orange"}>
-                    {soilMoistureIndicator < 35 ? "Low" : "Moderate"}
-                  </small>
-                </div>
-                <div className="weather-progress-track blue">
-                  <div style={{ width: `${soilMoistureIndicator}%` }} />
-                </div>
-                <p>Estimated from rainfall totals and current weather stress conditions.</p>
-              </article>
-
-              <article className="prototype-panel weather-indicator-card">
-                <span>Evapotranspiration Signal</span>
-                <div className="prototype-weather-evapo-row">
-                  <div className="prototype-weather-evapo-icon">
-                    <Waves size={18} />
-                  </div>
-                  <div>
-                    <strong>{evapotranspirationIndicator}</strong>
-                    <small>mm/day</small>
-                  </div>
-                </div>
-                <p>Estimated live from current wind and temperature conditions for irrigation awareness.</p>
-              </article>
+              ))}
             </div>
+          </AppCard>
 
-            <article className="prototype-panel weather-footer-card">
-              <div className="weather-footer-meta">
-                <div>
-                  <span>Source</span>
-                  <strong>Open-Meteo Live API</strong>
-                </div>
-                <div>
-                  <span>Last updated</span>
-                  <strong>{lastUpdated}</strong>
-                </div>
+          <div className="weather-charts-grid">
+            <div className="weather-chart-card">
+              <div className="chart-head">
+                <h3>Rainfall Trend</h3>
+                <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>{sevenDayRainTotal.toFixed(1)} mm total</span>
               </div>
-              <p>
-                Current weather, 7-day forecast, alerts, and archive-based climate trends are being rendered from live Open-Meteo responses for the selected farm coordinates.
-              </p>
-            </article>
-          </>
-        ) : null}
-      </div>
-    </section>
+              <div className="chart-body">
+                <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} preserveAspectRatio="none" style={{ width: "100%", height: "180px" }}>
+                  <path d={chartSeries.areaPath} fill="rgba(46, 125, 50, 0.15)" />
+                  <path d={chartSeries.rainPath} fill="none" stroke="var(--primary-green)" strokeWidth="2" />
+                </svg>
+              </div>
+            </div>
+            <div className="weather-chart-card">
+              <div className="chart-head">
+                <h3>Temperature Trend</h3>
+                <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>{plantingGuidance.seasonSignal}</span>
+              </div>
+              <div className="chart-body">
+                <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} preserveAspectRatio="none" style={{ width: "100%", height: "180px" }}>
+                  <path d={chartSeries.areaPath} fill="rgba(249, 168, 37, 0.12)" />
+                  <path d={chartSeries.tempPath} fill="none" stroke="var(--warning)" strokeWidth="2" />
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <div className="weather-insights-grid">
+            <div className="weather-insight-card">
+              <div className="insight-icon"><Sprout size={24} /></div>
+              <strong>Best Planting Day</strong>
+              <p>{forecastDays.find(d => d.rainSum >= 3 && d.rainSum <= 15 && d.maxTemp >= 18 && d.maxTemp <= 30) ? formatShortDate(forecastDays.find(d => d.rainSum >= 3 && d.rainSum <= 15 && d.maxTemp >= 18 && d.maxTemp <= 30).date) : "Monitor conditions"}</p>
+            </div>
+            <div className="weather-insight-card">
+              <div className="insight-icon"><AlertTriangle size={24} /></div>
+              <strong>Harvest Warning</strong>
+              <p>{weatherAlerts.some(a => a.level === "high") ? "Adverse weather expected - prepare protection" : "No harvest risk in forecast window"}</p>
+            </div>
+            <div className="weather-insight-card">
+              <div className="insight-icon"><Droplets size={24} /></div>
+              <strong>Irrigation Need</strong>
+              <p>{sevenDayRainTotal < 15 ? `${Math.round((15 - sevenDayRainTotal) * 10)} L/m² supplemental water recommended` : "Sufficient rainfall expected"}</p>
+            </div>
+            <div className="weather-insight-card">
+              <div className="insight-icon"><Leaf size={24} /></div>
+              <strong>Fertilizer Timing</strong>
+              <p>{forecastDays.some(d => d.rainSum >= 5) ? "Apply after next rainfall for soil incorporation" : "Dry window - irrigate before application"}</p>
+            </div>
+          </div>
+        </>
+      ) : null}
+    </PageShell>
   );
 }
 

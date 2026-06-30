@@ -1,10 +1,15 @@
 import {
   AlertTriangle,
+  BarChart3,
+  CalendarDays,
   CheckCircle2,
+  Clock3,
   Download,
   Eye,
   FileSpreadsheet,
   FileText,
+  Flower2,
+  Heart,
   Mail,
   Map,
   MapPin,
@@ -13,6 +18,7 @@ import {
   RotateCcw,
   Search,
   ShieldCheck,
+  Sprout,
   Tractor,
   Upload,
   Users,
@@ -25,6 +31,12 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useFarmerData } from "../../context/FarmerDataContext";
 import { phase1BackendService } from "../../services/phase1Backend";
+import { getFarmImage } from "../../data/cropImages";
+import { PageShell } from "../../components/common/PageShell";
+import { PageHeader } from "../../components/common/PageHeader";
+import { ActionButton } from "../../components/common/ActionButton";
+import { StatusBadge } from "../../components/common/StatusBadge";
+import { MetricCard } from "../../components/common/MetricCard";
 
 const DEMO_MODE = true;
 const RWANDA_REGIONS = [
@@ -157,6 +169,63 @@ function parseCsvRegistry(text) {
   return { rows, errors };
 }
 
+function formatRelativeTime(dateValue) {
+  if (!dateValue) return "Recently";
+  const now = new Date();
+  const date = new Date(dateValue);
+  const diffMs = now - date;
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+  return formatReadableDate(dateValue);
+}
+
+function getSoilHealthLabel(farm) {
+  const score = farm.soilHealthScore;
+  if (score == null) {
+    return farm.verificationStatus === "verified" ? "Good" : "Moderate";
+  }
+  if (score >= 75) return "Excellent";
+  if (score >= 55) return "Good";
+  if (score >= 35) return "Moderate";
+  return "Needs Attention";
+}
+
+function getCropHealthLabel(farm) {
+  return farm.verificationStatus === "verified" ? "Healthy" : "Stable";
+}
+
+const cropEmoji = {
+  Beans: "🫘", Maize: "🌽", Corn: "🌽", "Hybrid Corn": "🌽",
+  Tomato: "🍅", Tomatoes: "🍅",
+  Potato: "🥔", Potatoes: "🥔", "Irish Potato": "🥔",
+  "Sweet Potato": "🍠",
+  Rice: "🍚", Cassava: "🌿",
+  Coffee: "☕", Tea: "🍵",
+  Banana: "🍌", Plantain: "🍌",
+  Carrots: "🥕", Onions: "🧅",
+  Wheat: "🌾", Cabbage: "🥬",
+  Soybeans: "🫘", Barley: "🌾",
+  Sorghum: "🌾", Groundnuts: "🥜",
+  Peas: "🫛", Vegetables: "🥦",
+  Cereals: "🌾", Almonds: "🥜",
+};
+
+const historyChipColors = {
+  Beans: "#2E7D32", Maize: "#F9A825", Corn: "#F9A825",
+  Tomato: "#E53935", Potato: "#8D6E63",
+  Rice: "#43A047", Coffee: "#6D4C41",
+  Tea: "#558B2F", Banana: "#FDD835",
+  Carrots: "#FF6F00", Onions: "#7B1FA2",
+  Wheat: "#FF8F00", Cabbage: "#388E3C",
+  Soybeans: "#33691E", Barley: "#A1887F",
+  Sorghum: "#BF360C", Groundnuts: "#D84315",
+  Peas: "#689F38", Vegetables: "#43A047",
+  Almonds: "#A1887F",
+};
+
 function FarmerFarmsView() {
   const navigate = useNavigate();
   const { currentFarms, currentProfile, getProfileCompleteness } = useFarmerData();
@@ -165,11 +234,7 @@ function FarmerFarmsView() {
 
   const visibleFarms = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-
-    if (!normalizedQuery) {
-      return currentFarms;
-    }
-
+    if (!normalizedQuery) return currentFarms;
     return currentFarms.filter((farm) =>
       [farm.name, farm.region, farm.primaryCrop, farm.plotLabel]
         .join(" ")
@@ -182,7 +247,6 @@ function FarmerFarmsView() {
     const totalAcreage = currentFarms.reduce((sum, farm) => sum + Number(farm.sizeHectares || 0), 0);
     const verifiedFarms = currentFarms.filter((farm) => farm.verificationStatus === "verified").length;
     const cooperativePlots = currentFarms.filter((farm) => farm.cooperativeName).length;
-
     return [
       { label: "Total Acreage", value: totalAcreage.toFixed(totalAcreage % 1 === 0 ? 0 : 1), unit: "ha" },
       { label: "Verified Farms", value: `${verifiedFarms}/${currentFarms.length || 0}` },
@@ -192,130 +256,169 @@ function FarmerFarmsView() {
   }, [currentFarms, getProfileCompleteness, user.id]);
 
   return (
-    <section className="management-page prototype-farms-page">
-      <div className="page-title-block prototype-profile-title">
-        <h1>Farmer Profile &amp; Farm Management</h1>
-        <p>Academic-grade decision support and asset oversight for modern agriculture.</p>
-      </div>
-
-      <div className="prototype-farms-head enhanced">
-        <div>
-          <h2>Registered Farms</h2>
-          <p className="profile-section-copy">
-            Manage multiple plots, track historical crop performance, and prepare cooperative registrations.
-          </p>
-        </div>
-
-        <div className="prototype-farms-actions">
-          <label className="prototype-inline-search compact">
-            <Search size={16} />
-            <input
-              type="text"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search farms, plots, crops, or regions..."
-            />
-          </label>
-          <button
-            type="button"
-            className="profile-prototype-button primary"
-            onClick={() => navigate("/farms/new")}
-          >
-            <PlusCircle size={16} />
-            <span>Add New Farm</span>
-          </button>
-        </div>
-      </div>
-
-      <div className="profile-farm-list">
-        {visibleFarms.map((farm) => (
-          <article key={farm.id} className="prototype-panel profile-farm-card">
-            <div className="profile-farm-map">
-              <div className="profile-farm-map-grid" />
-              <div className="profile-farm-map-road road-a" />
-              <div className="profile-farm-map-road road-b" />
-              <div className="profile-farm-map-road road-c" />
-              <div
-                className="profile-farm-pin dynamic-pin"
-                style={{
-                  left: `${farm.location.mapX}%`,
-                  top: `${farm.location.mapY}%`,
-                }}
+    <PageShell>
+      <PageHeader
+        title="Registered Farms"
+        subtitle="Manage multiple plots, track historical crop performance, and prepare cooperative registrations"
+        actions={
+          <div className="farm-header-actions">
+            <label className="farm-search">
+              <Search size={16} />
+              <input
+                type="text"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search farms, crops, or regions..."
               />
-              <div className="profile-farm-coordinates">
-                {farm.location.lat.toFixed(2)}° , {farm.location.lng.toFixed(2)}°
-              </div>
-            </div>
+            </label>
+            <ActionButton variant="primary" onClick={() => navigate("/farms/new")}>
+              <PlusCircle size={16} />
+              <span>Add Farm</span>
+            </ActionButton>
+          </div>
+        }
+      />
 
-            <div className="profile-farm-content">
-              <div className="profile-farm-top">
-                <div>
-                  <h3>{farm.name}</h3>
-                  <div className="profile-farm-meta">
-                    <span>
-                      <MapPin size={14} />
-                      {farm.sizeHectares} Hectares
-                    </span>
-                    <span>
-                      <Waves size={14} />
-                      {farm.irrigationType}
-                    </span>
+      <div className="farm-metrics-row">
+        {farmMetrics.map((metric) => (
+          <MetricCard
+            key={metric.label}
+            label={metric.label}
+            value={metric.value}
+            suffix={metric.unit}
+            color="green"
+          />
+        ))}
+      </div>
+
+      <div className="farm-card-grid">
+        {visibleFarms.map((farm) => {
+          const heroImage = getFarmImage(farm);
+          const soilHealth = getSoilHealthLabel(farm);
+          const cropHealth = getCropHealthLabel(farm);
+          const hasCoords = farm.location?.lat != null && farm.location?.lng != null;
+          const cropKey = Object.keys(cropEmoji).find(
+            (k) => k.toLowerCase() === (farm.primaryCrop || "").toLowerCase()
+          ) || Object.keys(cropEmoji).find(
+            (k) => (farm.primaryCrop || "").toLowerCase().includes(k.toLowerCase())
+          );
+          const emoji = cropKey ? cropEmoji[cropKey] : "🌿";
+          return (
+            <article key={farm.id} className="farm-card">
+              <div className="farm-card-hero">
+                <img src={heroImage} alt={farm.primaryCrop} className="farm-card-hero-img" loading="lazy" onError={(e) => { e.target.src = getFarmImage(); }} />
+                <div className="farm-card-overlay">
+                  <div className="farm-card-overlay-info">
+                    <h3 className="farm-card-hero-title">{farm.name}</h3>
+                    <div className="farm-card-hero-crop-row">
+                      <span className="farm-card-hero-emoji">{emoji}</span>
+                      <span className="farm-card-hero-crop">{farm.primaryCrop || "Mixed Crops"}</span>
+                    </div>
+                    <span className="farm-card-hero-district">{farm.region || "Unspecified Region"}</span>
+                  </div>
+                  <div className="farm-card-overlay-badges">
+                    <StatusBadge variant={farm.verificationStatus === "verified" ? "success" : farm.verificationStatus === "pending" ? "warning" : "error"}>
+                      {formatStatus(farm.verificationStatus)}
+                    </StatusBadge>
+                    {farm.cooperativeName ? <StatusBadge variant="info">Co-op</StatusBadge> : null}
+                    {farm.status === "active" ? <StatusBadge variant="success">Active</StatusBadge> : null}
                   </div>
                 </div>
-                <span className={`profile-farm-status ${farm.verificationStatus}`}>
-                  {formatStatus(farm.verificationStatus)}
-                </span>
               </div>
 
-              <div className="profile-farm-history">
-                <span>Crop History</span>
-                <div className="profile-history-tags">
-                  {farm.history.map((item) => (
-                    <span key={item.id} className="profile-history-tag">
-                      {item.crop} ({item.season})
-                    </span>
-                  ))}
+              <div className="farm-card-body">
+                <div className="farm-card-details-grid">
+                  <div className="farm-card-detail-item">
+                    <MapPin size={14} />
+                    <span className="farm-card-detail-label">Size</span>
+                    <span className="farm-card-detail-value">{farm.sizeHectares || 0} ha</span>
+                  </div>
+                  <div className="farm-card-detail-item">
+                    <Waves size={14} />
+                    <span className="farm-card-detail-label">Irrigation</span>
+                    <span className="farm-card-detail-value">{farm.irrigationType || "Rain-fed"}</span>
+                  </div>
+                  <div className="farm-card-detail-item">
+                    <Sprout size={14} />
+                    <span className="farm-card-detail-label">Crop</span>
+                    <span className="farm-card-detail-value">{farm.primaryCrop || "Mixed"}</span>
+                  </div>
+                  <div className="farm-card-detail-item">
+                    <Flower2 size={14} />
+                    <span className="farm-card-detail-label">Crop Health</span>
+                    <span className="farm-card-detail-value">{cropHealth}</span>
+                  </div>
+                  <div className="farm-card-detail-item">
+                    <Heart size={14} />
+                    <span className="farm-card-detail-label">Soil Health</span>
+                    <span className="farm-card-detail-value">{soilHealth}</span>
+                  </div>
+                  <div className="farm-card-detail-item">
+                    <CalendarDays size={14} />
+                    <span className="farm-card-detail-label">Last Inspected</span>
+                    <span className="farm-card-detail-value">{farm.updatedAt ? formatRelativeTime(farm.updatedAt) : "N/A"}</span>
+                  </div>
                 </div>
-                <p className="profile-farm-challenges">
-                  Historical notes: {farm.history[0]?.challenges || "No major challenges recorded yet."}
-                </p>
-              </div>
 
-              <div className="profile-farm-extra">
-                <span>Land Type: {farm.landType}</span>
-                <span>Primary Crop: {farm.primaryCrop}</span>
-                {currentProfile?.cooperativeName ? <span>Cooperative: {currentProfile.cooperativeName}</span> : null}
-              </div>
+                {farm.history.length > 0 ? (
+                  <div className="farm-card-history">
+                    {farm.history.map((item) => {
+                      const chipKey = Object.keys(cropEmoji).find(
+                        (k) => k.toLowerCase() === (item.crop || "").toLowerCase()
+                      ) || Object.keys(cropEmoji).find(
+                        (k) => (item.crop || "").toLowerCase().includes(k.toLowerCase())
+                      );
+                      const chipEmoji = chipKey ? cropEmoji[chipKey] : "🌿";
+                      const chipBg = chipKey ? historyChipColors[chipKey] : "#2E7D32";
+                      return (
+                        <span
+                          key={item.id}
+                          className="farm-history-chip"
+                          style={{
+                            background: `${chipBg}1A`,
+                            color: chipBg,
+                            border: `1px solid ${chipBg}33`,
+                          }}
+                        >
+                          <span>{chipEmoji}</span>
+                          <span>{item.crop}</span>
+                          <span className="farm-history-chip-season">{item.season}</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : null}
 
-              <div className="profile-farm-actions">
-                <button type="button" className="profile-farm-link muted" onClick={() => navigate("/analytics")}>
-                  Analytics
-                </button>
-                <button
-                  type="button"
-                  className="profile-farm-link primary"
-                  onClick={() => navigate(`/farms/new?edit=${farm.id}`)}
-                >
-                  Manage Farm
-                </button>
+                <div className="farm-card-footer">
+                  <div className="farm-card-timestamp">
+                    <Clock3 size={12} />
+                    <span>{farm.updatedAt ? `Updated ${formatRelativeTime(farm.updatedAt)}` : "Newly registered"}</span>
+                  </div>
+                  <div className="farm-card-actions">
+                    <ActionButton variant="primary" size="sm" onClick={() => navigate(`/farms/new?edit=${farm.id}`)}>
+                      <Tractor size={14} />
+                      <span>Manage Farm</span>
+                    </ActionButton>
+                    <ActionButton variant="ghost" size="sm" onClick={() => navigate("/analytics")}>
+                      <BarChart3 size={14} />
+                      <span>Analytics</span>
+                    </ActionButton>
+                    <ActionButton variant="ghost" size="sm" onClick={() => navigate("/dashboard")}>
+                      <Map size={14} />
+                      <span>View Map</span>
+                    </ActionButton>
+                    <ActionButton variant="ghost" size="sm" onClick={() => navigate(`/farms/history/${farm.id}`)}>
+                      <RotateCcw size={14} />
+                      <span>Crop History</span>
+                    </ActionButton>
+                  </div>
+                </div>
               </div>
-            </div>
-          </article>
-        ))}
+            </article>
+          );
+        })}
       </div>
-
-      <div className="profile-metric-grid wide">
-        {farmMetrics.map((metric) => (
-          <article key={metric.label} className="profile-metric-card">
-            <span>{metric.label}</span>
-            <strong>
-              {metric.value}
-              {metric.unit ? <small>{metric.unit}</small> : null}
-            </strong>
-          </article>
-        ))}
-      </div>
-    </section>
+    </PageShell>
   );
 }
 
@@ -744,30 +847,29 @@ function AdminFarmsView() {
   const selectedFarmerFarms = profileModalFarmer ? getFarmsByOwner(profileModalFarmer.userId) : [];
 
   return (
-    <section className="management-page prototype-admin-farmers-page prototype-admin-farmers-page-v2">
-      <div className="prototype-admin-farmers-title">
-        <h1>Farmer Management</h1>
-        <p>
-          Centralized farmer and farm database for verification, multi-farm support, bulk onboarding,
-          and extension-officer decision workflow.
-        </p>
+    <section className="fm-page">
+      <div className="fm-header">
+        <div className="fm-header-row">
+          <div>
+            <h1>Farmer Management</h1>
+            <p>Centralized farmer and farm database for verification, multi-farm support, bulk onboarding, and extension-officer decision workflow.</p>
+          </div>
+          <div className="fm-badges">
+            <span className="fm-badge blue">DEMO_MODE</span>
+            <span className="fm-badge green">Local Demo Registry Data</span>
+          </div>
+        </div>
       </div>
 
-      <div className="prototype-admin-registry-banner">
-        <span className="status-pill tone-blue">DEMO_MODE</span>
-        <strong>Local Demo Registry Data</strong>
-        <small>Frontend-only farmer records, approvals, and farm assets stored in localStorage.</small>
-      </div>
-
-      <div className="prototype-admin-farmers-summary-grid prototype-admin-farmers-summary-grid-v2">
+      <div className="fm-summary-grid">
         {summaryCards.map((item) => {
           const Icon = item.icon;
           return (
-            <article key={item.label} className="prototype-panel prototype-admin-farmers-summary-card">
-              <div className={`prototype-admin-farmers-summary-icon ${item.tone}`}>
+            <article key={item.label} className="fm-summary-card">
+              <div className={`fm-summary-icon ${item.tone}`}>
                 <Icon size={18} />
               </div>
-              <div>
+              <div className="fm-summary-info">
                 <span>{item.label}</span>
                 <strong>{item.value}</strong>
               </div>
@@ -776,15 +878,15 @@ function AdminFarmsView() {
         })}
       </div>
 
-      <div className="prototype-admin-registry-banner">
-        <span className="status-pill tone-green">{registryInsight.verificationRate}% verified</span>
+      <div className="fm-insight-banner">
+        <span className="fm-badge green">{registryInsight.verificationRate}% verified</span>
         <strong>{registryInsight.topRegion}</strong>
         <small>{registryInsight.multiFarmFarmers} farmers currently manage more than one registered farm.</small>
       </div>
 
-      <div className="prototype-admin-farmers-filters">
-        <label className="prototype-admin-farmers-search">
-          <Search size={17} />
+      <div className="fm-toolbar">
+        <label className="fm-search">
+          <Search size={16} />
           <input
             type="text"
             value={query}
@@ -792,8 +894,8 @@ function AdminFarmsView() {
             placeholder="Search farmers by name, ID, contact, crop, or email..."
           />
         </label>
-        <label className="prototype-admin-farmers-region real-select">
-          <MapPin size={17} />
+        <label className="fm-select-wrap">
+          <MapPin size={16} />
           <select value={regionFilter} onChange={(event) => setRegionFilter(event.target.value)}>
             {regions.map((region) => (
               <option key={region} value={region}>
@@ -804,323 +906,233 @@ function AdminFarmsView() {
         </label>
       </div>
 
-      <div className="prototype-admin-farmers-tools">
-        <article className="prototype-panel prototype-admin-farmers-bulk-card prototype-admin-bulk-card-v2">
-          <div className="panel-toolbar">
+      <div className="fm-tools-grid">
+        <article className="fm-card">
+          <div className="fm-card-header">
             <h2>Bulk Farmer Onboarding</h2>
-            <div className="prototype-admin-inline-actions">
-              <button type="button" className="details-button" onClick={handleBulkPreview}>
-                Preview Import
-              </button>
-              <button type="button" className="approve-button" onClick={handleBulkOnboard}>
-                Save Farmers
-              </button>
+            <div className="fm-card-header-actions">
+              <button type="button" className="fm-btn secondary" onClick={handleBulkPreview}>Preview Import</button>
+              <button type="button" className="fm-btn primary" onClick={handleBulkOnboard}>Save Farmers</button>
             </div>
           </div>
-          <p className="profile-section-copy">
-            Expected CSV format: <code>Name, Email, Phone, Region, District, Sector, Primary Crop, Experience Level</code>
-          </p>
-
-          <div className="prototype-admin-bulk-inputs">
+          <div className="fm-card-body">
+            <p className="fm-code-hint">Expected CSV format: <code>Name, Email, Phone, Region, District, Sector, Primary Crop, Experience Level</code></p>
             <textarea
               value={bulkText}
               onChange={(event) => setBulkText(event.target.value)}
               placeholder="Name, Email, Phone, Region, District, Sector, Primary Crop, Experience Level"
-              rows="6"
-              className="prototype-admin-bulk-textarea"
+              rows="5"
+              className="fm-bulk-textarea"
             />
-            <div className="prototype-admin-bulk-upload-panel">
-              <button
-                type="button"
-                className="prototype-admin-secondary-button full"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Upload size={15} />
-                <span>Upload CSV File</span>
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,text/csv"
-                className="visually-hidden"
-                onChange={handleCsvUpload}
-              />
-              <div className="prototype-admin-bulk-format">
+            <div className="fm-bulk-meta">
+              <div className="fm-bulk-upload">
+                <button type="button" className="fm-btn secondary" onClick={() => fileInputRef.current?.click()}>
+                  <Upload size={15} />
+                  <span>Upload CSV File</span>
+                </button>
+                <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="visually-hidden" onChange={handleCsvUpload} />
+              </div>
+              <div className="fm-bulk-format">
                 <strong>Validation checks</strong>
-                <span>Missing fields are flagged before import.</span>
+                <span> — Missing fields are flagged before import.</span>
               </div>
             </div>
-          </div>
-
-          {bulkStatus ? <span className="prototype-admin-bulk-status">{bulkStatus}</span> : null}
-
-          {!!previewRows.length && (
-            <div className="prototype-admin-import-preview">
-              <div className="prototype-admin-import-preview-head">
-                <strong>Import Preview</strong>
-                <span>{previewRows.length} row(s)</span>
-              </div>
-              <div className="prototype-admin-import-preview-table">
-                {previewRows.slice(0, 5).map((row) => (
-                  <div key={row.id} className="prototype-admin-import-preview-row">
-                    <span>{row.fullName || "Missing name"}</span>
-                    <span>{row.region}</span>
-                    <span>{row.primaryCrop}</span>
-                    <small>{row.missingFields.length ? `Missing: ${row.missingFields.join(", ")}` : "Ready"}</small>
-                  </div>
-                ))}
-              </div>
-              {!!previewErrors.length && (
-                <div className="prototype-admin-import-errors">
-                  {previewErrors.map((error) => (
-                    <p key={error}>{error}</p>
+            {bulkStatus ? <span className="fm-bulk-status">{bulkStatus}</span> : null}
+            {!!previewRows.length && (
+              <div className="fm-preview">
+                <div className="fm-preview-head">
+                  <strong>Import Preview</strong>
+                  <span>{previewRows.length} row(s)</span>
+                </div>
+                <div className="fm-preview-table">
+                  {previewRows.slice(0, 5).map((row) => (
+                    <div key={row.id} className="fm-preview-row">
+                      <span>{row.fullName || "Missing name"}</span>
+                      <span>{row.region}</span>
+                      <span>{row.primaryCrop}</span>
+                      <small>{row.missingFields.length ? `Missing: ${row.missingFields.join(", ")}` : "Ready"}</small>
+                    </div>
                   ))}
                 </div>
-              )}
-            </div>
-          )}
+                {!!previewErrors.length && (
+                  <div className="fm-preview-errors">
+                    {previewErrors.map((error) => (
+                      <p key={error}>{error}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </article>
 
-        <article className="prototype-panel prototype-admin-farmers-bulk-card compact prototype-admin-export-card">
-          <div className="panel-toolbar">
+        <article className="fm-card">
+          <div className="fm-card-header">
             <h2>Data Export</h2>
-            <Download size={16} color="#1ea4ff" />
+            <Download size={16} color="var(--primary-green)" />
           </div>
-          <p className="profile-section-copy">
-            Export filtered farmer and farm records for extension coordination, NGO reporting, and academic review.
-          </p>
-          <div className="prototype-admin-export-actions">
-            <button type="button" className="prototype-admin-secondary-button full" onClick={handleExportCsv}>
-              <FileText size={15} />
-              <span>Export CSV</span>
-            </button>
-            <button type="button" className="prototype-admin-secondary-button full" onClick={handleExportExcel}>
-              <FileSpreadsheet size={15} />
-              <span>Export Excel</span>
-            </button>
-            <button type="button" className="prototype-admin-secondary-button full" onClick={handleExportReport}>
-              <Download size={15} />
-              <span>Export NGO/Government Report</span>
-            </button>
+          <div className="fm-card-body">
+            <p className="fm-code-hint">Export filtered farmer and farm records for extension coordination, NGO reporting, and academic review.</p>
+            <div className="fm-export-actions">
+              <button type="button" className="fm-btn secondary full" onClick={handleExportCsv}>
+                <FileText size={15} />
+                <span>Export CSV</span>
+              </button>
+              <button type="button" className="fm-btn secondary full" onClick={handleExportExcel}>
+                <FileSpreadsheet size={15} />
+                <span>Export Excel</span>
+              </button>
+              <button type="button" className="fm-btn secondary full" onClick={handleExportReport}>
+                <Download size={15} />
+                <span>Export NGO/Government Report</span>
+              </button>
+            </div>
           </div>
         </article>
       </div>
 
-      <article className="prototype-panel prototype-admin-farmers-table-card prototype-admin-farmers-table-card-v2">
-        <div className="prototype-admin-farmers-table">
-          <div className="prototype-admin-farmers-head prototype-admin-farmers-head-v2">
-            <span>Farmer Name</span>
-            <span>Farmer ID</span>
-            <span>Contact</span>
-            <span>Region / District / Sector</span>
-            <span>Number of Farms</span>
-            <span>Primary Crop</span>
-            <span>Profile Completeness</span>
-            <span>Verification Status</span>
-            <span>Joined Date</span>
-            <span>Actions</span>
-          </div>
-
-          {pagedRows.map((farmer) => (
-            <div key={farmer.userId} className="prototype-admin-farmers-row prototype-admin-farmers-row-v2">
-              <div className="prototype-admin-farmer-cell">
-                <div className="prototype-admin-farmer-badge">{farmer.initials}</div>
-                <div>
-                  <strong>{farmer.name}</strong>
-                  <span>{farmer.experienceLevel}</span>
-                </div>
-              </div>
-              <span>{farmer.id}</span>
-              <div className="prototype-admin-contact-cell">
-                <span><Phone size={13} /> {farmer.contact}</span>
-                <small><Mail size={13} /> {farmer.email}</small>
-              </div>
-              <span>{farmer.region}</span>
-              <div className="prototype-admin-farms-count">
-                <strong>{farmer.farmCount}</strong>
-                <div className="prototype-admin-farms-inline-actions">
-                  <button
-                    type="button"
-                    className="prototype-admin-action-button farm-link-button"
-                    onClick={() => handleOpenProfile(farmer)}
-                  >
-                    View farms
-                  </button>
-                  <button
-                    type="button"
-                    className="prototype-admin-action-button farm-link-button"
-                    onClick={() => navigate("/farms/new")}
-                  >
-                    Add farm
-                  </button>
-                </div>
-              </div>
-              <span>{farmer.primaryCrop}</span>
-              <span>{farmer.completeness}%</span>
-              <span className={`status-pill tone-${getStatusTone(farmer.status)}`}>
-                {formatStatus(farmer.status)}
-              </span>
-              <span>{farmer.joinedLabel}</span>
-              <div className="prototype-admin-farmer-actions prototype-admin-farmer-actions-v2">
-                <button
-                  type="button"
-                  className="prototype-admin-action-button action-view"
-                  onClick={() => handleOpenProfile(farmer)}
-                >
-                  <Eye size={14} />
-                  <span>View Profile</span>
-                </button>
-                {farmer.status !== "verified" && farmer.status !== "deactivated" ? (
-                  <button
-                    type="button"
-                    className="prototype-admin-action-button action-approve"
-                    onClick={() => {
-                      approveProfile(farmer.userId, "AgriFeed Admin");
-                      setBulkStatus(`Approved ${farmer.name}.`);
-                    }}
-                  >
-                    Approve
-                  </button>
-                ) : null}
-                {farmer.status === "pending" ? (
-                  <button
-                    type="button"
-                    className="prototype-admin-action-button action-reject"
-                    onClick={() => {
-                      rejectProfile(farmer.userId, "AgriFeed Admin");
-                      setBulkStatus(`Rejected ${farmer.name}.`);
-                    }}
-                  >
-                    Reject
-                  </button>
-                ) : null}
-                {farmer.status !== "deactivated" ? (
-                  <button
-                    type="button"
-                    className="prototype-admin-action-button action-deactivate"
-                    onClick={() => {
-                      deactivateProfile(farmer.userId);
-                      setBulkStatus(`Deactivated ${farmer.name}.`);
-                    }}
-                  >
-                    Deactivate
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="prototype-admin-action-button action-reactivate"
-                    onClick={() => {
-                      reactivateProfile(farmer.userId);
-                      setBulkStatus(`Reactivated ${farmer.name}.`);
-                    }}
-                  >
-                    <RotateCcw size={14} />
-                    <span>Reactivate</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
+      <article className="fm-card">
+        <div className="fm-card-header">
+          <h2>Farmer Registry</h2>
+          <span className="fm-code-hint">{visibleRows.length} farmer{visibleRows.length !== 1 ? "s" : ""}</span>
         </div>
-
-        <div className="prototype-admin-farmers-footer">
-          <span>
-            Showing {pagedRows.length ? (page - 1) * itemsPerPage + 1 : 0}-{Math.min(page * itemsPerPage, visibleRows.length)} of {visibleRows.length} filtered farmers
-          </span>
-          <div className="prototype-admin-farmers-pager">
-            <button
-              type="button"
-              className="prototype-admin-pager-button"
-              disabled={page === 1}
-              onClick={() => setPage((current) => Math.max(1, current - 1))}
-            >
-              Previous
-            </button>
-            <span className="prototype-admin-pager-indicator">Page {page} of {totalPages}</span>
-            <button
-              type="button"
-              className="prototype-admin-pager-button"
-              disabled={page === totalPages}
-              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-            >
-              Next
-            </button>
+        <div className="fm-table-wrap">
+          <div className="fm-table">
+            <div className="fm-table-head">
+              <span>Farmer Name</span>
+              <span>Farmer ID</span>
+              <span>Contact</span>
+              <span>Region</span>
+              <span>Farms</span>
+              <span>Crop</span>
+              <span>Completeness</span>
+              <span>Status</span>
+              <span>Joined</span>
+              <span>Actions</span>
+            </div>
+            {pagedRows.map((farmer) => (
+              <div key={farmer.userId} className="fm-table-row">
+                <div className="fm-farmer-cell">
+                  <div className="fm-farmer-avatar">{farmer.initials}</div>
+                  <div className="fm-farmer-info">
+                    <strong>{farmer.name}</strong>
+                    <span>{farmer.experienceLevel}</span>
+                  </div>
+                </div>
+                <span>{farmer.id}</span>
+                <div className="fm-contact-cell">
+                  <span><Phone size={12} /> {farmer.contact}</span>
+                  <small><Mail size={12} /> {farmer.email}</small>
+                </div>
+                <span>{farmer.region}</span>
+                <div className="fm-farms-cell">
+                  <strong>{farmer.farmCount}</strong>
+                  <div className="fm-farms-links">
+                    <button type="button" className="fm-link-btn" onClick={() => handleOpenProfile(farmer)}>View farms</button>
+                    <button type="button" className="fm-link-btn" onClick={() => navigate("/farms/new")}>Add farm</button>
+                  </div>
+                </div>
+                <span>{farmer.primaryCrop}</span>
+                <span>{farmer.completeness}%</span>
+                <span className={`fm-status ${getStatusTone(farmer.status)}`}>{formatStatus(farmer.status)}</span>
+                <span>{farmer.joinedLabel}</span>
+                <div className="fm-actions">
+                  <button type="button" className="fm-action-btn view" onClick={() => handleOpenProfile(farmer)}>
+                    <Eye size={12} />
+                    <span>View</span>
+                  </button>
+                  {farmer.status !== "verified" && farmer.status !== "deactivated" ? (
+                    <button type="button" className="fm-action-btn approve" onClick={() => { approveProfile(farmer.userId, "AgriFeed Admin"); setBulkStatus(`Approved ${farmer.name}.`); }}>
+                      Approve
+                    </button>
+                  ) : null}
+                  {farmer.status === "pending" ? (
+                    <button type="button" className="fm-action-btn reject" onClick={() => { rejectProfile(farmer.userId, "AgriFeed Admin"); setBulkStatus(`Rejected ${farmer.name}.`); }}>
+                      Reject
+                    </button>
+                  ) : null}
+                  {farmer.status !== "deactivated" ? (
+                    <button type="button" className="fm-action-btn deactivate" onClick={() => { deactivateProfile(farmer.userId); setBulkStatus(`Deactivated ${farmer.name}.`); }}>
+                      Deactivate
+                    </button>
+                  ) : (
+                    <button type="button" className="fm-action-btn reactivate" onClick={() => { reactivateProfile(farmer.userId); setBulkStatus(`Reactivated ${farmer.name}.`); }}>
+                      <RotateCcw size={12} />
+                      <span>Reactivate</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="fm-table-footer">
+          <span>Showing {pagedRows.length ? (page - 1) * itemsPerPage + 1 : 0}-{Math.min(page * itemsPerPage, visibleRows.length)} of {visibleRows.length} filtered farmers</span>
+          <div className="fm-pager">
+            <button type="button" className="fm-pager-btn" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Previous</button>
+            <span className="fm-pager-indicator">Page {page} of {totalPages}</span>
+            <button type="button" className="fm-pager-btn" disabled={page === totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>Next</button>
           </div>
         </div>
       </article>
 
-      <footer className="prototype-admin-farmers-bottom">
-        <span>© 2026 AgriSupport farmer registry. Workflow, approvals, and onboarding records are stored as Local Demo Registry Data.</span>
-      </footer>
+      <div className="fm-bottom">© 2026 AgriSupport farmer registry. Workflow, approvals, and onboarding records are stored as Local Demo Registry Data.</div>
 
       {profileModalFarmer ? (
-        <div className="recommendation-modal-backdrop" onClick={() => setProfileModalFarmer(null)}>
-          <div
-            className="recommendation-feedback-modal prototype-admin-profile-modal"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="prototype-admin-profile-modal-head">
-              <div>
+        <div className="fm-modal-backdrop" onClick={() => setProfileModalFarmer(null)}>
+          <div className="fm-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="fm-modal-head">
+              <div className="fm-modal-head-left">
                 <h3>{profileModalFarmer.name}</h3>
-                <span className={`status-pill tone-${getStatusTone(profileModalFarmer.status)}`}>
-                  {formatStatus(profileModalFarmer.status)}
-                </span>
+                <span className={`fm-status ${getStatusTone(profileModalFarmer.status)}`}>{formatStatus(profileModalFarmer.status)}</span>
               </div>
-              <button type="button" className="icon-button plain" onClick={() => setProfileModalFarmer(null)}>
+              <button type="button" className="fm-btn ghost" onClick={() => setProfileModalFarmer(null)}>
                 <X size={16} />
               </button>
             </div>
-
-            <div className="prototype-admin-profile-modal-grid">
-              <div className="prototype-admin-profile-facts">
-                <p><Phone size={15} /> <span>{profileModalFarmer.contact}</span></p>
-                <p><Mail size={15} /> <span>{profileModalFarmer.email}</span></p>
-                <p><MapPin size={15} /> <span>{profileModalFarmer.region}</span></p>
-                <p><Users size={15} /> <span>{profileModalFarmer.experienceLevel}</span></p>
-                <p><ShieldCheck size={15} /> <span>{profileModalFarmer.completeness}% profile completeness</span></p>
-                <p><Tractor size={15} /> <span>{profileModalFarmer.farmCount || selectedFarmerFarms.length} registered farm(s)</span></p>
-                <p><Map size={15} /> <span>{Number(profileModalFarmer.totalFarmSize || 0).toFixed(1)} {profileModalFarmer.totalFarmSizeUnit || "hectares"} total area</span></p>
-                <p><CheckCircle2 size={15} /> <span>Latest activity: {formatReadableDateTime(profileModalFarmer.latestActivityAt || profileModalFarmer.joined)}</span></p>
-              </div>
-
-              <div className="prototype-admin-profile-farms">
-                <strong>Registered farms</strong>
-                {profileModalLoading ? <p>Loading farmer profile details...</p> : null}
-                {selectedFarmerFarms.length ? (
-                  selectedFarmerFarms.map((farm) => (
-                    <div key={farm.id} className="prototype-admin-profile-farm-card">
-                      <div className="prototype-admin-profile-farm-top">
-                        <strong>{farm.name}</strong>
-                        <span>{farm.sizeHectares} ha</span>
+            <div className="fm-modal-body">
+              <div className="fm-modal-grid">
+                <div className="fm-modal-facts">
+                  <div className="fm-modal-fact"><Phone size={14} /> <span>{profileModalFarmer.contact}</span></div>
+                  <div className="fm-modal-fact"><Mail size={14} /> <span>{profileModalFarmer.email}</span></div>
+                  <div className="fm-modal-fact"><MapPin size={14} /> <span>{profileModalFarmer.region}</span></div>
+                  <div className="fm-modal-fact"><Users size={14} /> <span>{profileModalFarmer.experienceLevel}</span></div>
+                  <div className="fm-modal-fact"><ShieldCheck size={14} /> <span>{profileModalFarmer.completeness}% profile completeness</span></div>
+                  <div className="fm-modal-fact"><Tractor size={14} /> <span>{profileModalFarmer.farmCount || selectedFarmerFarms.length} registered farm(s)</span></div>
+                  <div className="fm-modal-fact"><Map size={14} /> <span>{Number(profileModalFarmer.totalFarmSize || 0).toFixed(1)} {profileModalFarmer.totalFarmSizeUnit || "hectares"} total area</span></div>
+                  <div className="fm-modal-fact"><CheckCircle2 size={14} /> <span>Latest activity: {formatReadableDateTime(profileModalFarmer.latestActivityAt || profileModalFarmer.joined)}</span></div>
+                </div>
+                <div className="fm-modal-farms">
+                  <strong>Registered farms</strong>
+                  {profileModalLoading ? <p>Loading farmer profile details...</p> : null}
+                  {selectedFarmerFarms.length ? (
+                    selectedFarmerFarms.map((farm) => (
+                      <div key={farm.id} className="fm-farm-card">
+                        <div className="fm-farm-card-top">
+                          <strong>{farm.name}</strong>
+                          <span>{farm.sizeHectares} ha</span>
+                        </div>
+                        <span>{farm.primaryCrop} · {farm.landType}</span>
+                        <small>{farm.region}</small>
                       </div>
-                      <span>{farm.primaryCrop} · {farm.landType}</span>
-                      <small>{farm.region}</small>
-                    </div>
-                  ))
-                ) : (
-                  <p>No farms registered yet.</p>
-                )}
+                    ))
+                  ) : (
+                    <p>No farms registered yet.</p>
+                  )}
+                </div>
+              </div>
+              <div className="fm-modal-docs">
+                <strong>Verification documents / photos</strong>
+                <div className="fm-doc-list">
+                  {selectedFarmerFarms.map((farm) => (
+                    <span key={`${farm.id}-doc`}>{farm.photoName ? `${farm.photoName}` : `${farm.name} - no uploaded photo yet`}</span>
+                  ))}
+                </div>
               </div>
             </div>
-
-            <div className="prototype-admin-profile-documents">
-              <strong>Verification documents / photos</strong>
-              <div className="prototype-admin-profile-doc-list">
-                {selectedFarmerFarms.map((farm) => (
-                  <span key={`${farm.id}-doc`}>
-                    {farm.photoName ? `${farm.photoName}` : `${farm.name} - no uploaded photo yet`}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div className="recommendation-modal-actions">
-              <button type="button" className="details-button" onClick={() => setProfileModalFarmer(null)}>
-                Close
-              </button>
-              <button type="button" className="approve-button" onClick={() => navigate("/profile")}>
-                Open Farmer Profile Layout
-              </button>
+            <div className="fm-modal-actions">
+              <button type="button" className="fm-btn secondary" onClick={() => setProfileModalFarmer(null)}>Close</button>
+              <button type="button" className="fm-btn primary" onClick={() => navigate("/profile")}>Open Farmer Profile Layout</button>
             </div>
           </div>
         </div>

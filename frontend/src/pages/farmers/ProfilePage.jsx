@@ -12,10 +12,20 @@ import {
   ShieldCheck,
   Sprout,
   Waves,
+  Tractor,
+  MapPinned,
+  CheckCircle2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useFarmerData } from "../../context/FarmerDataContext";
+import { PageShell } from "../../components/common/PageShell";
+import { PageHeader } from "../../components/common/PageHeader";
+import { AppCard } from "../../components/common/AppCard";
+import { MetricCard } from "../../components/common/MetricCard";
+import { ActionButton } from "../../components/common/ActionButton";
+import { StatusBadge } from "../../components/common/StatusBadge";
+import { getFarmImage } from "../../data/cropImages";
 
 function initialsFromName(name = "Farmer") {
   return name
@@ -51,10 +61,7 @@ export function ProfilePage() {
   const [feedback, setFeedback] = useState("");
 
   useEffect(() => {
-    if (!currentProfile) {
-      return;
-    }
-
+    if (!currentProfile) return;
     setForm({
       fullName: currentProfile.fullName || "",
       email: currentProfile.email || "",
@@ -75,7 +82,6 @@ export function ProfilePage() {
   const metrics = useMemo(() => {
     const totalAcreage = currentFarms.reduce((sum, farm) => sum + Number(farm.sizeHectares || 0), 0);
     const verifiedFarms = currentFarms.filter((farm) => farm.verificationStatus === "verified").length;
-
     return [
       { label: "Total Acreage", value: totalAcreage.toFixed(totalAcreage % 1 === 0 ? 0 : 1), unit: "ha" },
       { label: "Profile Complete", value: `${completeness}%` },
@@ -83,9 +89,7 @@ export function ProfilePage() {
     ];
   }, [completeness, currentFarms]);
 
-  if (!currentProfile) {
-    return null;
-  }
+  if (!currentProfile) return null;
 
   const profileFacts = [
     { label: "Email Address", value: currentProfile.email, icon: Mail },
@@ -96,10 +100,7 @@ export function ProfilePage() {
 
   const handleChange = (event) => {
     const { name, value } = event.target;
-    setForm((current) => ({
-      ...current,
-      [name]: value,
-    }));
+    setForm((current) => ({ ...current, [name]: value }));
   };
 
   const handleSave = async () => {
@@ -114,53 +115,64 @@ export function ProfilePage() {
   };
 
   return (
-    <section className="management-page prototype-profile-page">
-      <div className="page-title-block prototype-profile-title">
-        <h1>Farmer Profile &amp; Farm Management</h1>
-        <p>Academic-grade decision support and asset oversight for modern agriculture.</p>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Farmer Profile & Farm Management"
+        description="Academic-grade decision support and asset oversight for modern agriculture."
+      >
+        <ActionButton variant="primary" icon={PlusCircle} onClick={() => navigate("/farms/new")}>
+          Add New Farm
+        </ActionButton>
+      </PageHeader>
 
-      <div className="profile-prototype-grid">
-        <div className="profile-prototype-sidebar">
-          <article className="prototype-panel profile-prototype-card">
-            <div className="profile-prototype-avatar">
-              <div className="profile-prototype-avatar-ring">
-                <div className="profile-prototype-avatar-inner">{initialsFromName(form.fullName)}</div>
+      {feedback ? (
+        <div style={{ padding: "12px 16px", background: "var(--light-green)", borderRadius: "10px", color: "var(--primary-green)", fontSize: "14px", fontWeight: 600 }}>
+          {feedback}
+        </div>
+      ) : null}
+
+      <div className="profile-page-layout">
+        <div className="profile-sidebar">
+          <AppCard>
+            <div className="profile-avatar-section">
+              <div
+                className="profile-avatar-ring"
+                style={{ "--completeness": `${completeness}%` }}
+              >
+                <div className="profile-avatar-inner">{initialsFromName(form.fullName)}</div>
+              </div>
+              <h2 className="profile-name">{form.fullName}</h2>
+              <p className="profile-type">{form.farmerType}</p>
+              <div className="profile-verification-row">
+                <StatusBadge status={currentProfile.verificationStatus}>
+                  {formatStatus(currentProfile.verificationStatus)}
+                </StatusBadge>
+                <StatusBadge status={completeness >= 80 ? "verified" : "pending"}>
+                  {completeness}% Complete
+                </StatusBadge>
               </div>
             </div>
 
-            <div className="profile-prototype-heading">
-              <h2>{form.fullName}</h2>
-              <p>{form.farmerType}</p>
-            </div>
-
-            <div className="profile-status-row">
-              <span className={`profile-verification-badge ${currentProfile.verificationStatus}`}>
-                {formatStatus(currentProfile.verificationStatus)}
-              </span>
-              <span className="profile-completeness-text">{completeness}% Complete</span>
-            </div>
-
-            <div className="profile-completeness-card">
-              <div className="profile-completeness-top">
-                <strong>Farm Profile Completeness</strong>
-                <span>{completeness}%</span>
+            <div style={{ marginTop: "16px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "6px" }}>
+                <strong style={{ color: "var(--text-main)" }}>Farm Profile Completeness</strong>
+                <span style={{ color: "var(--primary-green)", fontWeight: 700 }}>{completeness}%</span>
               </div>
-              <div className="profile-completeness-track">
+              <div className="profile-completeness-bar">
                 <div className="profile-completeness-fill" style={{ width: `${completeness}%` }} />
               </div>
-              <p>Complete your contact details, farm records, map location, photo, and crop history.</p>
+              <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "8px" }}>
+                Complete your contact details, farm records, map location, photo, and crop history.
+              </p>
             </div>
 
             {!isEditing ? (
-              <div className="profile-prototype-facts">
+              <div className="profile-fact-list" style={{ marginTop: "16px" }}>
                 {profileFacts.map((fact) => {
                   const Icon = fact.icon;
                   return (
-                    <div key={fact.label} className="profile-prototype-fact">
-                      <div className="profile-prototype-fact-icon">
-                        <Icon size={18} />
-                      </div>
+                    <div key={fact.label} className="profile-fact-item">
+                      <div className="profile-fact-icon"><Icon size={18} /></div>
                       <div>
                         <span>{fact.label}</span>
                         <strong>{fact.value}</strong>
@@ -170,7 +182,7 @@ export function ProfilePage() {
                 })}
               </div>
             ) : (
-              <div className="profile-edit-grid">
+              <div className="profile-edit-form" style={{ marginTop: "16px" }}>
                 <label>
                   <span>Full Name</span>
                   <input name="fullName" value={form.fullName} onChange={handleChange} />
@@ -205,194 +217,148 @@ export function ProfilePage() {
                     <option value="Extension Research Plot">Extension Research Plot</option>
                   </select>
                 </label>
-                <label className="wide">
+                <label>
                   <span>Cooperative / Organization</span>
-                  <input
-                    name="cooperativeName"
-                    value={form.cooperativeName}
-                    onChange={handleChange}
-                    placeholder="Optional cooperative name"
-                  />
+                  <input name="cooperativeName" value={form.cooperativeName} onChange={handleChange} placeholder="Optional cooperative name" />
                 </label>
-                <label className="wide">
+                <label>
                   <span>Notes</span>
-                  <textarea
-                    name="notes"
-                    value={form.notes}
-                    onChange={handleChange}
-                    placeholder="Farmer background, seasonal goals, and onboarding notes"
-                    rows={4}
-                  />
+                  <textarea name="notes" value={form.notes} onChange={handleChange} placeholder="Farmer background, seasonal goals, and onboarding notes" rows={4} />
                 </label>
               </div>
             )}
 
-            <div className="profile-edit-actions">
-              <button
-                type="button"
-                className="profile-prototype-button secondary"
+            <div className="profile-actions" style={{ marginTop: "16px" }}>
+              <ActionButton
+                variant={isEditing ? "secondary" : "ghost"}
+                icon={PencilLine}
                 onClick={() => {
-                  if (isEditing) {
-                    setIsEditing(false);
-                    setFeedback("");
-                    return;
-                  }
-
+                  if (isEditing) { setIsEditing(false); setFeedback(""); return; }
                   setIsEditing(true);
                 }}
               >
-                <PencilLine size={15} />
-                <span>{isEditing ? "Cancel Editing" : "Edit Personal Details"}</span>
-              </button>
-              {isEditing ? (
-                <button type="button" className="profile-prototype-button primary" onClick={handleSave}>
-                  <ShieldCheck size={15} />
-                  <span>Save Updates</span>
-                </button>
-              ) : null}
+                {isEditing ? "Cancel Editing" : "Edit Personal Details"}
+              </ActionButton>
+              {isEditing && (
+                <ActionButton variant="primary" icon={ShieldCheck} onClick={handleSave}>
+                  Save Updates
+                </ActionButton>
+              )}
             </div>
-          </article>
+          </AppCard>
 
-          <article className="prototype-panel profile-certification-card">
-            <h3>Verification &amp; Approval Workflow</h3>
-            <div className="profile-certification-list workflow-list">
-              <div className="profile-certification-item">
-                <CalendarDays size={18} />
+          <AppCard>
+            <h3 style={{ fontSize: "16px", fontWeight: 700, margin: "0 0 16px", color: "var(--text-main)" }}>
+              Verification & Approval Workflow
+            </h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "13px", color: "var(--text-muted)" }}>
+                <CalendarDays size={16} style={{ color: "var(--primary-green)", flexShrink: 0 }} />
                 <span>Submitted: {new Date(currentProfile.submittedAt).toLocaleDateString()}</span>
               </div>
-              <div className="profile-certification-item">
-                <BadgeCheck size={18} />
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "13px", color: "var(--text-muted)" }}>
+                <BadgeCheck size={16} style={{ color: "var(--primary-green)", flexShrink: 0 }} />
                 <span>
                   {currentProfile.verifiedBy
                     ? `Verified by ${currentProfile.verifiedBy}`
                     : "Awaiting extension officer verification"}
                 </span>
               </div>
-              <div className="profile-certification-item">
-                <CircleAlert size={18} />
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "13px", color: "var(--text-muted)" }}>
+                <CircleAlert size={16} style={{ color: "var(--warning)", flexShrink: 0 }} />
                 <span>Bulk cooperative registration is supported for multi-plot onboarding.</span>
               </div>
             </div>
-            <button
-              type="button"
-              className="profile-prototype-button primary full-width"
-              onClick={handleSubmitForReview}
-              disabled={currentProfile.verificationStatus === "verified"}
-            >
-              <ShieldCheck size={16} />
-              <span>
+            <div style={{ marginTop: "16px" }}>
+              <ActionButton
+                variant="primary"
+                className="w-full"
+                onClick={handleSubmitForReview}
+                disabled={currentProfile.verificationStatus === "verified"}
+                icon={ShieldCheck}
+              >
                 {currentProfile.verificationStatus === "verified"
                   ? "Profile Verified"
                   : "Submit Profile for Approval"}
-              </span>
-            </button>
-          </article>
+              </ActionButton>
+            </div>
+          </AppCard>
         </div>
 
-        <div className="profile-prototype-main">
-          <div className="profile-prototype-section-head">
-            <div>
-              <h2>Registered Farms &amp; Historical Records</h2>
-              <p className="profile-section-copy">
-                Centralized records per farm including map location, plot size, crop history, and documentation.
-              </p>
-            </div>
-            <button
-              type="button"
-              className="profile-prototype-button primary"
-              onClick={() => navigate("/farms/new")}
-            >
-              <PlusCircle size={16} />
-              <span>Add New Farm</span>
-            </button>
+        <div className="profile-main">
+          <div className="profile-metrics-strip">
+            {metrics.map((metric) => (
+              <MetricCard
+                key={metric.label}
+                icon={metric.label === "Total Acreage" ? MapPinned : metric.label === "Verified Farms" ? CheckCircle2 : Tractor}
+                label={metric.label}
+                value={`${metric.value}${metric.unit ? ` ${metric.unit}` : ""}`}
+              />
+            ))}
           </div>
 
-          {feedback ? <p className="profile-feedback-banner">{feedback}</p> : null}
+          <AppCard>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <div>
+                <h2 style={{ fontSize: "18px", fontWeight: 700, margin: 0, color: "var(--text-main)" }}>
+                  Registered Farms & Historical Records
+                </h2>
+                <p style={{ fontSize: "13px", color: "var(--text-muted)", margin: "4px 0 0" }}>
+                  Centralized records per farm including map location, plot size, crop history, and documentation.
+                </p>
+              </div>
+            </div>
 
-          <div className="profile-farm-list">
-            {currentFarms.map((farm) => (
-              <article key={farm.id} className="prototype-panel profile-farm-card">
-                <div className="profile-farm-map">
-                  <div className="profile-farm-map-grid" />
-                  <div className="profile-farm-map-road road-a" />
-                  <div className="profile-farm-map-road road-b" />
-                  <div className="profile-farm-map-road road-c" />
-                  <div
-                    className="profile-farm-pin dynamic-pin"
-                    style={{
-                      left: `${farm.location.mapX}%`,
-                      top: `${farm.location.mapY}%`,
-                    }}
-                  />
-                  <div className="profile-farm-coordinates">
-                    {farm.location.lat.toFixed(2)}° , {farm.location.lng.toFixed(2)}°
+            <div className="profile-farm-grid">
+              {currentFarms.map((farm) => (
+                <div key={farm.id} className="profile-farm-card-modern">
+                  <div className="profile-farm-card-media">
+                    <img
+                      src={getFarmImage(farm)}
+                      alt={farm.name}
+                      loading="lazy"
+                      onError={(e) => { e.target.src = getFarmImage(); }}
+                    />
                   </div>
-                </div>
-
-                <div className="profile-farm-content">
-                  <div className="profile-farm-top">
-                    <div>
-                      <h3>{farm.name}</h3>
-                      <div className="profile-farm-meta">
-                        <span>
-                          <Sprout size={14} />
-                          {farm.sizeHectares} Hectares
-                        </span>
-                        <span>
-                          <Waves size={14} />
-                          {farm.irrigationType}
-                        </span>
+                  <div className="profile-farm-card-body">
+                    <h3 className="profile-farm-card-name">{farm.name}</h3>
+                    <div className="profile-farm-card-meta">
+                      <span><Sprout size={14} /> {farm.sizeHectares} ha</span>
+                      <span><Waves size={14} /> {farm.irrigationType}</span>
+                    </div>
+                    <div style={{ marginTop: "10px" }}>
+                      <StatusBadge status={farm.verificationStatus}>
+                        {formatStatus(farm.verificationStatus)}
+                      </StatusBadge>
+                    </div>
+                    <div style={{ marginTop: "8px" }}>
+                      <span style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: 600 }}>Crop History:</span>
+                      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "4px" }}>
+                        {farm.history.map((entry) => (
+                          <span key={entry.id} style={{ padding: "2px 8px", borderRadius: "6px", background: "var(--light-green)", color: "var(--primary-green)", fontSize: "11px", fontWeight: 600 }}>
+                            {entry.crop} ({entry.season})
+                          </span>
+                        ))}
                       </div>
                     </div>
-                    <span className={`profile-farm-status ${farm.verificationStatus}`}>
-                      {formatStatus(farm.verificationStatus)}
-                    </span>
-                  </div>
-
-                  <div className="profile-farm-history">
-                    <span>Crop History Log</span>
-                    <div className="profile-history-tags">
-                      {farm.history.map((entry) => (
-                        <span key={entry.id} className="profile-history-tag">
-                          {entry.crop} ({entry.season})
-                        </span>
-                      ))}
-                    </div>
-                    <p className="profile-farm-challenges">
+                    <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "8px" }}>
                       Latest challenge: {farm.history[0]?.challenges || "No challenge logged yet"}
                     </p>
                   </div>
-
-                  <div className="profile-farm-actions">
-                    <button type="button" className="profile-farm-link muted" onClick={() => navigate("/analytics")}>
+                  <div className="profile-farm-card-footer">
+                    <ActionButton variant="ghost" size="sm" onClick={() => navigate("/analytics")}>
                       Analytics
-                    </button>
-                    <button
-                      type="button"
-                      className="profile-farm-link primary"
-                      onClick={() => navigate(`/farms/new?edit=${farm.id}`)}
-                    >
+                    </ActionButton>
+                    <ActionButton variant="primary" size="sm" onClick={() => navigate(`/farms/new?edit=${farm.id}`)}>
                       Manage Farm
-                    </button>
+                    </ActionButton>
                   </div>
                 </div>
-              </article>
-            ))}
-          </div>
-
-          <div className="profile-metric-grid">
-            {metrics.map((metric) => (
-              <article key={metric.label} className="profile-metric-card">
-                <span>{metric.label}</span>
-                <strong>
-                  {metric.value}
-                  {metric.unit ? <small>{metric.unit}</small> : null}
-                </strong>
-              </article>
-            ))}
-          </div>
+              ))}
+            </div>
+          </AppCard>
         </div>
       </div>
-    </section>
+    </PageShell>
   );
 }

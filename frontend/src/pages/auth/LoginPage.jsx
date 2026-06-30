@@ -1,4 +1,4 @@
-import { CircleHelp, Lock, Mail, Tractor, ArrowRight, Eye } from "lucide-react";
+import { CircleHelp, Cpu, Database, Lock, Mail, Map, Sprout, Tractor, ArrowRight, Eye, TrendingUp, CloudSun, Leaf, ShieldCheck } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
@@ -74,24 +74,34 @@ export function LoginPage() {
 
   return (
     <section className="login-prototype-shell">
-      <div className="login-visual-pane">
-        <div className="login-visual-overlay" />
-        <div className="login-visual-top">
-          <div className="login-brand">
-            <Tractor size={19} />
+      <div className="auth-pane">
+        <div className="auth-floating-card" />
+        <div className="auth-floating-card" />
+        <div className="auth-top">
+          <div className="auth-brand">
+            <Leaf size={20} />
             <span>AgriAI Support</span>
           </div>
         </div>
 
-        <div className="login-visual-copy">
+        <div className="auth-content">
           <h1>AI-Assisted Farmer Decision Support System</h1>
-          <p>
-            Empowering sustainable agriculture through data-driven insights and rigorous
-            academic research.
-          </p>
+          <p>Empowering sustainable agriculture through data-driven insights, weather intelligence, soil analysis, pest alerts, and market recommendations.</p>
+
+          <div className="auth-chips">
+            <span className="auth-chip"><Cpu size={14} /> AI Recommendations</span>
+            <span className="auth-chip"><CloudSun size={14} /> Weather &amp; Soil Insights</span>
+            <span className="auth-chip"><TrendingUp size={14} /> Market Intelligence</span>
+          </div>
+
+          <div className="auth-stats">
+            <span className="auth-stat"><Database size={14} /> 12+ Smart Modules</span>
+            <span className="auth-stat"><ShieldCheck size={14} /> Offline Ready</span>
+            <span className="auth-stat"><Map size={14} /> Multi-Farm Support</span>
+          </div>
         </div>
 
-        <div className="login-visual-footer">
+        <div className="auth-bottom">
           <span>© 2024 Agricultural Research Division</span>
           <div>
             <span>Privacy Policy</span>

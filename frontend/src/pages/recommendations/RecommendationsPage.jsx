@@ -2220,288 +2220,462 @@ function AdminContentManagementViewV2() {
     );
   };
 
+  const renderStatusBadge = (status) => {
+    const tone = getContentStatusTone(status);
+    return <span className={`cm-status ${tone}`}>{status}</span>;
+  };
+
+  const renderActionBtns = (row) => (
+    <div className="cm-action-group">
+      <button type="button" className="cm-icon-btn approve" title="Approve" onClick={() => cycleStatus(row.id)}><Check size={14} /></button>
+      <button type="button" className="cm-icon-btn edit" title="Edit"><BookOpen size={14} /></button>
+      <button type="button" className="cm-icon-btn delete" title="Delete" onClick={() => removeEntry(row.id)}><Trash2 size={14} /></button>
+      <button type="button" className="cm-icon-btn view" title="View"><Search size={14} /></button>
+    </div>
+  );
+
+  const renderCropTable = () => (
+    <div className="cm-table">
+      <div className="cm-table-head" style={{ gridTemplateColumns: '1.2fr 1fr 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.6fr' }}>
+        <span>Crop</span><span>Recommended Soil</span><span>Optimal pH</span><span>Rainfall Range</span><span>Yield Potential</span><span>Suitability Score</span><span>Status</span><span>Actions</span>
+      </div>
+      {pagedEntries.map((row) => (
+        <div key={row.id} className="cm-table-row" style={{ gridTemplateColumns: '1.2fr 1fr 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.6fr' }}>
+          <strong>{row.crop}</strong><span>{row.recommendedSoil}</span><span>{row.optimalPh}</span><span>{row.rainfallRange}</span><span>{row.yieldPotential}</span><span>{row.suitabilityScore}</span>{renderStatusBadge(row.status)}{renderActionBtns(row)}
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderPestTable = () => (
+    <div className="cm-table">
+      <div className="cm-table-head" style={{ gridTemplateColumns: '1fr 1fr 1fr 1.5fr 0.8fr 0.7fr 0.6fr' }}>
+        <span>Pest / Disease</span><span>Affected Crops</span><span>Risk Level</span><span>Treatment Recommendation</span><span>Detection Confidence</span><span>Status</span><span>Actions</span>
+      </div>
+      {pagedEntries.map((row) => (
+        <div key={row.id} className="cm-table-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1.5fr 0.8fr 0.7fr 0.6fr' }}>
+          <strong>{row.crop}</strong><span>{row.affectedCrops}</span><span>{row.riskLevel}</span><span>{row.treatmentRecommendation}</span><span>{row.detectionConfidence}</span>{renderStatusBadge(row.status)}{renderActionBtns(row)}
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderLogicTable = () => (
+    <div className="cm-table">
+      <div className="cm-table-head" style={{ gridTemplateColumns: '1.2fr 1.2fr 0.8fr 0.8fr 0.7fr 0.6fr' }}>
+        <span>Rule Name</span><span>Trigger Parameter</span><span>Severity</span><span>Output Advice</span><span>Status</span><span>Actions</span>
+      </div>
+      {pagedEntries.map((row) => (
+        <div key={row.id} className="cm-table-row" style={{ gridTemplateColumns: '1.2fr 1.2fr 0.8fr 0.8fr 0.7fr 0.6fr' }}>
+          <strong>{row.crop}</strong><span>{row.trigger}</span><span>{row.ruleScope}</span><span>{row.confidence}</span>{renderStatusBadge(row.status)}{renderActionBtns(row)}
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderFertilizerTable = () => (
+    <div className="cm-table">
+      <div className="cm-table-head" style={{ gridTemplateColumns: '1.2fr 0.8fr 0.8fr 1fr 0.7fr 0.6fr' }}>
+        <span>Standard Name</span><span>Nutrient</span><span>Crop Group</span><span>Recommended Range</span><span>Status</span><span>Actions</span>
+      </div>
+      {pagedEntries.map((row) => (
+        <div key={row.id} className="cm-table-row" style={{ gridTemplateColumns: '1.2fr 0.8fr 0.8fr 1fr 0.7fr 0.6fr' }}>
+          <strong>{row.crop}</strong><span>{row.nutrientFocus}</span><span>{row.zone}</span><span>{row.benchmark}</span>{renderStatusBadge(row.status)}{renderActionBtns(row)}
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderTemplateTable = () => (
+    <div className="cm-table">
+      <div className="cm-table-head" style={{ gridTemplateColumns: '1.2fr 0.8fr 1.5fr 0.7fr 0.7fr 0.6fr' }}>
+        <span>Template</span><span>Category</span><span>Summary</span><span>Language</span><span>Status</span><span>Actions</span>
+      </div>
+      {pagedEntries.map((row) => (
+        <div key={row.id} className="cm-table-row" style={{ gridTemplateColumns: '1.2fr 0.8fr 1.5fr 0.7fr 0.7fr 0.6fr' }}>
+          <strong>{row.name}</strong><span>{row.category}</span><span>{row.summary}</span><span>{row.language}</span>{renderStatusBadge(row.status)}{renderActionBtns(row)}
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderActiveTable = () => {
+    if (activeTab === "Crops") return renderCropTable();
+    if (activeTab === "Pests") return renderPestTable();
+    if (activeTab === "Advisory Logic") return renderLogicTable();
+    if (activeTab === "Fertilizer Standards") return renderFertilizerTable();
+    return renderTemplateTable();
+  };
+
+  const getWorkflowCount = (stage) =>
+    Object.values(entries).flat().filter((item) => item.status === stage).length;
+
+  const nodeTypeClass = (type) => {
+    const map = { Crop: 'crop', Pest: 'pest', Soil: 'soil', Rule: 'rule', Fertilizer: 'fert' };
+    return map[type] || '';
+  };
+
   return (
-    <section className="management-page prototype-admin-content-page">
-      <div className="prototype-admin-content-main">
-        <div className="page-title-block prototype-admin-content-title">
-          <div>
+    <section className="cm-page">
+      <div className="cm-header">
+        <div className="cm-header-row">
+          <div className="cm-header-left">
             <h1>Content Management</h1>
-            <p>Complete agricultural knowledge base and AI advisory management center for demo-mode administration.</p>
+            <p>Manage crops, pests, advisory rules, fertilizer standards, templates, approvals, and audit records.</p>
           </div>
-          <div className="prototype-admin-demo-tag">
-            <span>{DEMO_MODE ? "DEMO_MODE" : "Live Mode"}</span>
-            <small>localStorage + mock content records</small>
+          <div className="cm-badges">
+            <span className="cm-badge amber">Demo Mode</span>
+            <span className="cm-badge blue">Local Storage</span>
+            <span className="cm-badge green">Knowledge Base Active</span>
           </div>
         </div>
+      </div>
 
-        <div className="prototype-stats-grid prototype-admin-content-stats-grid">
-          {contentStats.map((item) => {
-            const Icon = item.icon;
-            return (
-              <article key={item.label} className="prototype-stat-card prototype-admin-content-stat-card">
-                <div className="stat-card-top">
-                  <div className={`stat-icon tone-${item.tone}`}>
-                    <Icon size={16} />
-                  </div>
-                </div>
-                <p>{item.label}</p>
-                <h3>{item.value}</h3>
-              </article>
-            );
-          })}
-        </div>
+      <div className="cm-summary-grid">
+        {contentStats.map((item) => {
+          const Icon = item.icon;
+          return (
+            <article key={item.label} className="cm-summary-card">
+              <div className={`cm-summary-icon ${item.tone}`}>
+                <Icon size={18} />
+              </div>
+              <div className="cm-summary-info">
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+              </div>
+            </article>
+          );
+        })}
+      </div>
 
-        <div className="prototype-admin-content-actions">
-          <button type="button" className="prototype-admin-secondary-button" onClick={exportCurrentTab}>
+      <div className="cm-toolbar">
+        <div className="cm-toolbar-left">
+          <button type="button" className="cm-btn secondary" onClick={exportCurrentTab}>
             <FileDown size={15} />
             <span>Export Data</span>
           </button>
-          <div className="prototype-admin-entry-inline">
+        </div>
+        <div className="cm-toolbar-right">
+          <div className="cm-input-wrap">
             <input type="text" value={entryName} onChange={(event) => setEntryName(event.target.value)} placeholder={`Add new ${activeTab.toLowerCase()} entry`} />
-            <button type="button" className="prototype-admin-primary-button" onClick={addEntry}>
-              <Plus size={16} />
-              <span>Add New Entry</span>
-            </button>
           </div>
+          <button type="button" className="cm-btn primary" onClick={addEntry}>
+            <Plus size={16} />
+            <span>Add New Entry</span>
+          </button>
         </div>
+      </div>
 
-        <div className="prototype-admin-content-tabs">
-          {Object.entries(tabIcons).map(([label, Icon]) => (
-            <button key={label} type="button" className={activeTab === label ? "active" : ""} onClick={() => setActiveTab(label)}>
-              <Icon size={16} />
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
+      <div className="cm-tabs">
+        {Object.entries(tabIcons).map(([label, Icon]) => (
+          <button key={label} type="button" className={`cm-tab ${activeTab === label ? "active" : ""}`} onClick={() => setActiveTab(label)}>
+            <Icon size={15} />
+            <span>{label}</span>
+          </button>
+        ))}
+      </div>
 
-        <div className="prototype-admin-content-grid">
-          <div className="prototype-admin-content-left">
-            <article className="prototype-panel prototype-admin-content-table-card">
-              <div className="prototype-admin-content-card-head">
-                <div>
-                  <h2>{activeTab} Database</h2>
-                  <span>Knowledge center records with workflow and language support</span>
-                </div>
-                <div className="prototype-admin-language-select">
-                  <span>Content Language</span>
-                  <select value={contentLanguage} onChange={(event) => setContentLanguage(event.target.value)}>
-                    {CONTENT_LANGUAGE_OPTIONS.map((language) => (
-                      <option key={language} value={language}>{language}</option>
-                    ))}
-                  </select>
-                </div>
+      <div className="cm-main-grid">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <article className="cm-card">
+            <div className="cm-card-header">
+              <div className="cm-card-header-left">
+                <h2>{activeTab} Database</h2>
+                <p>Knowledge center records with workflow and language support</p>
               </div>
-              {renderTable()}
-              <div className="prototype-admin-content-pagination">
-                <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page === 1}>Previous</button>
-                <div>
-                  <button type="button" className="active">Page {page} of {totalPages}</button>
-                </div>
-                <button type="button" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={page === totalPages}>Next</button>
-              </div>
-            </article>
-
-            <div className="prototype-admin-content-subgrid">
-              <article className="prototype-panel prototype-admin-logic-card">
-                <div className="prototype-admin-content-card-head align-start">
-                  <div>
-                    <h2>Recommendation Testing Sandbox</h2>
-                    <p>Test advisory outputs using crop, soil, weather, and growth-stage inputs before publishing.</p>
-                  </div>
-                </div>
-
-                <div className="prototype-admin-sandbox-grid">
-                  <label className="prototype-admin-content-field">
-                    <span>Crop</span>
-                    <select value={sandboxInput.crop} onChange={(event) => setSandboxInput((current) => ({ ...current, crop: event.target.value }))}>
-                      {(entries.Crops || []).map((item) => <option key={item.id} value={item.crop}>{item.crop}</option>)}
-                    </select>
-                  </label>
-                  <label className="prototype-admin-content-field"><span>Soil pH</span><input type="number" value={sandboxInput.soilPh} onChange={(event) => setSandboxInput((current) => ({ ...current, soilPh: event.target.value }))} /></label>
-                  <label className="prototype-admin-content-field"><span>Nitrogen (N)</span><input type="number" value={sandboxInput.nitrogen} onChange={(event) => setSandboxInput((current) => ({ ...current, nitrogen: event.target.value }))} /></label>
-                  <label className="prototype-admin-content-field"><span>Phosphorus (P)</span><input type="number" value={sandboxInput.phosphorus} onChange={(event) => setSandboxInput((current) => ({ ...current, phosphorus: event.target.value }))} /></label>
-                  <label className="prototype-admin-content-field"><span>Potassium (K)</span><input type="number" value={sandboxInput.potassium} onChange={(event) => setSandboxInput((current) => ({ ...current, potassium: event.target.value }))} /></label>
-                  <label className="prototype-admin-content-field"><span>Rainfall (mm)</span><input type="number" value={sandboxInput.rainfall} onChange={(event) => setSandboxInput((current) => ({ ...current, rainfall: event.target.value }))} /></label>
-                  <label className="prototype-admin-content-field"><span>Temperature (°C)</span><input type="number" value={sandboxInput.temperature} onChange={(event) => setSandboxInput((current) => ({ ...current, temperature: event.target.value }))} /></label>
-                  <label className="prototype-admin-content-field">
-                    <span>Growth Stage</span>
-                    <select value={sandboxInput.growthStage} onChange={(event) => setSandboxInput((current) => ({ ...current, growthStage: event.target.value }))}>
-                      <option>Establishment</option><option>Vegetative</option><option>Flowering</option><option>Grain Fill</option><option>Harvest Ready</option>
-                    </select>
-                  </label>
-                </div>
-
-                <div className="prototype-admin-logic-grid">
-                  <label>
-                    <span>Trigger Parameter</span>
-                    <select value={triggerParameter} onChange={(event) => setTriggerParameter(event.target.value)}>
-                      <option>Soil Moisture Deficiency (%)</option>
-                      <option>Leaf Temperature Spike</option>
-                      <option>Nitrogen Deficit</option>
-                    </select>
-                  </label>
-                  <div className="prototype-admin-severity-block">
-                    <span>Severity Level</span>
-                    <div className="prototype-admin-radio-row">
-                      {["Low", "Medium", "Critical"].map((option) => (
-                        <label key={option}>
-                          <input type="radio" name="severity-v2" checked={severity === option} onChange={() => setSeverity(option)} />
-                          {option}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <label className="prototype-admin-content-field">
-                  <span>Recommendation Content (Output for Farmer)</span>
-                  <textarea rows="4" placeholder="Enter the advice text that will be shown to users..." value={recommendationContent} onChange={(event) => setRecommendationContent(event.target.value)} />
-                </label>
-                <label className="prototype-admin-content-field">
-                  <span>Actionable Steps (.JSON Logic)</span>
-                  <textarea rows="6" className="code" value={jsonLogic} onChange={(event) => setJsonLogic(event.target.value)} />
-                </label>
-
-                {sandboxOutput ? (
-                  <div className="prototype-admin-sandbox-output">
-                    <div className="prototype-admin-content-card-head">
-                      <h3>Sandbox Output</h3>
-                      <span>{sandboxOutput.confidence}% confidence</span>
-                    </div>
-                    <strong>{sandboxOutput.recommendation}</strong>
-                    <p>{sandboxOutput.explanation}</p>
-                  </div>
-                ) : null}
-
-                <div className="prototype-admin-logic-actions">
-                  <button type="button" className="prototype-admin-secondary-button" onClick={testLogic}>Run Sandbox</button>
-                  <button type="button" className="prototype-admin-primary-button" onClick={saveLogic}>Save Recommendation</button>
-                </div>
-              </article>
-
-              <article className="prototype-panel prototype-admin-logic-card">
-                <div className="prototype-admin-content-card-head align-start">
-                  <div>
-                    <h2>Agricultural Knowledge Graph View</h2>
-                    <p>Visualize relationships between crops, pests, soil conditions, advisory rules, and fertilizer standards.</p>
-                  </div>
-                </div>
-                <div className="prototype-admin-graph-layout">
-                  <div className="prototype-admin-graph-nodes">
-                    {knowledgeGraphSummary.map((node) => (
-                      <div key={node.id} className="prototype-admin-graph-node">
-                        <strong>{node.label}</strong>
-                        <span>{node.type}</span>
-                        <small>{node.links} connection(s)</small>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="prototype-admin-graph-links">
-                    {contentGraphLinks.map((link) => (
-                      <div key={`${link.from}-${link.to}`} className="prototype-admin-graph-link">
-                        <span>{contentGraphNodes.find((node) => node.id === link.from)?.label}</span>
-                        <ChevronDown size={14} />
-                        <strong>{link.label}</strong>
-                        <ChevronDown size={14} />
-                        <span>{contentGraphNodes.find((node) => node.id === link.to)?.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </article>
-            </div>
-          </div>
-
-          <aside className="prototype-admin-content-right">
-            <article className="prototype-panel prototype-admin-sync-card">
-              <div className="prototype-admin-side-head"><Database size={18} /><h3>Local Language Management</h3></div>
-              <p>Maintain aligned advisory content across English, Kinyarwanda, and French for extension delivery.</p>
-              <div className="prototype-admin-sync-list">
-                {languageSummary.map((item) => (
-                  <div key={item.language} className="prototype-admin-sync-item">
-                    <strong>{item.language}</strong>
-                    <span className={item.total >= 3 ? "active" : "pending"}>{item.total} entries</span>
-                  </div>
-                ))}
-              </div>
-            </article>
-
-            <article className="prototype-panel prototype-admin-sync-card">
-              <div className="prototype-admin-side-head"><TestTube2 size={18} /><h3>Update Fertilizer Standards</h3></div>
-              <p>Periodically sync local standards with global academic fertilizer benchmarks (FAO/USDA). Last synced: 14 Oct 2023.</p>
-              <div className="prototype-admin-sync-list">
-                {fertilizerCards.map((item) => (
-                  <div key={item.title} className="prototype-admin-sync-item">
-                    <strong>{item.title}</strong>
-                    <span className={item.state === "Active" ? "active" : "pending"}>{item.state}</span>
-                  </div>
-                ))}
-              </div>
-              <button type="button" className="prototype-admin-primary-button full" onClick={syncGuidelines}><Sparkles size={15} /><span>Sync Guidelines Now</span></button>
-            </article>
-
-            <article className="prototype-panel prototype-admin-recent-card">
-              <div className="prototype-admin-side-head"><Clock3 size={18} /><h3>Recent Modifications</h3></div>
-              <div className="prototype-admin-recent-list">
-                {modifications.map((item) => (
-                  <div key={`${item.title}-${item.meta}`}>
-                    <strong>{item.title}</strong>
-                    <span>{item.meta}</span>
-                  </div>
-                ))}
-              </div>
-              <button type="button" className="prototype-admin-text-link" onClick={exportAuditTrail}>View Full Audit Trail</button>
-            </article>
-
-            <article className="prototype-admin-help-card">
-              <h3>Need Help?</h3>
-              <p>Access documentation for crop rules, pest knowledge, local language packs, and advisory graph structure.</p>
-              <button type="button" onClick={exportDocumentation}>Documentation</button>
-              <BookOpen size={58} />
-            </article>
-          </aside>
-        </div>
-
-        <div className="prototype-admin-content-grid prototype-admin-content-bottom-grid">
-          <article className="prototype-panel prototype-admin-content-table-card">
-            <div className="prototype-admin-content-card-head">
-              <div>
-                <h2>Content Approval Workflow</h2>
-                <span>Statuses supported: Draft, Pending Review, Approved, Published, Archived</span>
+              <div className="cm-card-header-right">
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Content Language</span>
+                <select value={contentLanguage} onChange={(event) => setContentLanguage(event.target.value)}
+                  style={{ padding: '6px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, outline: 'none', color: 'var(--text-dark)', background: 'white' }}>
+                  {CONTENT_LANGUAGE_OPTIONS.map((language) => (
+                    <option key={language} value={language}>{language}</option>
+                  ))}
+                </select>
               </div>
             </div>
-            <div className="prototype-admin-workflow-chip-row">
-              {CONTENT_WORKFLOW.map((status) => (
-                <span key={status} className={`prototype-admin-content-status ${getContentStatusTone(status)}`}>{status}</span>
-              ))}
+            <div className="cm-table-wrap">
+              {renderActiveTable()}
+            </div>
+            <div className="cm-pagination">
+              <span>Showing {pagedEntries.length ? (page - 1) * itemsPerPage + 1 : 0}-{Math.min(page * itemsPerPage, visibleEntries.length)} of {visibleEntries.length} entries</span>
+              <div className="cm-pager">
+                <button type="button" className="cm-pager-btn" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Previous</button>
+                <span className="cm-pager-indicator">Page {page} of {totalPages}</span>
+                <button type="button" className="cm-pager-btn" disabled={page === totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>Next</button>
+              </div>
             </div>
           </article>
 
-          <article className="prototype-panel prototype-admin-content-table-card">
-            <div className="prototype-admin-content-card-head">
-              <div>
-                <h2>Full Audit Trail Dashboard</h2>
-                <span>User, action, module, and timestamp for editorial accountability</span>
+          <article className="cm-card">
+            <div className="cm-card-header">
+              <div className="cm-card-header-left">
+                <h2>Recommendation Testing Sandbox</h2>
+                <p>Test advisory outputs using crop, soil, weather, and growth-stage inputs before publishing.</p>
               </div>
-              <button type="button" className="prototype-admin-secondary-button" onClick={exportAuditTrail}><Download size={15} /><span>Export Audit</span></button>
             </div>
-            <div className="prototype-admin-audit-list">
+            <div className="cm-sandbox-grid">
+              <div className="cm-sandbox-field">
+                <label>Crop</label>
+                <select value={sandboxInput.crop} onChange={(event) => setSandboxInput((current) => ({ ...current, crop: event.target.value }))}>
+                  {(entries.Crops || []).map((item) => <option key={item.id} value={item.crop}>{item.crop}</option>)}
+                </select>
+              </div>
+              <div className="cm-sandbox-field">
+                <label>Soil pH</label>
+                <input type="number" value={sandboxInput.soilPh} onChange={(event) => setSandboxInput((current) => ({ ...current, soilPh: event.target.value }))} />
+              </div>
+              <div className="cm-sandbox-field">
+                <label>Nitrogen (N)</label>
+                <input type="number" value={sandboxInput.nitrogen} onChange={(event) => setSandboxInput((current) => ({ ...current, nitrogen: event.target.value }))} />
+              </div>
+              <div className="cm-sandbox-field">
+                <label>Phosphorus (P)</label>
+                <input type="number" value={sandboxInput.phosphorus} onChange={(event) => setSandboxInput((current) => ({ ...current, phosphorus: event.target.value }))} />
+              </div>
+              <div className="cm-sandbox-field">
+                <label>Potassium (K)</label>
+                <input type="number" value={sandboxInput.potassium} onChange={(event) => setSandboxInput((current) => ({ ...current, potassium: event.target.value }))} />
+              </div>
+              <div className="cm-sandbox-field">
+                <label>Rainfall (mm)</label>
+                <input type="number" value={sandboxInput.rainfall} onChange={(event) => setSandboxInput((current) => ({ ...current, rainfall: event.target.value }))} />
+              </div>
+              <div className="cm-sandbox-field">
+                <label>Temperature (°C)</label>
+                <input type="number" value={sandboxInput.temperature} onChange={(event) => setSandboxInput((current) => ({ ...current, temperature: event.target.value }))} />
+              </div>
+              <div className="cm-sandbox-field">
+                <label>Growth Stage</label>
+                <select value={sandboxInput.growthStage} onChange={(event) => setSandboxInput((current) => ({ ...current, growthStage: event.target.value }))}>
+                  <option>Establishment</option><option>Vegetative</option><option>Flowering</option><option>Grain Fill</option><option>Harvest Ready</option>
+                </select>
+              </div>
+
+              <div className="cm-sandbox-divider" />
+
+              <div className="cm-sandbox-field">
+                <label>Trigger Parameter</label>
+                <select value={triggerParameter} onChange={(event) => setTriggerParameter(event.target.value)}>
+                  <option>Soil Moisture Deficiency (%)</option>
+                  <option>Leaf Temperature Spike</option>
+                  <option>Nitrogen Deficit</option>
+                </select>
+              </div>
+              <div className="cm-sandbox-field">
+                <label>Severity Level</label>
+                <div className="cm-radio-group">
+                  {["Low", "Medium", "Critical"].map((option) => (
+                    <label key={option}>
+                      <input type="radio" name="severity-v2" checked={severity === option} onChange={() => setSeverity(option)} />
+                      {option}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="cm-sandbox-full cm-sandbox-field">
+                <label>Recommendation Content (Output for Farmer)</label>
+                <textarea className="cm-textarea" rows="3" placeholder="Enter the advice text that will be shown to users..." value={recommendationContent} onChange={(event) => setRecommendationContent(event.target.value)} />
+              </div>
+              <div className="cm-sandbox-full cm-sandbox-field">
+                <label>Actionable Steps (.JSON Logic)</label>
+                <textarea className="cm-textarea code" rows="5" value={jsonLogic} onChange={(event) => setJsonLogic(event.target.value)} />
+              </div>
+
+              {sandboxOutput ? (
+                <div className="cm-sandbox-output">
+                  <div className="cm-sandbox-output-head">
+                    <strong>Sandbox Output</strong>
+                    <span>{sandboxOutput.confidence}% confidence</span>
+                  </div>
+                  <p><strong>{sandboxOutput.recommendation}</strong></p>
+                  <p>{sandboxOutput.explanation}</p>
+                </div>
+              ) : null}
+
+              <div className="cm-sandbox-actions">
+                <button type="button" className="cm-btn secondary" onClick={testLogic}>Run Sandbox</button>
+                <button type="button" className="cm-btn primary" onClick={saveLogic}>Save Recommendation</button>
+              </div>
+            </div>
+          </article>
+
+          <article className="cm-card">
+            <div className="cm-card-header">
+              <div className="cm-card-header-left">
+                <h2>Agricultural Knowledge Graph View</h2>
+                <p>Visualize relationships between crops, pests, soil conditions, advisory rules, and fertilizer standards.</p>
+              </div>
+            </div>
+            <div className="cm-graph">
+              <div className="cm-graph-row">
+                {knowledgeGraphSummary.map((node) => (
+                  <span key={node.id} className={`cm-graph-node ${nodeTypeClass(node.type)}`}>
+                    {node.label}
+                    <small style={{ fontSize: 10, opacity: 0.7 }}>({node.links})</small>
+                  </span>
+                ))}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {contentGraphLinks.map((link) => (
+                  <div key={`${link.from}-${link.to}`} className="cm-graph-link-row">
+                    <span className={`cm-graph-node ${nodeTypeClass(contentGraphNodes.find((n) => n.id === link.from)?.type)}`} style={{ fontSize: 11, padding: '4px 10px' }}>
+                      {contentGraphNodes.find((n) => n.id === link.from)?.label}
+                    </span>
+                    <span className="cm-graph-arrow">→</span>
+                    <span className="cm-graph-label">{link.label}</span>
+                    <span className="cm-graph-arrow">→</span>
+                    <span className={`cm-graph-node ${nodeTypeClass(contentGraphNodes.find((n) => n.id === link.to)?.type)}`} style={{ fontSize: 11, padding: '4px 10px' }}>
+                      {contentGraphNodes.find((n) => n.id === link.to)?.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <aside className="cm-sidebar">
+          <div className="cm-side-card">
+            <div className="cm-side-header">
+              <Database size={16} color="var(--primary-green)" />
+              <h3>Local Language Management</h3>
+            </div>
+            <div className="cm-side-body">
+              <p>Maintain aligned advisory content across English, Kinyarwanda, and French for extension delivery.</p>
+              {languageSummary.map((item) => (
+                <div key={item.language} className="cm-sync-item">
+                  <strong>{item.language}</strong>
+                  <span className={`cm-sync-status ${item.total >= 3 ? "active" : "pending"}`}>{item.total} entries</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="cm-side-card">
+            <div className="cm-side-header">
+              <TestTube2 size={16} color="var(--primary-green)" />
+              <h3>Fertilizer Standards Sync</h3>
+            </div>
+            <div className="cm-side-body">
+              <p>Periodically sync local standards with global academic fertilizer benchmarks (FAO/USDA). Last synced: 14 Oct 2023.</p>
+              {fertilizerCards.map((item) => (
+                <div key={item.title} className="cm-sync-item">
+                  <strong>{item.title}</strong>
+                  <span className={`cm-sync-status ${item.state === "Active" ? "active" : "pending"}`}>{item.state}</span>
+                </div>
+              ))}
+              <button type="button" className="cm-btn primary full" onClick={syncGuidelines} style={{ marginTop: 4, justifyContent: 'center' }}>
+                <Sparkles size={14} />
+                <span>Sync Guidelines Now</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="cm-side-card">
+            <div className="cm-side-header">
+              <Clock3 size={16} color="var(--primary-green)" />
+              <h3>Recent Modifications</h3>
+            </div>
+            <div className="cm-side-body" style={{ padding: '8px 18px' }}>
+              <div className="cm-timeline">
+                {modifications.map((item, index) => {
+                  const parts = item.meta.split('·');
+                  const source = parts[0]?.trim() || '';
+                  const timestamp = parts[1]?.trim() || item.meta;
+                  return (
+                    <div key={`${item.title}-${index}`} className="cm-timeline-item">
+                      <div className="cm-timeline-icon">
+                        <BookOpen size={14} />
+                      </div>
+                      <div className="cm-timeline-info">
+                        <strong>{item.title}</strong>
+                        <span>{source} · {timestamp}</span>
+                      </div>
+                      <span className="cm-timeline-badge">{activeTab}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <button type="button" className="cm-btn ghost" style={{ width: '100%', justifyContent: 'center', fontSize: 12 }} onClick={exportAuditTrail}>
+                View Full Audit Trail
+              </button>
+            </div>
+          </div>
+
+          <div className="cm-side-card">
+            <div className="cm-help-card">
+              <h3>Need Help?</h3>
+              <p>Access documentation for crop rules, pest knowledge, local language packs, and advisory graph structure.</p>
+              <div className="cm-help-links">
+                <button type="button" className="cm-btn secondary" onClick={exportDocumentation}>Documentation</button>
+                <button type="button" className="cm-btn secondary">Knowledge Graph Guide</button>
+                <button type="button" className="cm-btn secondary">Fertilizer Std Guide</button>
+                <button type="button" className="cm-btn secondary">Advisory Rule Guide</button>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div className="cm-main-grid" style={{ marginTop: 0 }}>
+        <article className="cm-card">
+          <div className="cm-card-header">
+            <div className="cm-card-header-left">
+              <h2>Content Approval Workflow</h2>
+              <p>Statuses supported: Draft, Pending Review, Approved, Published, Archived</p>
+            </div>
+          </div>
+          <div className="cm-workflow-stages">
+            {CONTENT_WORKFLOW.map((status, index) => (
+              <div key={status} className="cm-workflow-stage">
+                <span className={`cm-workflow-pill ${getContentStatusTone(status) === 'verified' || getContentStatusTone(status) === 'review' ? 'active' : ''}`}>
+                  {status}
+                  <span className="count">{getWorkflowCount(status)}</span>
+                </span>
+                {index < CONTENT_WORKFLOW.length - 1 && <span className="cm-workflow-arrow">→</span>}
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <article className="cm-card">
+          <div className="cm-card-header">
+            <div className="cm-card-header-left">
+              <h2>Full Audit Trail Dashboard</h2>
+              <p>User, action, module, and timestamp for editorial accountability</p>
+            </div>
+            <button type="button" className="cm-btn secondary" onClick={exportAuditTrail}>
+              <Download size={15} />
+              <span>Export Audit</span>
+            </button>
+          </div>
+          <div className="cm-table-wrap">
+            <div className="cm-audit-table">
+              <div className="cm-audit-head">
+                <span>User</span><span>Action</span><span>Module</span><span>Timestamp</span><span>Status</span>
+              </div>
               {auditTrail.slice(0, 8).map((item) => (
-                <div key={item.id} className="prototype-admin-audit-row">
+                <div key={item.id} className="cm-audit-row">
                   <strong>{item.user}</strong>
                   <span>{item.action}</span>
                   <span>{item.module}</span>
-                  <small>{formatReadableDate(item.timestamp)}</small>
+                  <span>{formatReadableDate(item.timestamp)}</span>
+                  {renderStatusBadge("Published")}
                 </div>
               ))}
             </div>
-          </article>
-        </div>
+          </div>
+        </article>
+      </div>
 
-        <footer className="prototype-admin-content-footer">
-          <span>© 2026 AgriSupport Academic Research Project. All rights reserved.</span>
-          <div><span>System Status</span><span>Terms of Access</span><span>Privacy Policy</span></div>
-        </footer>
+      <div className="cm-footer">
+        <span>© 2026 AgriSupport Academic Research Project. All rights reserved.</span>
+        <div className="cm-footer-links">
+          <span>System Status</span>
+          <span>Terms of Access</span>
+          <span>Privacy Policy</span>
+        </div>
       </div>
     </section>
   );

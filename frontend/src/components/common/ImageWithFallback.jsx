@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { getCropImageUrl, getPestImageUrl, getDiseaseImageUrl } from "../../data/cropImages";
 
 function createPlaceholderDataUri(label, category) {
   const safeLabel = String(label || "AgriSupport")
@@ -9,9 +10,9 @@ function createPlaceholderDataUri(label, category) {
   const palette =
     category === "disease"
       ? {
-          start: "#16324f",
-          end: "#245c7b",
-          accent: "#38bdf8",
+          start: "#1a4a1a",
+          end: "#2d6b2d",
+          accent: "#a7f3d0",
           tag: "Disease Reference",
         }
       : {
@@ -48,22 +49,34 @@ export default function ImageWithFallback({
   label,
   category = "crop",
   className = "",
+  cropName,
+  pestName,
+  diseaseName,
   ...props
 }) {
+  const autoSrc = useMemo(() => {
+    if (src) return src;
+    if (cropName) return getCropImageUrl(cropName);
+    if (pestName) return getPestImageUrl(pestName);
+    if (diseaseName) return getDiseaseImageUrl(diseaseName);
+    return null;
+  }, [src, cropName, pestName, diseaseName]);
+
   const fallbackSrc = useMemo(
-    () => createPlaceholderDataUri(label || alt || "AgriSupport", category),
-    [alt, category, label],
+    () => createPlaceholderDataUri(label || alt || cropName || pestName || diseaseName || "AgriSupport", category),
+    [alt, category, label, cropName, pestName, diseaseName],
   );
-  const [currentSrc, setCurrentSrc] = useState(src || fallbackSrc);
+
+  const [currentSrc, setCurrentSrc] = useState(autoSrc || fallbackSrc);
 
   useEffect(() => {
-    setCurrentSrc(src || fallbackSrc);
-  }, [src, fallbackSrc]);
+    setCurrentSrc(autoSrc || fallbackSrc);
+  }, [autoSrc, fallbackSrc]);
 
   return (
     <img
       src={currentSrc}
-      alt={alt || label || "Agricultural reference"}
+      alt={alt || label || cropName || pestName || diseaseName || "Agricultural reference"}
       className={className}
       onError={() => {
         if (currentSrc !== fallbackSrc) {

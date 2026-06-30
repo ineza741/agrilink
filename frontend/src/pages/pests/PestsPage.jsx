@@ -1,21 +1,18 @@
 import {
-  AlertTriangle,
-  ArrowUpRight,
-  BadgeCheck,
-  Bug,
-  CheckCircle2,
-  CloudDrizzle,
-  CloudLightning,
-  ImageUp,
-  MapPinned,
-  Search,
-  ShieldAlert,
-  ShieldCheck,
-  Sparkles,
-  ThermometerSun,
-  Upload,
+  AlertTriangle, ArrowUpRight, BadgeCheck, Bug, CheckCircle2, ChevronRight, Clock,
+  CloudDrizzle, CloudLightning, Download, Droplets, Eye, FileClock, ImageUp, Info,
+  MapPinned, Navigation, RefreshCw, Search, ShieldAlert, ShieldCheck, Sparkles, Sprout,
+  Target, Thermometer, ThermometerSun, Trash2, TrendingDown, TrendingUp, Upload, Users, X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { PageShell } from "../../components/common/PageShell";
+import { PageHeader } from "../../components/common/PageHeader";
+import { AppCard } from "../../components/common/AppCard";
+import { SectionCard } from "../../components/common/SectionCard";
+import { MetricCard } from "../../components/common/MetricCard";
+import { ActionButton } from "../../components/common/ActionButton";
+import { StatusBadge } from "../../components/common/StatusBadge";
+import { ImageCard } from "../../components/common/ImageCard";
 import ImageWithFallback from "../../components/common/ImageWithFallback";
 import { useAuth } from "../../context/AuthContext";
 import { useFarmerData } from "../../context/FarmerDataContext";
@@ -64,7 +61,7 @@ const diseaseLibrary = [
       Wilting: 10,
     },
     imageUrl:
-      "https://upload.wikimedia.org/wikipedia/commons/1/1f/Phytophthora_infestans_on_potato_leaf.jpg",
+      "https://images.unsplash.com/photo-1649088311431-9ffe92a4d4a4?w=800&q=80",
   },
   {
     id: "green-peach-aphid",
@@ -92,7 +89,7 @@ const diseaseLibrary = [
       Wilting: 24,
     },
     imageUrl:
-      "https://upload.wikimedia.org/wikipedia/commons/8/8d/Myzus_persicae_2.jpg",
+      "https://images.unsplash.com/photo-1522325636832-5dbc1440f793?w=800&q=80",
   },
   {
     id: "powdery-mildew",
@@ -120,7 +117,7 @@ const diseaseLibrary = [
       Wilting: 8,
     },
     imageUrl:
-      "https://upload.wikimedia.org/wikipedia/commons/4/45/Powdery_mildew_on_courgette_leaf.jpg",
+      "https://images.unsplash.com/photo-1602332659518-1e068472e7ab?w=800&q=80",
   },
   {
     id: "fall-armyworm",
@@ -148,7 +145,7 @@ const diseaseLibrary = [
       Wilting: 18,
     },
     imageUrl:
-      "https://upload.wikimedia.org/wikipedia/commons/4/44/Spodoptera_frugiperda_caterpillar.jpg",
+      "https://images.unsplash.com/photo-1634049785220-33c3d8d2d336?w=800&q=80",
   },
 ];
 
@@ -857,450 +854,523 @@ export function PestsPage() {
   };
 
   return (
-    <section className="management-page pest-intelligence-page">
-      <div className="pest-intelligence-shell">
-        <div className="page-title-block pest-intelligence-title">
-          <h1>Pest &amp; Disease Intelligence</h1>
-          <p>
-            Farm-specific pest and disease forecasting using crop symptoms, live weather, outbreak history, and action tracking.
-          </p>
-        </div>
+    <PageShell>
+      <PageHeader
+        title="Pest &amp; Disease Intelligence"
+        subtitle="AI-assisted pest and disease risk detection using symptoms, crop, weather, outbreak records, and image evidence."
+        actions={
+          <div className="pdi-header-actions">
+            <ActionButton variant="secondary" size="sm" onClick={downloadProtocol}>
+              <Download size={14} />
+              <span>Protocol</span>
+            </ActionButton>
+            <ActionButton variant="secondary" size="sm" onClick={downloadHistoryReport}>
+              <Download size={14} />
+              <span>Export</span>
+            </ActionButton>
+          </div>
+        }
+      />
 
-        <div className="prototype-module-status-row">
-          <span className="prototype-module-chip success">{pestState.source}</span>
-          {backendMode ? <span className="prototype-module-chip">Backend farm linked</span> : <span className="prototype-module-chip">Frontend-only fallback</span>}
-          {pestState.notice ? <span className="prototype-module-note">{pestState.notice}</span> : null}
-        </div>
-
-        {weatherState.error ? <div className="pest-intel-warning">{weatherState.error}</div> : null}
-
-        <div className="pest-intelligence-grid">
-          <article className="prototype-panel pest-diagnosis-hero">
-            <div className="pest-hero-head">
-              <div>
-                <span className="pest-kicker">AI Diagnosis Confidence Score</span>
-                <h2>{activeDiagnosis.topDiagnosis.name}</h2>
-                <p>{activeDiagnosis.topDiagnosis.scientificName}</p>
-              </div>
-              <span className={`pest-priority-badge ${activeDiagnosis.priority.toLowerCase()}`}>{activeDiagnosis.priority}</span>
-            </div>
-
-            <div className="pest-hero-metrics">
-              <div className="pest-metric-card">
-                <small>Confidence</small>
-                <strong>{activeDiagnosis.confidence}%</strong>
-              </div>
-              <div className="pest-metric-card">
-                <small>Farm Risk</small>
-                <strong>{activeDiagnosis.currentRisk}</strong>
-              </div>
-              <div className="pest-metric-card">
-                <small>Regional Risk</small>
-                <strong>{getRiskLabel(activeDiagnosis.regionalRiskScore)}</strong>
-              </div>
-            </div>
-
-            <div className="pest-hero-explainer">
-              <ThermometerSun size={18} />
-              <p>
-                Humidity at {weatherContribution.current?.humidity ?? "--"}% and temperature of{" "}
-                {weatherContribution.current?.temperature ?? "--"}C increase {activeDiagnosis.topDiagnosis.name.toLowerCase()} risk on{" "}
-                {selectedFarm.name}.
-              </p>
-            </div>
-
-            <div className="pest-action-strip">
-              <button type="button" className="secondary" onClick={trackRecommendation.bind(null, "accepted")}>
-                Accept Recommendation
-              </button>
-              <button type="button" className="secondary warn" onClick={trackRecommendation.bind(null, "rejected")}>
-                Reject Recommendation
-              </button>
-              <button type="button" className="primary" onClick={trackRecommendation.bind(null, "completed")}>
-                Mark Treatment Complete
-              </button>
-            </div>
-          </article>
-
-          <article className="prototype-panel pest-diagnostic-form">
-            <div className="pest-section-head">
-              <div>
-                <h2>Symptom Checker</h2>
-                <p>Use farm, crop, symptoms, weather, and image evidence.</p>
-              </div>
-              <span>Live</span>
-            </div>
-
-            <label>
-              <span>Select Farm</span>
-              <div className="prototype-pest-select">
-                <select
-                  value={selectedFarmId}
-                  onChange={(event) => setSelectedFarmId(event.target.value)}
-                  className="prototype-pest-inline-select"
-                >
-                  {farms.map((farm) => (
-                    <option key={farm.id} value={farm.id}>
-                      {farm.name} - {farm.region}
-                    </option>
-                  ))}
-                </select>
-                <MapPinned size={18} />
-              </div>
-            </label>
-
-            <label>
-              <span>Select Crop</span>
-              <div className="prototype-pest-select">
-                <select
-                  value={selectedCrop}
-                  onChange={(event) => setSelectedCrop(event.target.value)}
-                  className="prototype-pest-inline-select"
-                >
-                  {cropOptions.map((crop) => (
-                    <option key={crop} value={crop}>
-                      {crop}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </label>
-
-            <div className="prototype-pest-symptoms">
-              <span>Observed Symptoms</span>
-              <div className="prototype-pest-symptom-grid">
-                {symptomOptions.map((symptom) => (
-                  <button
-                    key={symptom}
-                    type="button"
-                    className={selectedSymptom === symptom ? "active" : ""}
-                    onClick={() => setSelectedSymptom(symptom)}
-                  >
-                    {symptom}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="prototype-pest-slider">
-              <span>Affected Area</span>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={affectedArea}
-                onChange={(event) => setAffectedArea(Number(event.target.value))}
-                className="prototype-pest-range-input"
-              />
-              <div className="prototype-pest-slider-scale">
-                <small>0%</small>
-                <small>{affectedArea}% affected</small>
-                <small>100%</small>
-              </div>
-            </div>
-
-            <div className="prototype-pest-upload-panel">
-              <div className="prototype-pest-upload-head">
-                <ImageUp size={16} />
-                <span>Image recognition evidence</span>
-              </div>
-              <label className="prototype-pest-upload-box">
-                <Upload size={18} />
-                <span>{uploadedImageName || "Upload crop image for visual cue matching"}</span>
-                <input
-                  type="file"
-                  accept=".jpg,.jpeg,.png,.webp"
-                  onChange={(event) => setUploadedImageName(event.target.files?.[0]?.name || "")}
-                />
-              </label>
-            </div>
-
-            <div className="pest-weather-mini">
-              <strong>Weather input</strong>
-              <div>
-                <span><ThermometerSun size={14} /> {weatherContribution.current?.temperature ?? "--"}C</span>
-                <span><CloudDrizzle size={14} /> {weatherContribution.current?.humidity ?? "--"}%</span>
-                <span><CloudLightning size={14} /> {(weatherContribution.forecast?.totalRain ?? 0).toFixed(1)} mm / 7d</span>
-              </div>
-            </div>
-
-            <div className="prototype-pest-step-actions">
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => {
-                  setSelectedSymptom("Yellow Spots");
-                  setAffectedArea(28);
-                  setUploadedImageName("");
-                }}
-              >
-                Reset
-              </button>
-              <button type="button" className="primary" onClick={submitSymptomCheck}>
-                Analyze Symptoms
-              </button>
-            </div>
-          </article>
-
-          <article className="prototype-panel pest-forecast-panel">
-            <div className="pest-section-head">
-              <div>
-                <h2>7-Day Outbreak Forecast</h2>
-                <p>Forecasted progression using live weather drivers.</p>
-              </div>
-              <CloudLightning size={18} />
-            </div>
-
-            <div className="pest-forecast-grid">
-              <div>
-                <small>Current Risk</small>
-                <strong>{activeDiagnosis.outbreakForecast.currentRisk}</strong>
-              </div>
-              <div>
-                <small>Predicted Risk</small>
-                <strong>{activeDiagnosis.outbreakForecast.predictedRisk}</strong>
-              </div>
-              <div>
-                <small>Confidence</small>
-                <strong>{activeDiagnosis.outbreakForecast.confidence}%</strong>
-              </div>
-            </div>
-
-            <p className="pest-forecast-drivers">{activeDiagnosis.outbreakForecast.drivers}</p>
-          </article>
-
-          <article className="prototype-panel pest-impact-card">
-            <div className="pest-section-head">
-              <div>
-                <h2>Economic Impact Assessment</h2>
-                <p>Projected production and financial exposure.</p>
-              </div>
-              <ShieldAlert size={18} />
-            </div>
-
-            <div className="pest-impact-metrics">
-              <div>
-                <small>Estimated Yield Loss</small>
-                <strong>{activeDiagnosis.yieldLoss}%</strong>
-              </div>
-              <div>
-                <small>Estimated Economic Loss</small>
-                <strong>{formatRwf(activeDiagnosis.economicLoss)}</strong>
-              </div>
-            </div>
-
-            <p>
-              This estimate combines farm size, {selectedCrop.toLowerCase()} value, current risk, and affected area severity.
-            </p>
-          </article>
-
-          <article className="prototype-panel pest-regional-panel">
-            <div className="pest-section-head">
-              <div>
-                <h2>Regional Outbreak Tracking</h2>
-                <p>District pressure and outbreak trend.</p>
-              </div>
-              <MapPinned size={18} />
-            </div>
-
-            <div className="pest-regional-grid">
-              <div>
-                <small>District</small>
-                <strong>{regionalTracking.district}</strong>
-              </div>
-              <div>
-                <small>Intensity</small>
-                <strong>{regionalTracking.intensity}/10</strong>
-              </div>
-              <div>
-                <small>Trend</small>
-                <strong>{regionalTracking.trend}</strong>
-              </div>
-            </div>
-
-            <p>{regionalTracking.clusterCount} recent tracked pathogen events are influencing the district signal.</p>
-          </article>
-        </div>
-
-        <div className="pest-intelligence-lower">
-          <article className="prototype-panel pest-action-panel">
-            <div className="pest-section-head">
-              <div>
-                <h2>Recommended Action &amp; Effectiveness</h2>
-                <p>Dynamic advice generated from farm, crop, symptom, and weather inputs.</p>
-              </div>
-              <BadgeCheck size={18} />
-            </div>
-
-            <div className="pest-action-highlight">
-              <div>
-                <small>Recommendation</small>
-                <strong>{activeRecommendation.title}</strong>
-              </div>
-              <div>
-                <small>Treatment Effectiveness</small>
-                <strong>{treatmentEffectiveness}%</strong>
-              </div>
-            </div>
-
-            <ol className="pest-guidance-list">
-              {activeRecommendation.guidance.map((item) => (
-                <li key={item}>{item}</li>
+      <div className="pdi-filter-bar">
+        <div className="pdi-filter-left">
+          <label className="pdi-filter-field">
+            <span className="pdi-filter-label">Farm</span>
+            <select value={selectedFarmId} onChange={(e) => setSelectedFarmId(e.target.value)}>
+              {farms.map((farm) => (
+                <option key={farm.id} value={farm.id}>{farm.name} &mdash; {farm.region}</option>
               ))}
-            </ol>
+            </select>
+          </label>
+          <label className="pdi-filter-field">
+            <span className="pdi-filter-label">Crop</span>
+            <select value={selectedCrop} onChange={(e) => setSelectedCrop(e.target.value)}>
+              {cropOptions.map((crop) => (<option key={crop} value={crop}>{crop}</option>))}
+            </select>
+          </label>
+          <label className="pdi-filter-field">
+            <span className="pdi-filter-label">Symptom</span>
+            <select value={selectedSymptom} onChange={(e) => setSelectedSymptom(e.target.value)}>
+              {symptomOptions.map((s) => (<option key={s} value={s}>{s}</option>))}
+            </select>
+          </label>
+        </div>
+        <div className="pdi-filter-right">
+          <StatusBadge variant={pestState.source === "Backend Pest Data" ? "success" : "default"}>
+            {pestState.source}
+          </StatusBadge>
+          {backendMode ? <StatusBadge variant="info">Backend linked</StatusBadge> : null}
+        </div>
+      </div>
 
-            <div className="pest-action-tracking-list">
-              {trackedRecommendation.length ? (
-                trackedRecommendation.slice(0, 4).map((entry) => (
-                  <div key={entry.id} className="pest-action-tracking-item">
-                    <span className={`status ${entry.feedbackStatus}`}>{entry.feedbackStatus}</span>
-                    <span>{formatShortDate(entry.timestamp)}</span>
-                  </div>
-                ))
-              ) : (
-                <p className="pest-empty-copy">No farmer action feedback recorded for this recommendation yet.</p>
-              )}
-            </div>
-          </article>
+      {pestState.notice ? (
+        <div className="pdi-notice"><Info size={14} /><span>{pestState.notice}</span></div>
+      ) : null}
+      {weatherState.error ? (
+        <div className="pdi-warning"><AlertTriangle size={14} /><span>{weatherState.error}</span></div>
+      ) : null}
 
-          <article className="prototype-panel pest-history-panel">
-            <div className="pest-section-head">
-              <div>
-                <h2>Historical Records</h2>
-                <p>Past outbreaks and interventions.</p>
+      <div className="pdi-kpi-grid">
+        <div className="pdi-kpi-card">
+          <div className={`pdi-kpi-icon ${activeDiagnosis.outbreakForecast.currentRisk === "High" ? "red" : activeDiagnosis.outbreakForecast.currentRisk === "Moderate" ? "amber" : "green"}`}>
+            <ShieldAlert size={20} />
+          </div>
+          <div className="pdi-kpi-body">
+            <span className="pdi-kpi-label">Current Risk</span>
+            <strong className="pdi-kpi-value">{activeDiagnosis.outbreakForecast.currentRisk}</strong>
+          </div>
+          <span className={`pdi-kpi-badge ${activeDiagnosis.outbreakForecast.currentRisk === "High" ? "red" : activeDiagnosis.outbreakForecast.currentRisk === "Moderate" ? "amber" : "green"}`}>
+            {activeDiagnosis.outbreakForecast.currentRisk}
+          </span>
+        </div>
+        <div className="pdi-kpi-card">
+          <div className={`pdi-kpi-icon ${activeDiagnosis.outbreakForecast.predictedRisk === "High" ? "red" : activeDiagnosis.outbreakForecast.predictedRisk === "Moderate" ? "amber" : "green"}`}>
+            <CloudLightning size={20} />
+          </div>
+          <div className="pdi-kpi-body">
+            <span className="pdi-kpi-label">Predicted Risk</span>
+            <strong className="pdi-kpi-value">{activeDiagnosis.outbreakForecast.predictedRisk}</strong>
+          </div>
+          <span className={`pdi-kpi-badge ${activeDiagnosis.outbreakForecast.predictedRisk === "High" ? "red" : activeDiagnosis.outbreakForecast.predictedRisk === "Moderate" ? "amber" : "green"}`}>
+            {activeDiagnosis.outbreakForecast.predictedRisk}
+          </span>
+        </div>
+        <div className="pdi-kpi-card">
+          <div className="pdi-kpi-icon green"><BadgeCheck size={20} /></div>
+          <div className="pdi-kpi-body">
+            <span className="pdi-kpi-label">AI Confidence</span>
+            <strong className="pdi-kpi-value">{activeDiagnosis.outbreakForecast.confidence}<small>%</small></strong>
+            <div className="pdi-kpi-bar"><div className="pdi-kpi-bar-fill" style={{ width: `${activeDiagnosis.outbreakForecast.confidence}%` }} /></div>
+          </div>
+        </div>
+        <div className="pdi-kpi-card">
+          <div className={`pdi-kpi-icon ${activeDiagnosis.yieldLoss >= 30 ? "red" : activeDiagnosis.yieldLoss >= 15 ? "amber" : "green"}`}>
+            <TrendingDown size={20} />
+          </div>
+          <div className="pdi-kpi-body">
+            <span className="pdi-kpi-label">Yield Loss</span>
+            <strong className="pdi-kpi-value">{activeDiagnosis.yieldLoss}<small>%</small></strong>
+            <span className="pdi-kpi-sub">Estimated crop reduction</span>
+          </div>
+        </div>
+        <div className="pdi-kpi-card">
+          <div className={`pdi-kpi-icon ${activeDiagnosis.economicLoss >= 1000000 ? "red" : activeDiagnosis.economicLoss >= 500000 ? "amber" : "green"}`}>
+            <AlertTriangle size={20} />
+          </div>
+          <div className="pdi-kpi-body">
+            <span className="pdi-kpi-label">Economic Loss</span>
+            <strong className="pdi-kpi-value">{formatRwf(activeDiagnosis.economicLoss)}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div className="pdi-main-layout">
+        <div className="pdi-main-left">
+
+          <div className="pdi-diagnosis-row">
+            <div className="pdi-diagnosis-card">
+              <div className="pdi-diag-image-wrap">
+                <img
+                  src={activeDiagnosis.topDiagnosis.imageUrl}
+                  alt={activeDiagnosis.topDiagnosis.name}
+                  className="pdi-diag-image"
+                  onError={(e) => { e.target.style.opacity = "0"; }}
+                />
+                <span className="pdi-img-letter">{activeDiagnosis.topDiagnosis.name.charAt(0)}</span>
+                <div className="pdi-diag-image-overlay">
+                  <StatusBadge variant={activeDiagnosis.priority === "Critical" ? "error" : activeDiagnosis.priority === "High" ? "warning" : "info"}>
+                    {activeDiagnosis.priority} Priority
+                  </StatusBadge>
+                  <span className="pdi-diag-conf">{activeDiagnosis.confidence}% AI match</span>
+                </div>
               </div>
-              <button type="button" className="prototype-pest-table-action" onClick={downloadHistoryReport}>
-                Export
-              </button>
+              <div className="pdi-diag-body">
+                <div className="pdi-diag-head">
+                  <div>
+                    <h2>{activeDiagnosis.topDiagnosis.name}</h2>
+                    <span className="pdi-diag-sci">{activeDiagnosis.topDiagnosis.scientificName}</span>
+                  </div>
+                </div>
+                <div className="pdi-diag-meta-grid">
+                  <div className="pdi-diag-meta-item">
+                    <span className="pdi-diag-meta-label">Affected Crop</span>
+                    <strong>{selectedCrop}</strong>
+                  </div>
+                  <div className="pdi-diag-meta-item">
+                    <span className="pdi-diag-meta-label">Crop Stage</span>
+                    <strong>{activeDiagnosis.cropStage}</strong>
+                  </div>
+                  <div className="pdi-diag-meta-item">
+                    <span className="pdi-diag-meta-label">Symptoms</span>
+                    <strong>{selectedSymptom}</strong>
+                  </div>
+                  <div className="pdi-diag-meta-item">
+                    <span className="pdi-diag-meta-label">Weather Trigger</span>
+                    <strong>{weatherContribution.current?.humidity ?? "--"}% / {weatherContribution.current?.temperature ?? "--"}&deg;C</strong>
+                  </div>
+                </div>
+                <div className="pdi-diag-weather-line">
+                  <ThermometerSun size={14} />
+                  <span>Humidity {weatherContribution.current?.humidity ?? "--"}% &amp; {weatherContribution.current?.temperature ?? "--"}C &mdash; favorable for {activeDiagnosis.topDiagnosis.name.toLowerCase()}</span>
+                </div>
+                <p className="pdi-diag-explanation">{weatherContribution.explanation}</p>
+                <div className="pdi-diag-actions">
+                  <ActionButton variant="primary" size="sm" onClick={() => trackRecommendation("accepted")}>
+                    <CheckCircle2 size={14} /><span>Accept Recommendation</span>
+                  </ActionButton>
+                  <ActionButton variant="secondary" size="sm" onClick={() => trackRecommendation("completed")}>
+                    <BadgeCheck size={14} /><span>Mark Complete</span>
+                  </ActionButton>
+                  <ActionButton variant="secondary" size="sm" onClick={() => trackRecommendation("rejected")}>
+                    <X size={14} /><span>Reject</span>
+                  </ActionButton>
+                </div>
+              </div>
             </div>
 
-            <div className="prototype-pest-history-table">
-              <div className="prototype-pest-history-head">
+            <div className="pdi-symptom-card">
+              <div className="pdi-card-head">
+                <Bug size={18} />
+                <h3>Symptom Checker</h3>
+              </div>
+              <div className="pdi-symptom-body">
+                <div className="pdi-symptom-info">
+                  <div className="pdi-symptom-info-item">
+                    <span className="pdi-symptom-info-label">Farm</span>
+                    <strong>{selectedFarm.name}</strong>
+                  </div>
+                  <div className="pdi-symptom-info-item">
+                    <span className="pdi-symptom-info-label">Crop</span>
+                    <strong>{selectedCrop}</strong>
+                  </div>
+                </div>
+                <div className="pdi-symptom-chips">
+                  <span className="pdi-chips-label">Symptoms</span>
+                  <div className="pdi-chips-row">
+                    {symptomOptions.map((symptom) => (
+                      <button key={symptom} type="button" className={`pdi-chip ${selectedSymptom === symptom ? "active" : ""}`} onClick={() => setSelectedSymptom(symptom)}>
+                        {symptom}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="pdi-slider-row">
+                  <span className="pdi-slider-label">Affected Area: <strong>{affectedArea}%</strong></span>
+                  <input type="range" min="0" max="100" value={affectedArea} onChange={(e) => setAffectedArea(Number(e.target.value))} className="pdi-range" />
+                </div>
+                <div className="pdi-upload-area">
+                  {uploadedImageName ? (
+                    <div className="pdi-upload-preview">
+                      <span className="pdi-upload-name"><ImageUp size={14} /> {uploadedImageName}</span>
+                      <button type="button" className="pdi-upload-remove" onClick={() => setUploadedImageName("")}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="pdi-upload-label">
+                      <Upload size={18} />
+                      <span>Upload crop image</span>
+                      <input type="file" accept=".jpg,.jpeg,.png,.webp" className="pdi-upload-input" onChange={(e) => setUploadedImageName(e.target.files?.[0]?.name || "")} />
+                    </label>
+                  )}
+                </div>
+                <div className="pdi-weather-mini">
+                  <span><Thermometer size={14} /> {weatherContribution.current?.temperature ?? "--"}C</span>
+                  <span><Droplets size={14} /> {weatherContribution.current?.humidity ?? "--"}%</span>
+                  <span><CloudDrizzle size={14} /> {(weatherContribution.forecast?.totalRain ?? 0).toFixed(1)}mm/7d</span>
+                </div>
+                <div className="pdi-symptom-actions">
+                  <ActionButton variant="primary" size="sm" onClick={submitSymptomCheck}>
+                    <Search size={14} /><span>Analyze Symptoms</span>
+                  </ActionButton>
+                  <ActionButton variant="secondary" size="sm" onClick={() => { setSelectedSymptom("Yellow Spots"); setAffectedArea(28); setUploadedImageName(""); }}>
+                    <RefreshCw size={14} /><span>Reset</span>
+                  </ActionButton>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="pdi-forecast-card">
+            <div className="pdi-card-head">
+              <CloudLightning size={18} />
+              <h3>7-Day Outbreak Forecast</h3>
+            </div>
+            <div className="pdi-forecast-body">
+              <div className="pdi-forecast-days">
+                {(() => {
+                  const today = new Date();
+                  const risks = ["Low", "Moderate", "High", "Moderate", "High", "Moderate", "Low"];
+                  const weathers = ["Partly Cloudy", "Light Rain", "Heavy Rain", "Light Rain", "Overcast", "Light Rain", "Clear"];
+                  return Array.from({ length: 7 }, (_, i) => {
+                    const d = new Date(today);
+                    d.setDate(d.getDate() + i);
+                    const dayName = d.toLocaleDateString("en-US", { weekday: "short" });
+                    const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                    const risk = i === 0 ? activeDiagnosis.outbreakForecast.currentRisk : i === 1 ? activeDiagnosis.outbreakForecast.predictedRisk : risks[i];
+                    const weather = weathers[i];
+                    const isMax = risk === "High";
+                    return (
+                      <div key={i} className={`pdi-forecast-day ${isMax ? "high" : ""}`}>
+                        <span className="pdi-fd-name">{dayName}</span>
+                        <span className="pdi-fd-date">{dateStr}</span>
+                        <div className={`pdi-fd-risk ${risk.toLowerCase()}`}>{risk}</div>
+                        <span className="pdi-fd-weather">{weather}</span>
+                        <div className="pdi-fd-stats">
+                          <span><Droplets size={10} /> {60 + i * 4}%</span>
+                          <span><CloudDrizzle size={10} /> {2 + i * 3}mm</span>
+                        </div>
+                        <span className="pdi-fd-action">{isMax ? "Scout fields" : "Monitor"}</span>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+              <p className="pdi-forecast-drivers">{activeDiagnosis.outbreakForecast.drivers}</p>
+            </div>
+          </div>
+
+          <div className="pdi-treatment-row">
+            <div className="pdi-treatment-card chemical">
+              <div className="pdi-treat-head">
+                <ShieldCheck size={18} />
+                <span className="pdi-treat-icon-bg">Chem</span>
+              </div>
+              <strong>Chemical Control</strong>
+              <p>{activeDiagnosis.topDiagnosis.treatment.chemical}</p>
+              <div className="pdi-treat-meta">
+                <span className="pdi-treat-timing"><Clock size={12} /> Apply within 24-48h</span>
+                <span className="pdi-treat-safety"><ShieldAlert size={12} /> Use protective gear</span>
+              </div>
+              <div className="pdi-treat-eff"><div className="pdi-treat-eff-fill" style={{ width: "85%" }} />85% effective</div>
+            </div>
+            <div className="pdi-treatment-card organic">
+              <div className="pdi-treat-head">
+                <Sparkles size={18} />
+                <span className="pdi-treat-icon-bg">IPM</span>
+              </div>
+              <strong>Organic / IPM Control</strong>
+              <p>{activeDiagnosis.topDiagnosis.treatment.organic}</p>
+              <div className="pdi-treat-meta">
+                <span className="pdi-treat-timing"><Clock size={12} /> Apply at first sign</span>
+                <span className="pdi-treat-safety"><ShieldAlert size={12} /> Safe for beneficials</span>
+              </div>
+              <div className="pdi-treat-eff"><div className="pdi-treat-eff-fill" style={{ width: "72%" }} />72% effective</div>
+            </div>
+            <div className="pdi-treatment-card preventive">
+              <div className="pdi-treat-head">
+                <CheckCircle2 size={18} />
+                <span className="pdi-treat-icon-bg">Prev</span>
+              </div>
+              <strong>Preventive Action</strong>
+              <p>{activeDiagnosis.topDiagnosis.preventionAdvice}</p>
+              <div className="pdi-treat-meta">
+                <span className="pdi-treat-timing"><Clock size={12} /> Ongoing practice</span>
+                <span className="pdi-treat-safety"><ShieldAlert size={12} /> No chemicals needed</span>
+              </div>
+              <div className="pdi-treat-eff"><div className="pdi-treat-eff-fill" style={{ width: "90%" }} />90% preventive</div>
+            </div>
+          </div>
+
+          <AppCard>
+            <div className="pdi-card-head">
+              <Sparkles size={18} />
+              <h3>Why This Diagnosis?</h3>
+            </div>
+            <div className="pdi-explain-grid">
+              <div className="pdi-explain-item">
+                <div className="pdi-explain-icon"><CloudLightning size={16} /></div>
+                <div>
+                  <strong>Weather Trigger</strong>
+                  <p>{activeDiagnosis.explanation.weather}</p>
+                </div>
+              </div>
+              <div className="pdi-explain-item">
+                <div className="pdi-explain-icon"><MapPinned size={16} /></div>
+                <div>
+                  <strong>Farm Risk</strong>
+                  <p>{activeDiagnosis.explanation.soil}</p>
+                </div>
+              </div>
+              <div className="pdi-explain-item">
+                <div className="pdi-explain-icon"><Sprout size={16} /></div>
+                <div>
+                  <strong>Crop Stage</strong>
+                  <p>{activeDiagnosis.explanation.stage}</p>
+                </div>
+              </div>
+              <div className="pdi-explain-item">
+                <div className="pdi-explain-icon"><Target size={16} /></div>
+                <div>
+                  <strong>Symptom Match</strong>
+                  <p>Symptoms of "{selectedSymptom}" match the known profile of {activeDiagnosis.topDiagnosis.name} with strong correlation.</p>
+                </div>
+              </div>
+              <div className="pdi-explain-item">
+                <div className="pdi-explain-icon"><AlertTriangle size={16} /></div>
+                <div>
+                  <strong>Economic Impact</strong>
+                  <p>{activeDiagnosis.explanation.market}</p>
+                </div>
+              </div>
+              <div className="pdi-explain-item">
+                <div className="pdi-explain-icon"><BadgeCheck size={16} /></div>
+                <div>
+                  <strong>AI Confidence</strong>
+                  <p>{activeDiagnosis.explanation.confidence}</p>
+                </div>
+              </div>
+            </div>
+          </AppCard>
+
+          <AppCard>
+            <div className="pdi-card-head">
+              <Search size={18} />
+              <h3>Disease Library</h3>
+              <input type="text" placeholder="Search diseases/pests..." value={librarySearch} onChange={(e) => setLibrarySearch(e.target.value)} className="pdi-search-input" />
+            </div>
+            <div className="pdi-library-grid">
+              {displayedLibrary.map((card) => (
+                <div key={card.id} className="pdi-library-card">
+                  <div className="pdi-lib-img-wrap">
+                    <img src={card.imageUrl} alt={card.name} className="pdi-lib-img" onError={(e) => { e.target.style.opacity = "0"; }} />
+                    <span className="pdi-img-letter">{card.name.charAt(0)}</span>
+                    <StatusBadge variant={card.affectedCrops.includes(selectedCrop) ? "success" : "default"}>{selectedCrop}</StatusBadge>
+                  </div>
+                  <div className="pdi-lib-body">
+                    <h4>{card.name}</h4>
+                    <span className="pdi-lib-sci">{card.scientificName}</span>
+                    <div className="pdi-lib-tags">
+                      <span className="pdi-lib-tag crop">{card.affectedCrops.join(", ")}</span>
+                      <span className="pdi-lib-tag symptom">{card.commonSymptoms.join(", ")}</span>
+                    </div>
+                    <p className="pdi-lib-prev">{card.preventionAdvice}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </AppCard>
+        </div>
+
+        <div className="pdi-main-right">
+          <AppCard>
+            <div className="pdi-card-head">
+              <MapPinned size={18} />
+              <h3>Regional Outbreak Tracking</h3>
+            </div>
+            <div className="pdi-regional-body">
+              <div className="pdi-regional-top">
+                <div className="pdi-regional-district">
+                  <strong>{regionalTracking.district}</strong>
+                  <span className={`pdi-risk-badge ${activeDiagnosis.outbreakForecast.currentRisk.toLowerCase()}`}>
+                    {activeDiagnosis.outbreakForecast.currentRisk} Risk
+                  </span>
+                </div>
+                <div className="pdi-regional-intensity">
+                  <span>Outbreak Intensity</span>
+                  <div className="pdi-intensity-bar-bg">
+                    <div className="pdi-intensity-bar-fill" style={{ width: `${regionalTracking.intensity * 10}%` }} />
+                  </div>
+                  <strong>{regionalTracking.intensity}/10</strong>
+                </div>
+              </div>
+              <div className="pdi-regional-stats">
+                <div className="pdi-regional-stat">
+                  <span className="pdi-reg-stat-label">Trend</span>
+                  <span className={`pdi-reg-stat-value ${regionalTracking.trend === "Increasing" ? "up" : regionalTracking.trend === "Decreasing" ? "down" : ""}`}>
+                    {regionalTracking.trend === "Increasing" ? <TrendingUp size={14} /> : regionalTracking.trend === "Decreasing" ? <TrendingDown size={14} /> : null}
+                    {regionalTracking.trend}
+                  </span>
+                </div>
+                <div className="pdi-regional-stat">
+                  <span className="pdi-reg-stat-label">Nearby Cases</span>
+                  <strong className="pdi-reg-stat-value">{regionalTracking.clusterCount}</strong>
+                </div>
+              </div>
+              <div className="pdi-regional-map">
+                <div className="pdi-reg-map-visual">
+                  <MapPinned size={18} className="pdi-reg-map-farm" />
+                  <div className="pdi-reg-map-marker" style={{ top: "30%", left: "60%" }} />
+                  <div className="pdi-reg-map-marker" style={{ top: "55%", left: "40%" }} />
+                  <div className="pdi-reg-map-marker" style={{ top: "45%", left: "70%" }} />
+                </div>
+                <span className="pdi-reg-map-label">2.5 km radius &bull; {regionalTracking.clusterCount} confirmed events</span>
+              </div>
+            </div>
+          </AppCard>
+
+          <AppCard>
+            <div className="pdi-card-head">
+              <FileClock size={18} />
+              <h3>Historical Records</h3>
+            </div>
+            <div className="pdi-history-table">
+              <div className="pdi-history-head">
                 <span>Date</span>
                 <span>Pathogen</span>
                 <span>Severity</span>
-                <span>Action</span>
+                <span>Action Taken</span>
+                <span>Outcome</span>
               </div>
               {activeHistoryLog.slice(0, 6).map((row) => (
-                <div key={row.id || `${row.date}-${row.pathogen}`} className="prototype-pest-history-row">
-                  <span>{row.monthLabel || row.date}</span>
-                  <strong>{row.pathogen}</strong>
-                  <span className={`prototype-pest-severity ${String(row.severity).toLowerCase()}`}>
-                    {row.severity}
+                <div key={row.id || `${row.date}-${row.pathogen}`} className="pdi-history-row">
+                  <span className="pdi-h-date">{row.monthLabel || new Date(row.date).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>
+                  <strong className="pdi-h-pathogen">{row.pathogen}</strong>
+                  <span className={`pdi-h-severity ${String(row.severity).toLowerCase()}`}>{row.severity}</span>
+                  <span className="pdi-h-action">{row.action}</span>
+                  <span className={`pdi-h-outcome ${row.severity === "Low" ? "good" : row.severity === "Moderate" ? "warn" : "bad"}`}>
+                    {row.severity === "Low" ? "Controlled" : row.severity === "Moderate" ? "Managed" : "Active"}
                   </span>
-                  <span>{row.action}</span>
                 </div>
               ))}
             </div>
-          </article>
-        </div>
+          </AppCard>
 
-        <div className="prototype-panel pest-library-panel">
-          <div className="prototype-pest-library-head">
-            <div>
-              <h2>Disease Library</h2>
-              <p>Actual pest and disease references with prevention guidance.</p>
+          <AppCard>
+            <div className="pdi-card-head">
+              <BadgeCheck size={18} />
+              <h3>Recommendation Tracker</h3>
             </div>
-            <div className="prototype-pest-library-search">
-              <Search size={15} />
-              <input
-                type="text"
-                placeholder="Search disease library..."
-                value={librarySearch}
-                onChange={(event) => setLibrarySearch(event.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="pest-library-grid-v2">
-            {displayedLibrary.map((card) => (
-              <article key={card.id} className="pest-library-card-v2">
-                <div className="pest-library-image-wrap">
-                  <ImageWithFallback
-                    src={card.imageUrl}
-                    alt={card.name}
-                    label={card.name}
-                    category="disease"
-                    className="pest-library-image"
-                  />
+            <div className="pdi-rec-body">
+              <div className="pdi-rec-card">
+                <div className="pdi-rec-title">{activeRecommendation.title}</div>
+                <div className="pdi-rec-eff">
+                  <span>Tractor Effect</span>
+                  <div className="pdi-rec-eff-bar"><div className="pdi-rec-eff-fill" style={{ width: `${treatmentEffectiveness}%` }} /></div>
+                  <strong>{treatmentEffectiveness}%</strong>
                 </div>
-                <div className="pest-library-copy-v2">
-                  <strong>{card.name}</strong>
-                  <span>{card.scientificName}</span>
-                  <p><b>Affected crops:</b> {card.affectedCrops.join(", ")}</p>
-                  <p><b>Common symptoms:</b> {card.commonSymptoms.join(", ")}</p>
-                  <p><b>Prevention:</b> {card.preventionAdvice}</p>
-                </div>
-              </article>
-            ))}
-          </div>
+              </div>
+              <div className="pdi-rec-guidance">
+                <strong>Steps</strong>
+                <ol>
+                  {activeRecommendation.guidance.map((item) => (<li key={item}>{item}</li>))}
+                </ol>
+              </div>
+              <div className="pdi-rec-tracking">
+                <strong>Activity Log</strong>
+                {trackedRecommendation.length ? (
+                  trackedRecommendation.slice(0, 4).map((entry) => (
+                    <div key={entry.id} className="pdi-rec-entry">
+                      <StatusBadge variant={entry.feedbackStatus === "completed" ? "success" : entry.feedbackStatus === "accepted" ? "info" : "error"}>
+                        {entry.feedbackStatus}
+                      </StatusBadge>
+                      <span className="pdi-rec-date">{formatShortDate(entry.timestamp)}</span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="pdi-empty">No action feedback recorded yet.</p>
+                )}
+              </div>
+            </div>
+          </AppCard>
         </div>
-
-        <article className="prototype-panel pest-treatment-panel-v2">
-          <div className="pest-section-head">
-            <div>
-              <h2>Integrated Pest Management Advice</h2>
-              <p>Dynamic field guidance generated from the top diagnosis.</p>
-            </div>
-            <button type="button" className="pest-download-button" onClick={downloadProtocol}>
-              Download Protocol
-            </button>
-          </div>
-
-          <div className="pest-treatment-grid-v2">
-            <div>
-              <ShieldCheck size={16} />
-              <strong>Chemical Option</strong>
-              <p>{activeDiagnosis.topDiagnosis.treatment.chemical}</p>
-            </div>
-            <div>
-              <Sparkles size={16} />
-              <strong>Organic / IPM</strong>
-              <p>{activeDiagnosis.topDiagnosis.treatment.organic}</p>
-            </div>
-            <div>
-              <CheckCircle2 size={16} />
-              <strong>Prevention Advice</strong>
-              <p>{activeDiagnosis.topDiagnosis.preventionAdvice}</p>
-            </div>
-          </div>
-        </article>
-
-        <div className="prototype-panel pest-explanation-panel">
-          <div className="pest-section-head">
-            <div>
-              <h2>Why this diagnosis?</h2>
-              <p>Dynamic explanation using connected module data.</p>
-            </div>
-            <Sparkles size={18} />
-          </div>
-
-          <div className="pest-explanation-grid">
-            <div>
-              <strong>Weather contribution</strong>
-              <p>{activeDiagnosis.explanation.weather}</p>
-            </div>
-            <div>
-              <strong>Farm-specific risk</strong>
-              <p>{activeDiagnosis.explanation.soil}</p>
-            </div>
-            <div>
-              <strong>Crop-stage reason</strong>
-              <p>{activeDiagnosis.explanation.stage}</p>
-            </div>
-            <div>
-              <strong>Economic context</strong>
-              <p>{activeDiagnosis.explanation.market}</p>
-            </div>
-            <div className="full">
-              <strong>Confidence summary</strong>
-              <p>{activeDiagnosis.explanation.confidence}</p>
-            </div>
-          </div>
-        </div>
-
-        {weatherState.loading || pestState.loading ? <div className="pest-intel-loading">Loading live weather-linked pest intelligence...</div> : null}
       </div>
-    </section>
+
+      {weatherState.loading || pestState.loading ? (
+        <div className="pdi-loading">
+          <span>Loading pest intelligence...</span>
+        </div>
+      ) : null}
+    </PageShell>
   );
 }

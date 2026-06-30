@@ -11,6 +11,7 @@ export function DashboardLayout() {
   const location = useLocation();
   const isAdmin = isAdminRole(user?.role);
   const [isFarmerSidebarOpen, setIsFarmerSidebarOpen] = useState(false);
+  const [isAdminSidebarOpen, setIsAdminSidebarOpen] = useState(false);
   const shouldShowHeader = true;
 
   useEffect(() => {
@@ -28,6 +29,20 @@ export function DashboardLayout() {
     };
   }, [isAdmin]);
 
+  useEffect(() => {
+    if (!isAdmin) {
+      return undefined;
+    }
+    const handleToggle = () => setIsAdminSidebarOpen((current) => !current);
+    window.addEventListener("toggle-admin-sidebar", handleToggle);
+    return () => window.removeEventListener("toggle-admin-sidebar", handleToggle);
+  }, [isAdmin]);
+
+  const closeSidebars = () => {
+    setIsFarmerSidebarOpen(false);
+    setIsAdminSidebarOpen(false);
+  };
+
   return (
     <div className={isAdmin ? "dashboard-layout" : "dashboard-layout farmer-layout"}>
       {!isAdmin && isFarmerSidebarOpen ? (
@@ -39,10 +54,28 @@ export function DashboardLayout() {
         />
       ) : null}
 
-      <AppSidebar isOpen={isAdmin ? true : isFarmerSidebarOpen} onClose={() => setIsFarmerSidebarOpen(false)} />
+      {isAdmin && isAdminSidebarOpen ? (
+        <button
+          type="button"
+          className="farmer-sidebar-overlay admin-overlay"
+          aria-label="Close menu"
+          onClick={() => setIsAdminSidebarOpen(false)}
+        />
+      ) : null}
+
+      <AppSidebar
+        isOpen={isAdmin ? (isAdminSidebarOpen ? true : undefined) : isFarmerSidebarOpen}
+        onClose={closeSidebars}
+      />
       <div className="dashboard-main">
         {shouldShowHeader ? (
-          <AppHeader onToggleSidebar={() => setIsFarmerSidebarOpen((current) => !current)} />
+          <AppHeader onToggleSidebar={() => {
+            if (isAdmin) {
+              setIsAdminSidebarOpen((current) => !current);
+            } else {
+              setIsFarmerSidebarOpen((current) => !current);
+            }
+          }} />
         ) : null}
         <Outlet />
       </div>
