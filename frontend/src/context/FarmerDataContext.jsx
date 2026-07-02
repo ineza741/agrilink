@@ -96,6 +96,7 @@ function createFarmRecord(ownerId, farm, overrides = {}) {
       mapX: Number(farm.location?.mapX ?? farm.mapX ?? 50),
       mapY: Number(farm.location?.mapY ?? farm.mapY ?? 50),
       label: farm.location?.label || farm.locationLabel || "",
+      boundary: farm.location?.boundary || null,
     },
     photoName: farm.photoName || "",
     status: farm.status || "active",
@@ -590,6 +591,11 @@ export function FarmerDataProvider({ children }) {
   const [data, setData] = useState(() => loadFarmerData());
   const [backendAdminRows, setBackendAdminRows] = useState([]);
   const [backendAdminSummary, setBackendAdminSummary] = useState(null);
+  const [isBackendLoading, setIsBackendLoading] = useState(false);
+  const [backendTimedOut, setBackendTimedOut] = useState(false);
+  const [backendError, setBackendError] = useState(null);
+  const BACKEND_TIMEOUT_MS = 5000; // 5 seconds
+
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -604,22 +610,45 @@ export function FarmerDataProvider({ children }) {
 
   useEffect(() => {
     let isMounted = true;
+    let timeoutId;
 
     async function syncBackendFarmerData() {
       if (!user || user.role !== "farmer" || !isBackendSessionActive()) {
+        if (isMounted) {
+          setIsBackendLoading(false);
+          setBackendTimedOut(false);
+          setBackendError(null);
+        }
         return;
       }
 
+      if (isMounted) {
+        setIsBackendLoading(true);
+        setBackendTimedOut(false);
+        setBackendError(null);
+      }
+
+      const backendFetchPromise = Promise.all([
+        phase1BackendService.farmers.me(),
+        phase1BackendService.farms.my(user.id, data.farms.filter((farm) => farm.ownerId === user.id)),
+      ]);
+
+      const timeoutPromise = new Promise((resolve, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error("Backend data fetch timed out."));
+        }, BACKEND_TIMEOUT_MS);
+      });
+
       try {
-        const currentOwnerFarms = data.farms.filter((farm) => farm.ownerId === user.id);
-        const [backendProfile, backendFarms] = await Promise.all([
-          phase1BackendService.farmers.me(),
-          phase1BackendService.farms.my(user.id, currentOwnerFarms),
+        const [backendProfile, backendFarms] = await Promise.race([
+          backendFetchPromise,
+          timeoutPromise,
         ]);
 
         if (!isMounted) {
           return;
         }
+        clearTimeout(timeoutId);
 
         setData((current) =>
           mergeBackendFarmsIntoData(
@@ -651,7 +680,25 @@ export function FarmerDataProvider({ children }) {
           verificationStatus: backendProfile.verificationStatus || user.verificationStatus,
           profileCompleteness: backendProfile.profileCompleteness || user.profileCompleteness || 0,
         });
-      } catch {
+
+        if (isMounted) {
+          setIsBackendLoading(false);
+          setBackendTimedOut(false);
+          setBackendError(null);
+        }
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+        clearTimeout(timeoutId);
+
+        console.warn("Failed to sync farmer backend data:", error);
+        if (error.message === "Backend data fetch timed out.") {
+          setBackendTimedOut(true);
+        } else {
+          setBackendError(error);
+        }
+        setIsBackendLoading(false);
         // Keep frontend-only local data active when the Phase 1 backend is unavailable.
       }
     }
@@ -660,35 +707,77 @@ export function FarmerDataProvider({ children }) {
 
     return () => {
       isMounted = false;
+      clearTimeout(timeoutId);
     };
-  }, [user?.id]);
+  }, [user?.id, isBackendSessionActive, BACKEND_TIMEOUT_MS, data.farms, updateCurrentUser]);
 
   useEffect(() => {
     let isMounted = true;
+    let timeoutId;
 
     async function syncBackendAdminData() {
       if (!user || !["admin", "extensionofficer"].includes(user.role) || !isBackendSessionActive()) {
         if (isMounted) {
           setBackendAdminRows([]);
           setBackendAdminSummary(null);
+          setIsBackendLoading(false);
+          setBackendTimedOut(false);
+          setBackendError(null);
         }
         return;
       }
 
+      if (isMounted) {
+        setIsBackendLoading(true);
+        setBackendTimedOut(false);
+        setBackendError(null);
+      }
+
+      const backendFetchPromise = Promise.all([
+        phase1BackendService.farmers.list(),
+        phase1BackendService.admin.dashboardSummary(),
+      ]);
+
+      const timeoutPromise = new Promise((resolve, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error("Backend data fetch timed out."));
+        }, BACKEND_TIMEOUT_MS);
+      });
+
       try {
-        const [records, summary] = await Promise.all([
-          phase1BackendService.farmers.list(),
-          phase1BackendService.admin.dashboardSummary(),
+        const [records, summary] = await Promise.race([
+          backendFetchPromise,
+          timeoutPromise,
         ]);
 
         if (!isMounted) {
           return;
         }
+        clearTimeout(timeoutId);
 
         setBackendAdminRows(records.map((record) => record.row));
         setBackendAdminSummary(summary);
         setData((current) => mergeBackendRegistryIntoData(current, records));
-      } catch {
+
+        if (isMounted) {
+          setIsBackendLoading(false);
+          setBackendTimedOut(false);
+          setBackendError(null);
+        }
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+        clearTimeout(timeoutId);
+
+        console.warn("Failed to sync admin backend data:", error);
+        if (error.message === "Backend data fetch timed out.") {
+          setBackendTimedOut(true);
+        } else {
+          setBackendError(error);
+        }
+        setIsBackendLoading(false);
+
         if (isMounted) {
           setBackendAdminRows([]);
           setBackendAdminSummary(null);
@@ -700,8 +789,9 @@ export function FarmerDataProvider({ children }) {
 
     return () => {
       isMounted = false;
+      clearTimeout(timeoutId);
     };
-  }, [user?.id, user?.role]);
+  }, [user?.id, user?.role, isBackendSessionActive, BACKEND_TIMEOUT_MS, data.farms]);
 
   const value = useMemo(() => {
     const currentProfile = user?.role === "farmer" ? data.profiles[user.id] : null;
@@ -732,7 +822,7 @@ export function FarmerDataProvider({ children }) {
         };
       });
     const effectiveAdminFarmerRows =
-      ["admin", "extensionofficer"].includes(user?.role) && backendAdminRows.length
+      (["admin", "extensionofficer"].includes(user?.role) && !isBackendLoading && !backendTimedOut)
         ? backendAdminRows
         : localAdminFarmerRows;
 
@@ -741,7 +831,9 @@ export function FarmerDataProvider({ children }) {
       adminDashboardSummary: backendAdminSummary,
       currentProfile,
       currentFarms,
-      getProfileByUserId: (userId) => data.profiles[userId] || null,
+      isBackendLoading,
+      backendTimedOut,
+      backendError,      getProfileByUserId: (userId) => data.profiles[userId] || null,
       getFarmsByOwner: (ownerId) => data.farms.filter((farm) => farm.ownerId === ownerId),
       loadFarmerProfileDetails: async (userId) => {
         const localProfile = data.profiles[userId] || null;
@@ -1358,7 +1450,7 @@ export function FarmerDataProvider({ children }) {
         }));
       },
     };
-  }, [backendAdminRows, backendAdminSummary, data, updateCurrentUser, user]);
+  }, [backendAdminRows, backendAdminSummary, data, updateCurrentUser, user, isBackendLoading, backendTimedOut, backendError]);
 
   return <FarmerDataContext.Provider value={value}>{children}</FarmerDataContext.Provider>;
 }

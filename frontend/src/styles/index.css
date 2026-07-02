@@ -847,8 +847,10 @@ img { max-width: 100%; display: block; }
   background: none;
   outline: none;
   width: 100%;
-  font-size: 14px;
-  color: var(--agri-text);
+  font-size: 16px;
+  font-weight: 500;
+  color: #111827;
+  opacity: 1;
 }
 
 .input-shell select {
@@ -1761,44 +1763,6 @@ img { max-width: 100%; display: block; }
 }
 
 .dashboard-ghost-button:hover { border-color: var(--agri-primary); background: var(--agri-light); }
-
-/* Resource strip */
-.command-resource-strip {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.command-resource-card { padding: 16px; }
-
-.resource-item-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.resource-item-top span { font-size: 13px; color: var(--agri-text-secondary); font-weight: 500; }
-.resource-item-top strong { font-size: 18px; font-weight: 700; }
-
-.resource-bar-track {
-  height: 6px;
-  background: var(--agri-bg);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.resource-bar-fill {
-  height: 100%;
-  border-radius: 4px;
-  transition: width 0.6s ease;
-}
-
-.resource-bar-fill.tone-blue { background: linear-gradient(90deg, #38BDF8, #0284C7); }
-.resource-bar-fill.tone-green { background: linear-gradient(90deg, #43A047, #1F7A3E); }
-.resource-bar-fill.tone-amber { background: linear-gradient(90deg, #F4B400, #E65100); }
-.resource-bar-fill.tone-sky { background: linear-gradient(90deg, #22D3EE, #0891B2); }
 
 /* Lower grid */
 .command-lower-grid {
@@ -3948,7 +3912,6 @@ img { max-width: 100%; display: block; }
 .command-decision-button { }
 .field-map-live.command-map-frame { }
 .command-map-shell { }
-.resource-bar-track.compact { }
 .command-center-actions { }
 
 .prototype-farm-analytics-filter-row { }
@@ -4067,7 +4030,6 @@ img { max-width: 100%; display: block; }
   .command-summary-grid { grid-template-columns: repeat(2, 1fr); }
   .command-center-grid { grid-template-columns: 1fr; }
   .command-lower-grid { grid-template-columns: 1fr; }
-  .command-resource-strip { grid-template-columns: repeat(2, 1fr); }
   .ai-center-main-grid { grid-template-columns: 1fr; }
   .recommendation-scheduler-grid { grid-template-columns: 1fr; }
   .prototype-main-grid { grid-template-columns: 1fr; }
@@ -4108,7 +4070,6 @@ img { max-width: 100%; display: block; }
 
 @media (max-width: 640px) {
   .command-summary-grid { grid-template-columns: 1fr; }
-  .command-resource-strip { grid-template-columns: 1fr; }
   .prototype-stats-grid { grid-template-columns: 1fr 1fr; }
   .ai-center-summary-grid { grid-template-columns: 1fr 1fr; }
   .weather-week-grid { grid-template-columns: repeat(2, 1fr); }

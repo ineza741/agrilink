@@ -324,7 +324,7 @@ export function CommunityPage() {
 
             <div className="comm-disc-list">
               {filteredDiscussions.length ? filteredDiscussions.map((item) => {
-                const initials = item.expert.split(" ").map((w) => w[0]).join("").slice(0, 2);
+                const initials = (item.expert || "").split(" ").map((w) => w[0]).join("").slice(0, 2);
                 return (
                   <div key={item.id} className="comm-disc-card">
                     <div className="comm-disc-avatar">{initials}</div>
@@ -370,7 +370,7 @@ export function CommunityPage() {
               </div>
               <div className="comm-expert-preview">
                 <div className="comm-expert-preview-avatar">
-                  {selectedExpert.split(" ").map((w) => w[0]).join("").slice(0, 2)}
+                  {(selectedExpert || "").split(" ").map((w) => w[0]).join("").slice(0, 2)}
                 </div>
                 <div className="comm-expert-preview-info">
                   <strong>{selectedExpert}</strong>
@@ -505,7 +505,7 @@ export function CommunityPage() {
               <h3>Top Contributors</h3>
             </div>
             {safeContributors.map((item) => {
-              const initials = item.name.split(" ").map((w) => w[0]).join("").slice(0, 2);
+              const initials = (item.name || "").split(" ").map((w) => w[0]).join("").slice(0, 2);
               return (
                 <div key={item.id} className="comm-contrib-row">
                   <div className="comm-contrib-avatar">{initials}</div>
@@ -531,8 +531,8 @@ export function CommunityPage() {
             {safeEvents.map((event) => (
               <div key={event.id} className="comm-event-card">
                 <div className="comm-event-date-badge">
-                  <span className="comm-event-day">{event.date.split(" ")[0]}</span>
-                  <span className="comm-event-month">{event.date.split(" ")[1]}</span>
+                  <span className="comm-event-day">{(event.date || "").split(" ")[0]}</span>
+                  <span className="comm-event-month">{(event.date || "").split(" ")[1]}</span>
                 </div>
                 <div className="comm-event-body">
                   <h4>{event.title}</h4>
@@ -554,7 +554,7 @@ export function CommunityPage() {
               <h3>Expert Directory</h3>
             </div>
             {safeExperts.map((item) => {
-              const initials = item.name.split(" ").map((w) => w[0]).join("").slice(0, 2);
+              const initials = (item.name || "").split(" ").map((w) => w[0]).join("").slice(0, 2);
               return (
                 <div key={item.id} className="comm-expert-row">
                   <div className="comm-expert-avatar-sm">{initials}</div>

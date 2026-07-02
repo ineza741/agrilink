@@ -29,14 +29,14 @@ export function SettingsPage() {
     setPreferredLanguage,
     smsMode,
     setSmsMode,
-    voiceNotes,
+    voiceNotes = [],
     addVoiceNote,
-    downloadableGuides,
+    downloadableGuides = [],
     downloadGuide,
-    pendingSyncItems,
+    pendingSyncItems = [],
     queueSyncItem,
     syncNow,
-    syncing,
+    syncing = false,
     lastSyncAt,
   } = useMobileSupport();
 

@@ -148,6 +148,7 @@ function formatReadableDateTime(value) {
 }
 
 function formatCompactNumber(value) {
+  if (value == null) return "0";
   if (value >= 1000) {
     return new Intl.NumberFormat("en", {
       notation: "compact",
@@ -159,6 +160,7 @@ function formatCompactNumber(value) {
 }
 
 function computeRegionAlertCount(region) {
+  if (!region) return 1;
   const lowerRegion = region.toLowerCase();
 
   if (lowerRegion.includes("bugesera")) return 3;
@@ -202,7 +204,7 @@ export function DashboardPage() {
       return adminDashboardSummary.regionBreakdown
         .map((region) => ({
           ...region,
-          activeAlerts: computeRegionAlertCount(region.region),
+          activeAlerts: computeRegionAlertCount(region.region || ""),
           verificationRate: region.farmers
             ? Math.round(((region.verifiedFarmers || 0) / region.farmers) * 100)
             : 0,
@@ -293,7 +295,7 @@ export function DashboardPage() {
       }));
     }
 
-    return [...adminFarmerRows]
+    return [...(adminFarmerRows || [])]
       .sort((a, b) => new Date(b.joined).getTime() - new Date(a.joined).getTime())
       .slice(0, 5)
       .map((row) => ({
@@ -582,7 +584,7 @@ export function DashboardPage() {
           </div>
 
           <div className="prototype-admin-monitoring-list">
-            {(adminDashboardSummary?.monitoring || monitoringSeed).map((item) => {
+            {(Array.isArray(adminDashboardSummary?.monitoring) ? adminDashboardSummary.monitoring : monitoringSeed).map((item) => {
               const Icon = item.icon;
               return (
                 <div key={item.id} className="prototype-admin-monitoring-item">

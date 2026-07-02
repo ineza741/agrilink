@@ -143,10 +143,10 @@ function calculateAdvisory({ farm, crop, cropStage, weather, soilProfile, soilMo
   const currentHumidity = Number(current.relative_humidity_2m ?? 0);
   const currentRain = Number(current.rain ?? current.precipitation ?? 0);
   const currentWind = Number(current.wind_speed_10m ?? 0);
-  const dailyRain = (daily.rain_sum || daily.precipitation_sum || []).map((value) => Number(value || 0));
-  const dailyRainProbability = (daily.precipitation_probability_max || []).map((value) => Number(value || 0));
-  const dailyEt0 = (daily.et0_fao_evapotranspiration || []).map((value) => Number(value || 0));
-  const dailyMaxTemp = (daily.temperature_2m_max || []).map((value) => Number(value || 0));
+  const dailyRain = (Array.isArray(daily.rain_sum) ? daily.rain_sum : Array.isArray(daily.precipitation_sum) ? daily.precipitation_sum : []).map((value) => Number(value || 0));
+  const dailyRainProbability = (Array.isArray(daily.precipitation_probability_max) ? daily.precipitation_probability_max : []).map((value) => Number(value || 0));
+  const dailyEt0 = (Array.isArray(daily.et0_fao_evapotranspiration) ? daily.et0_fao_evapotranspiration : []).map((value) => Number(value || 0));
+  const dailyMaxTemp = (Array.isArray(daily.temperature_2m_max) ? daily.temperature_2m_max : []).map((value) => Number(value || 0));
   const kc = getCropCoefficient(crop, cropStage);
   const avgReferenceEt = dailyEt0.length ? dailyEt0.reduce((sum, value) => sum + value, 0) / dailyEt0.length : clamp(3.4 + currentTemp * 0.08 - currentHumidity * 0.02 + currentWind * 0.04, 2.8, 6.8);
   const cropEt = Number((avgReferenceEt * kc).toFixed(2));
@@ -232,7 +232,7 @@ function logIrrigationDebug(label, payload) { if (!import.meta.env.DEV) return; 
 export function IrrigationPage() {
   const { currentFarms } = useFarmerData();
   const fallbackFarm = useMemo(() => createDefaultFarm(), []);
-  const farms = useMemo(() => (currentFarms.length ? currentFarms : [fallbackFarm]), [currentFarms, fallbackFarm]);
+  const farms = useMemo(() => ((Array.isArray(currentFarms) && currentFarms.length) ? currentFarms : [fallbackFarm]), [currentFarms, fallbackFarm]);
   const stored = useMemo(() => loadStoredState(), []);
   const [calendarDate, setCalendarDate] = useState(() => new Date());
   const [selectedFarmId, setSelectedFarmId] = useState(farms[0]?.id || "irrigation-default-farm");
@@ -245,7 +245,7 @@ export function IrrigationPage() {
   const [selectedScheduleDate, setSelectedScheduleDate] = useState("");
   const [reminderType, setReminderType] = useState("irrigation");
   const [reminderDate, setReminderDate] = useState(stored.reminderDate || "");
-  const [reminders, setReminders] = useState(stored.reminders || []);
+  const [reminders, setReminders] = useState(Array.isArray(stored.reminders) ? stored.reminders : []);
   const [backendAdvisory, setBackendAdvisory] = useState(null);
   const [remoteState, setRemoteState] = useState({ loading: true, notice: "", weather: null, soil: null, lastUpdated: "", weatherLabel: "Live Weather Data", soilLabel: "Local Data" });
 
@@ -272,11 +272,12 @@ export function IrrigationPage() {
         if (soilResult.status === "fulfilled") { nextState.soil = parseSoilEstimate(soilResult.value, selectedFarm); resolvedSoil = nextState.soil; nextState.soilLabel = "Local Data"; } else { console.error("[IrrigationPage] soil request failed", soilResult.reason); nextState.notice = nextState.notice ? `${nextState.notice} Baseline local soil values are also being used.` : "Baseline local soil values are being used for this advisory."; }
       } catch (error) { if (cancelled) return; console.error("[IrrigationPage] advisory load failed", error); nextState.weather = createMockWeatherData(selectedFarm); resolvedWeather = nextState.weather; nextState.notice = "Demo Data is being used because live advisory services were unavailable."; nextState.weatherLabel = "Demo Data"; }
       if (backendMode) {
-        try { const backendReminders = await phase1BackendService.irrigation.listReminders(backendFarmId); if (!cancelled) setReminders((current) => [...current.filter((entry) => entry.farmId !== selectedFarm.id), ...backendReminders]); } catch (error) { console.error("[IrrigationPage] backend reminder load failed", error); }
+        try { const backendReminders = await phase1BackendService.irrigation.listReminders(backendFarmId); if (!cancelled) setReminders((current) => [...current.filter((entry) => entry.farmId !== selectedFarm?.id), ...backendReminders]); } catch (error) { console.error("[IrrigationPage] backend reminder load failed", error); }
         try { const backendCalculated = await phase1BackendService.irrigation.calculate(backendFarmId, { crop: selectedFarm?.primaryCrop || "Maize", cropStage: cropStage || getDefaultGrowthStage(selectedFarm?.primaryCrop || "Maize"), irrigationType: selectedFarm?.irrigationType || "Manual Irrigation", weather: resolvedWeather, soilProfile: resolvedSoil, soilMoisture: Number(soilMoisture || 0), sensorMode, targetYield: Number(targetYield || 0), fertilizerType, budget: Number(budget || 0), weatherLabel: nextState.weatherLabel, soilLabel: nextState.soilLabel, notice: nextState.notice || undefined }); if (!cancelled) setBackendAdvisory(backendCalculated); } catch (error) { console.error("[IrrigationPage] backend advisory calculation failed", error); if (!cancelled) setBackendAdvisory(null); } } else if (!cancelled) setBackendAdvisory(null);
       if (!cancelled) setRemoteState(nextState);
     }
-    loadAdvisoryInputs(); return () => { cancelled = true; };
+    const safetyTimeout = setTimeout(() => { setRemoteState(c => c.loading ? { ...c, loading: false, notice: "Advisory load timed out. Showing demo data." } : c); }, 12000);
+    loadAdvisoryInputs(); return () => { cancelled = true; clearTimeout(safetyTimeout); };
   }, [backendFarmId, backendMode, budget, cropStage, fertilizerType, selectedFarm?.id, selectedFarm?.irrigationType, selectedFarm?.landType, selectedFarm?.location?.lat, selectedFarm?.location?.lng, selectedFarm?.name, selectedFarm?.primaryCrop, selectedFarm?.sizeHectares, sensorMode, soilMoisture, targetYield]);
 
   const soilProfile = useMemo(() => remoteState.soil || createFallbackSoilProfile(selectedFarm), [remoteState.soil, selectedFarm]);
@@ -316,9 +317,9 @@ export function IrrigationPage() {
   const handleCalendarClick = async (cell) => {
     if (!cell.currentMonth) return;
     setSelectedScheduleDate(cell.dateKey);
-    const hasExisting = reminders.some((entry) => entry.farmId === selectedFarm.id && entry.dateKey === cell.dateKey);
-    if (!hasExisting && advisory?.scheduleDates.find((entry) => entry.dateKey === cell.dateKey)?.scheduled) {
-      setReminders((current) => [...current, { id: `auto-rem-${Date.now()}`, farmId: selectedFarm.id, dateKey: cell.dateKey, type: "irrigation", priority: "High", status: "Pending", createdAt: new Date().toISOString() }]);
+    const hasExisting = reminders.some((entry) => entry.farmId === selectedFarm?.id && entry.dateKey === cell.dateKey);
+    if (!hasExisting && advisory?.scheduleDates?.find((entry) => entry.dateKey === cell.dateKey)?.scheduled) {
+      setReminders((current) => [...current, { id: `auto-rem-${Date.now()}`, farmId: selectedFarm?.id, dateKey: cell.dateKey, type: "irrigation", priority: "High", status: "Pending", createdAt: new Date().toISOString() }]);
     }
   };
 
@@ -432,7 +433,7 @@ export function IrrigationPage() {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
                   <div className="irrigation-form-stack">
                     <label><span>Target Yield (t/ha)</span><input type="number" step="0.1" value={targetYield} onChange={(event) => setTargetYield(event.target.value)} /></label>
-                    <label><span>Crop Stage</span><select value={cropStage} onChange={(event) => setCropStage(event.target.value)}>{getCropStageOptions(selectedFarm.primaryCrop || "Maize").map((stage) => (<option key={stage} value={stage}>{stage}</option>))}</select></label>
+                    <label><span>Crop Stage</span><select value={cropStage} onChange={(event) => setCropStage(event.target.value)}>{getCropStageOptions(selectedFarm?.primaryCrop || "Maize").map((stage) => (<option key={stage} value={stage}>{stage}</option>))}</select></label>
                     <label><span>Fertilizer Type</span><select value={fertilizerType} onChange={(event) => setFertilizerType(event.target.value)}>{Object.keys(fertilizerTypes).map((type) => (<option key={type} value={type}>{type}</option>))}</select></label>
                     <label><span>Available Budget (RWF)</span><input type="number" value={budget} onChange={(event) => setBudget(event.target.value)} /></label>
                   </div>

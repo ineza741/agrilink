@@ -6,16 +6,11 @@ import {
   CloudRain,
   CloudSun,
   Droplets,
-  Eye,
-  Gauge,
   Leaf,
   MapPin,
   ShieldAlert,
   Sprout,
   Sun,
-  Thermometer,
-  Waves,
-  Wind,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -25,11 +20,10 @@ import {
 } from "../../services/api";
 import { isBackendSessionActive, phase1BackendService } from "../../services/phase1Backend";
 import { useFarmerData } from "../../context/FarmerDataContext";
+import { CROP_REQUIREMENTS, findCropRequirements } from "../../data/cropRequirements";
 import { PageShell } from "../../components/common/PageShell";
 import { PageHeader } from "../../components/common/PageHeader";
 import { AppCard } from "../../components/common/AppCard";
-import { MetricCard } from "../../components/common/MetricCard";
-import { ActionButton } from "../../components/common/ActionButton";
 import { StatusBadge } from "../../components/common/StatusBadge";
 
 const WEATHER_CODE_MAP = {
@@ -117,7 +111,7 @@ function clampPercentage(value) {
 }
 
 function buildTrendPath(values, width, height, paddingY = 16) {
-  if (!values.length) return "";
+  if (!Array.isArray(values) || !values.length) return "";
   const max = Math.max(...values);
   const min = Math.min(...values);
   const range = max - min || 1;
@@ -137,18 +131,16 @@ function buildAreaPath(values, width, height, paddingY = 16) {
 }
 
 function summarizeTrend(values) {
-  if (values.length < 2) {
-    return "Stable";
-  }
+  if (!Array.isArray(values) || values.length < 2) return "Stable";
   const delta = values[values.length - 1] - values[0];
   if (delta > 2) return "Rising";
   if (delta < -2) return "Cooling";
   return "Stable";
 }
 
-function buildAlerts(days) {
+function buildAlerts(days, cropReq) {
+  if (!Array.isArray(days) || !days.length) return [{ id: "no-alert", level: "low", title: "No Alert", body: "No active weather alerts." }];
   const alerts = [];
-  const totalRain = days.reduce((sum, day) => sum + day.rainSum, 0);
 
   const heavyRainDay = days.find((day) => day.rainSum >= 30);
   if (heavyRainDay) {
@@ -170,13 +162,17 @@ function buildAlerts(days) {
     });
   }
 
-  if (totalRain < 10) {
-    alerts.push({
-      id: "drought-risk",
-      level: "medium",
-      title: "Drought Risk",
-      body: `The next 7 days total only ${totalRain.toFixed(1)} mm of rain, which is below the planting comfort range.`,
-    });
+  if (cropReq) {
+    const totalRain = days.reduce((sum, day) => sum + day.rainSum, 0);
+    if (totalRain < cropReq.minRain) {
+      const deficit = cropReq.minRain - totalRain;
+      alerts.push({
+        id: "drought-risk",
+        level: deficit > 10 ? "high" : "medium",
+        title: "Drought Risk",
+        body: `Drought Risk: The next 7 days total only ${totalRain.toFixed(1)} mm of rain, below the ${cropReq.minRain} mm planting requirement for ${cropReq.name}.`,
+      });
+    }
   }
 
   const strongWindDay = days.find((day) => day.windMax >= 35);
@@ -194,75 +190,126 @@ function buildAlerts(days) {
       id: "no-alert",
       level: "low",
       title: "No Alert",
-      body: "No alert if none of these conditions are met.",
+      body: "No active weather alerts for this period.",
     });
   }
 
   return alerts;
 }
 
-function buildPlantingGuidance(days) {
+function generatePlantingRecommendation(days, cropReq) {
+  if (!Array.isArray(days) || !days.length) return { recommendedAction: "No forecast data available", cropName: "", sevenDayRainTotal: 0, requiredRainfall: 0, temperatureSuitable: null, confidence: 0, explanation: "No forecast data available.", suggestedActions: [], seasonSignal: "Stable" };
   const totalRain = days.reduce((sum, day) => sum + day.rainSum, 0);
-  const avgMax = days.reduce((sum, day) => sum + day.maxTemp, 0) / Math.max(days.length, 1);
-  const summaryLabel = "Planting guidance generated from 7-day rainfall and temperature trends.";
+  const avgMaxTemp = days.length ? days.reduce((sum, d) => sum + d.maxTemp, 0) / days.length : 0;
+  const avgMinTemp = days.length ? days.reduce((sum, d) => sum + d.minTemp, 0) / days.length : 0;
 
-  if (totalRain < 10) {
+  if (!cropReq) {
     return {
-      label: summaryLabel,
-      title: "Delay planting 10–14 days",
-      detail: `Only ${totalRain.toFixed(1)} mm of rain is forecast. Soil moisture recharge is likely insufficient for safe establishment.`,
+      recommendedAction: "Select a crop to see planting recommendations",
+      cropName: "",
+      sevenDayRainTotal: totalRain,
+      requiredRainfall: 0,
+      temperatureSuitable: null,
+      confidence: 0,
+      explanation: "Choose a crop from the selector above to get AI-driven planting guidance based on the 7-day weather forecast.",
+      suggestedActions: [],
       seasonSignal: summarizeTrend(days.map((day) => day.maxTemp)),
-      rainBand: "Low rainfall window",
-      avgMax,
     };
   }
 
-  if (totalRain <= 25) {
-    return {
-      label: summaryLabel,
-      title: "Plant with moisture conservation",
-      detail: `${totalRain.toFixed(1)} mm of rain is forecast. Planting is possible if mulching and moisture-retention practices are used.`,
-      seasonSignal: summarizeTrend(days.map((day) => day.maxTemp)),
-      rainBand: "Moderate rainfall window",
-      avgMax,
-    };
+  const tempInRange = avgMaxTemp >= cropReq.idealTempMin && avgMaxTemp <= cropReq.idealTempMax;
+  const rainRatio = totalRain / cropReq.minRain;
+
+  let recommendedAction;
+  let explanation;
+  let suggestedActions;
+
+  if (totalRain < cropReq.minRain * 0.5) {
+    recommendedAction = "Delay planting 10–14 days";
+    explanation = `Only ${totalRain.toFixed(1)} mm of rain is forecast over the next 7 days, well below the ${cropReq.minRain} mm minimum required for ${cropReq.name}. Soil moisture recharge is likely insufficient for safe germination.`;
+    suggestedActions = [
+      "Delay planting by 10–14 days until more rainfall is expected",
+      "Consider seed priming to improve germination under marginal moisture",
+      "Prepare irrigation support if available",
+    ];
+  } else if (totalRain < cropReq.minRain) {
+    recommendedAction = "Delay planting 3–7 days or prepare irrigation support";
+    explanation = `The next 7 days total ${totalRain.toFixed(1)} mm of rain, slightly below the ${cropReq.minRain} mm requirement for ${cropReq.name}. With supplemental irrigation, planting may proceed.`;
+    suggestedActions = [
+      "Delay planting by 3–7 days if relying solely on rainfall",
+      "Supplement with irrigation if planting immediately",
+      "Use moisture-retention practices such as mulching",
+    ];
+  } else if (totalRain <= cropReq.minRain * 1.5) {
+    recommendedAction = "Planting window is suitable";
+    explanation = `The next 7 days provide ${totalRain.toFixed(1)} mm of expected rainfall, which meets the planting requirement for ${cropReq.name}.`;
+    suggestedActions = [
+      "Proceed with planting preparations",
+      "Monitor soil moisture levels before sowing",
+      "Apply starter fertilizer at planting time",
+    ];
+  } else {
+    recommendedAction = "Avoid planting immediately due to waterlogging risk";
+    explanation = `The next 7 days total ${totalRain.toFixed(1)} mm of rain, which exceeds the ${cropReq.minRain} mm requirement for ${cropReq.name} and may cause waterlogging.`;
+    suggestedActions = [
+      "Delay planting until heavy rainfall subsides",
+      "Ensure drainage channels are clear",
+      "Consider raised beds for better drainage",
+    ];
   }
+
+  let confidence = 85;
+  if (days.length === 7) confidence += 5;
+  else if (days.length < 5) confidence -= 10;
+
+  if (tempInRange) confidence += 5;
+  else if (avgMaxTemp > cropReq.idealTempMax + 5 || avgMinTemp < cropReq.idealTempMin - 5) confidence -= 15;
+  else confidence -= 5;
+
+  const deficit = Math.abs(totalRain - cropReq.minRain);
+  if (deficit > 15) confidence += 5;
+  else if (deficit < 3) confidence -= 10;
+
+  confidence = Math.max(40, Math.min(100, Math.round(confidence)));
 
   return {
-    label: summaryLabel,
-    title: "Suitable planting window",
-    detail: `${totalRain.toFixed(1)} mm of rain is forecast across the next 7 days, supporting planting and early establishment.`,
+    recommendedAction,
+    cropName: cropReq.name,
+    sevenDayRainTotal: totalRain,
+    requiredRainfall: cropReq.minRain,
+    temperatureSuitable: tempInRange,
+    confidence,
+    explanation,
+    suggestedActions,
     seasonSignal: summarizeTrend(days.map((day) => day.maxTemp)),
-    rainBand: "Moist planting window",
-    avgMax,
   };
 }
 
 function toForecastDays(daily) {
-  return daily.time.map((date, index) => ({
+  return (Array.isArray(daily?.time) ? daily.time : []).map((date, index) => ({
     date,
-    code: daily.weather_code[index],
-    description: getWeatherDescription(daily.weather_code[index]),
-    maxTemp: daily.temperature_2m_max[index],
-    minTemp: daily.temperature_2m_min[index],
-    precipitationProbability: daily.precipitation_probability_max[index] ?? 0,
-    rainSum: daily.rain_sum[index] ?? 0,
-    precipitationSum: daily.precipitation_sum[index] ?? 0,
-    humidityMax: daily.relative_humidity_2m_max[index] ?? 0,
-    windMax: daily.wind_speed_10m_max[index] ?? 0,
+    code: daily?.weather_code?.[index],
+    description: getWeatherDescription(daily?.weather_code?.[index]),
+    maxTemp: daily?.temperature_2m_max?.[index],
+    minTemp: daily?.temperature_2m_min?.[index],
+    precipitationProbability: daily?.precipitation_probability_max?.[index] ?? 0,
+    rainSum: daily?.rain_sum?.[index] ?? 0,
+    precipitationSum: daily?.precipitation_sum?.[index] ?? 0,
+    humidityMax: daily?.relative_humidity_2m_max?.[index] ?? 0,
+    windMax: daily?.wind_speed_10m_max?.[index] ?? 0,
   }));
 }
 
 function toHistoricalSeries(archive) {
-  return archive.daily.time.map((date, index) => {
-    const max = archive.daily.temperature_2m_max[index] ?? 0;
-    const min = archive.daily.temperature_2m_min[index] ?? 0;
+  return (Array.isArray(archive?.daily?.time) ? archive.daily.time : []).map((date, index) => {
+    const max = archive?.daily?.temperature_2m_max?.[index] ?? 0;
+    const min = archive?.daily?.temperature_2m_min?.[index] ?? 0;
     return {
       date,
       avgTemp: Number(((max + min) / 2).toFixed(1)),
       maxTemp: max,
       minTemp: min,
-      precipitationSum: archive.daily.precipitation_sum[index] ?? 0,
+      precipitationSum: archive?.daily?.precipitation_sum?.[index] ?? 0,
     };
   });
 }
@@ -335,9 +382,10 @@ function buildHistoricalAxisLabels(points, range) {
 
 export function WeatherPage() {
   const { currentFarms, data } = useFarmerData();
-  const farms = currentFarms.length ? currentFarms : data.farms;
+  const farms = (Array.isArray(currentFarms) ? currentFarms : []).length ? currentFarms : data.farms;
   const [selectedFarmId, setSelectedFarmId] = useState(farms[0]?.id || "");
   const [selectedRange, setSelectedRange] = useState("1M");
+  const [selectedCropName, setSelectedCropName] = useState("");
   const [forecastData, setForecastData] = useState(null);
   const [historicalData, setHistoricalData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -345,17 +393,25 @@ export function WeatherPage() {
   const [warning, setWarning] = useState("");
   const [lastUpdated, setLastUpdated] = useState("");
 
+  const selectedFarm = useMemo(
+    () => farms.find((farm) => farm.id === selectedFarmId) || farms[0] || null,
+    [farms, selectedFarmId]
+  );
+  const backendMode = isBackendSessionActive() && Boolean(selectedFarm?.id);
+
   useEffect(() => {
     if (!selectedFarmId && farms[0]?.id) {
       setSelectedFarmId(farms[0].id);
     }
   }, [farms, selectedFarmId]);
 
-  const selectedFarm = useMemo(
-    () => farms.find((farm) => farm.id === selectedFarmId) || farms[0] || null,
-    [farms, selectedFarmId]
-  );
-  const backendMode = isBackendSessionActive() && Boolean(selectedFarm?.id);
+  useEffect(() => {
+    if (selectedFarm?.primaryCrop && findCropRequirements(selectedFarm.primaryCrop)) {
+      setSelectedCropName(selectedFarm.primaryCrop);
+    } else if (!selectedCropName && CROP_REQUIREMENTS.length) {
+      setSelectedCropName(CROP_REQUIREMENTS[0].name);
+    }
+  }, [selectedFarm]);
 
   useEffect(() => {
     if (!selectedFarm?.location?.lat || !selectedFarm?.location?.lng) {
@@ -447,6 +503,13 @@ export function WeatherPage() {
       setLastUpdated(formatTimestamp(new Date()));
     }
 
+    const safetyTimeout = setTimeout(() => {
+      if (!cancelled) {
+        setLoading(false);
+        setError("Weather data timed out. Showing demo data.");
+      }
+    }, 15000);
+
     loadWeather()
       .catch(() => {
         if (!cancelled) {
@@ -456,6 +519,7 @@ export function WeatherPage() {
         }
       })
       .finally(() => {
+        clearTimeout(safetyTimeout);
         if (!cancelled) {
           setLoading(false);
         }
@@ -463,6 +527,7 @@ export function WeatherPage() {
 
     return () => {
       cancelled = true;
+      clearTimeout(safetyTimeout);
     };
   }, [backendMode, selectedFarm, selectedRange]);
 
@@ -504,26 +569,23 @@ export function WeatherPage() {
     };
   }, [historicalData, selectedRange]);
 
-  const currentWeather = forecastData?.current || null;
-  const weatherAlerts = useMemo(() => buildAlerts(forecastDays), [forecastDays]);
-  const plantingGuidance = useMemo(() => buildPlantingGuidance(forecastDays), [forecastDays]);
+  const cropReq = useMemo(() => findCropRequirements(selectedCropName), [selectedCropName]);
+  const weatherAlerts = useMemo(() => buildAlerts(forecastDays, cropReq), [forecastDays, cropReq]);
+  const plantingRecommendation = useMemo(
+    () => generatePlantingRecommendation(forecastDays, cropReq),
+    [forecastDays, cropReq]
+  );
   const activeForecastIndex = useMemo(() => {
     const todayIndex = forecastDays.findIndex((day) => isSameCalendarDay(day.date));
     return todayIndex >= 0 ? todayIndex : 0;
   }, [forecastDays]);
 
+  const todayForecast = forecastDays[activeForecastIndex] || null;
+
   const sevenDayRainTotal = useMemo(
     () => forecastDays.reduce((sum, day) => sum + day.rainSum, 0),
     [forecastDays]
   );
-
-  const droughtRisk = clampPercentage(Math.max(0, 100 - sevenDayRainTotal * 4));
-  const soilMoistureIndicator = clampPercentage(Math.max(15, 100 - droughtRisk * 0.78));
-  const evapotranspirationIndicator = currentWeather
-    ? Number((Math.max(2.2, (currentWeather.wind_speed_10m || 0) / 6 + (currentWeather.temperature_2m || 0) / 8)).toFixed(1))
-    : 0;
-
-  const footerSource = "Source: Open-Meteo Live API";
 
   return (
     <PageShell>
@@ -546,6 +608,14 @@ export function WeatherPage() {
             ))}
           </select>
         </label>
+        <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 14px", background: "var(--card)", borderRadius: "10px", border: "1px solid var(--border)" }}>
+          <Sprout size={16} style={{ color: "var(--text-muted)" }} />
+          <select value={selectedCropName} onChange={(event) => setSelectedCropName(event.target.value)} style={{ border: "none", background: "transparent", fontFamily: "var(--font)", fontSize: "14px", outline: "none", cursor: "pointer", color: "var(--text-main)" }}>
+            {CROP_REQUIREMENTS.map((crop) => (
+              <option key={crop.name} value={crop.name}>{crop.name}</option>
+            ))}
+          </select>
+        </label>
         <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>{selectedFarm?.location?.label || selectedFarm?.region || ""}</span>
       </div>
 
@@ -553,7 +623,7 @@ export function WeatherPage() {
       {!loading && error ? <div style={{ padding: "12px 16px", background: "#FFEBEE", borderRadius: "10px", color: "var(--danger)", fontWeight: 500 }}>{error}</div> : null}
       {!loading && !error && warning ? <div style={{ padding: "12px 16px", background: "#FFF8E1", borderRadius: "10px", color: "#E65100", fontWeight: 500 }}>{warning}</div> : null}
 
-      {!loading && !error && currentWeather ? (
+      {!loading && !error && todayForecast ? (
         <>
           <div className="weather-page-hero">
             <div className="weather-hero-main">
@@ -561,22 +631,22 @@ export function WeatherPage() {
                 <div>
                   <div className="weather-hero-location"><MapPin size={16} />{selectedFarm?.name || "Farm"}</div>
                   <div className="weather-hero-condition" style={{ marginTop: "16px" }}>
-                    <div className="weather-hero-icon-wrap">{getWeatherIcon(currentWeather.weather_code, 36)}</div>
+                    <div className="weather-hero-icon-wrap">{getWeatherIcon(todayForecast.code, 36)}</div>
                     <div>
-                      <div className="weather-hero-temp">{Math.round(currentWeather.temperature_2m)}°C</div>
-                      <div className="weather-hero-desc">{getWeatherDescription(currentWeather.weather_code)}</div>
+                      <div className="weather-hero-temp">{Math.round(todayForecast.maxTemp)}°C</div>
+                      <div className="weather-hero-desc">{todayForecast.description}</div>
                     </div>
                   </div>
                 </div>
-                <StatusBadge status="verified">Live Conditions</StatusBadge>
+                <StatusBadge status="verified">Today's Forecast</StatusBadge>
               </div>
               <div className="weather-hero-metrics">
-                <div className="weather-hero-metric"><small>Feels Like</small><strong>{Math.round(currentWeather.temperature_2m - 2)}°C</strong></div>
-                <div className="weather-hero-metric"><small>Rainfall</small><strong>{Number(currentWeather.rain || currentWeather.precipitation || 0).toFixed(1)} mm</strong></div>
-                <div className="weather-hero-metric"><small>Humidity</small><strong>{Math.round(currentWeather.relative_humidity_2m)}%</strong></div>
-                <div className="weather-hero-metric"><small>Wind</small><strong>{Math.round(currentWeather.wind_speed_10m)} km/h</strong></div>
-                <div className="weather-hero-metric"><small>Pressure</small><strong>{Math.round(currentWeather.pressure_msl)} hPa</strong></div>
-                <div className="weather-hero-metric"><small>UV Index</small><strong>{Math.round((currentWeather.temperature_2m || 0) / 8)}</strong></div>
+                <div className="weather-hero-metric"><small>Max Temp</small><strong>{Math.round(todayForecast.maxTemp)}°C</strong></div>
+                <div className="weather-hero-metric"><small>Rainfall</small><strong>{todayForecast.rainSum.toFixed(1)} mm</strong></div>
+                <div className="weather-hero-metric"><small>Humidity</small><strong>{Math.round(todayForecast.humidityMax)}%</strong></div>
+                <div className="weather-hero-metric"><small>Wind</small><strong>{Math.round(todayForecast.windMax)} km/h</strong></div>
+                <div className="weather-hero-metric"><small>Rain Chance</small><strong>{Math.round(todayForecast.precipitationProbability)}%</strong></div>
+                <div className="weather-hero-metric"><small>Min Temp</small><strong>{Math.round(todayForecast.minTemp)}°C</strong></div>
               </div>
             </div>
 
@@ -589,10 +659,40 @@ export function WeatherPage() {
               </div>
               <div className="weather-hero-insight">
                 <h4><Sprout size={18} color="var(--primary-green)" />AI Planting Recommendation</h4>
-                <p>{plantingGuidance.detail}</p>
-                <div className={`weather-planting-badge ${plantingGuidance.title.includes("Delay") ? "delay" : plantingGuidance.title.includes("conservation") ? "caution" : "good"}`}>
-                  {plantingGuidance.title}
-                </div>
+                {cropReq ? (
+                  <>
+                    <div className="weather-rec-stats" style={{ display: "flex", gap: "8px", flexWrap: "wrap", margin: "8px 0" }}>
+                      <span className="weather-rec-stat" style={{ background: "var(--light-green)", padding: "2px 8px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, color: "var(--primary-green)" }}>
+                        {plantingRecommendation.sevenDayRainTotal.toFixed(1)} mm rain
+                      </span>
+                      <span className="weather-rec-stat" style={{ background: "var(--light-green)", padding: "2px 8px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, color: "var(--primary-green)" }}>
+                        {plantingRecommendation.requiredRainfall} mm needed
+                      </span>
+                      <span className="weather-rec-stat" style={{ background: plantingRecommendation.temperatureSuitable ? "var(--light-green)" : "#FFF3E0", padding: "2px 8px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, color: plantingRecommendation.temperatureSuitable ? "var(--primary-green)" : "#E65100" }}>
+                        {plantingRecommendation.temperatureSuitable ? "Temp suitable" : "Temp marginal"}
+                      </span>
+                      <span className="weather-rec-stat" style={{ background: "#E3F2FD", padding: "2px 8px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, color: "#1565C0" }}>
+                        AI {plantingRecommendation.confidence}%
+                      </span>
+                    </div>
+                    <p style={{ fontSize: "13px", lineHeight: 1.5, margin: "6px 0" }}>{plantingRecommendation.explanation}</p>
+                    <div className={`weather-planting-badge ${plantingRecommendation.recommendedAction.includes("Delay") || plantingRecommendation.recommendedAction.includes("Avoid") ? "delay" : plantingRecommendation.recommendedAction.includes("suitable") ? "good" : "caution"}`}>
+                      {plantingRecommendation.recommendedAction}
+                    </div>
+                    {plantingRecommendation.suggestedActions.length > 0 && (
+                      <ul style={{ margin: "6px 0 0", paddingLeft: "16px", fontSize: "12px", color: "var(--text-muted)", lineHeight: 1.6 }}>
+                        {plantingRecommendation.suggestedActions.map((action, idx) => (
+                          <li key={idx}>{action}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p style={{ fontSize: "13px", lineHeight: 1.5, margin: "6px 0" }}>{plantingRecommendation.explanation}</p>
+                    <div className="weather-planting-badge delay">Select a crop</div>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -642,7 +742,7 @@ export function WeatherPage() {
             <div className="weather-chart-card">
               <div className="chart-head">
                 <h3>Temperature Trend</h3>
-                <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>{plantingGuidance.seasonSignal}</span>
+                <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>{plantingRecommendation.seasonSignal}</span>
               </div>
               <div className="chart-body">
                 <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} preserveAspectRatio="none" style={{ width: "100%", height: "180px" }}>
@@ -657,7 +757,7 @@ export function WeatherPage() {
             <div className="weather-insight-card">
               <div className="insight-icon"><Sprout size={24} /></div>
               <strong>Best Planting Day</strong>
-              <p>{forecastDays.find(d => d.rainSum >= 3 && d.rainSum <= 15 && d.maxTemp >= 18 && d.maxTemp <= 30) ? formatShortDate(forecastDays.find(d => d.rainSum >= 3 && d.rainSum <= 15 && d.maxTemp >= 18 && d.maxTemp <= 30).date) : "Monitor conditions"}</p>
+              <p>{forecastDays.find(d => d.rainSum >= 3 && d.rainSum <= 15 && d.maxTemp >= 18 && d.maxTemp <= 30) ? formatShortDate(forecastDays.find(d => d.rainSum >= 3 && d.rainSum <= 15 && d.maxTemp >= 18 && d.maxTemp <= 30)?.date) : "Monitor conditions"}</p>
             </div>
             <div className="weather-insight-card">
               <div className="insight-icon"><AlertTriangle size={24} /></div>
@@ -667,7 +767,7 @@ export function WeatherPage() {
             <div className="weather-insight-card">
               <div className="insight-icon"><Droplets size={24} /></div>
               <strong>Irrigation Need</strong>
-              <p>{sevenDayRainTotal < 15 ? `${Math.round((15 - sevenDayRainTotal) * 10)} L/m² supplemental water recommended` : "Sufficient rainfall expected"}</p>
+              <p>{cropReq && sevenDayRainTotal < cropReq.minRain ? `${Math.round((cropReq.minRain - sevenDayRainTotal) * 10)} L/m² supplemental water recommended for ${cropReq.name}` : "Sufficient rainfall expected"}</p>
             </div>
             <div className="weather-insight-card">
               <div className="insight-icon"><Leaf size={24} /></div>

@@ -398,7 +398,8 @@ function computeDiagnoses({
     }))
     .sort((a, b) => b.weightedScore - a.weightedScore);
 
-  const top = ranked[0];
+  const top = ranked.length ? ranked[0] : null;
+  if (!top) return { ranked, topDiagnosis: null, confidence: 0, explanation: "No diagnosis available.", affectedCrops: [], recommendedActions: [], outbreakForecast: { currentRisk: "Low", trend: "Stable", riskFactors: [], forecast7Day: "Low", forecast30Day: "Low" }, riskTrend: "stable", district: "", weather: null };
   const second = ranked[1];
   const confidence = clamp(
     Math.round(top.weightedScore - (second ? Math.max(0, second.weightedScore - 8) * 0.25 : 0)),
@@ -468,7 +469,8 @@ function computeDiagnoses({
 }
 
 function buildDynamicRecommendation(diagnosisModel, farm, crop) {
-  const top = diagnosisModel.topDiagnosis;
+  const top = diagnosisModel?.topDiagnosis;
+  if (!top) return { recommendationId: `rec-${farm?.id}-unknown`, diseaseName: "Unknown", actionType: "Pest/Disease", title: `Control issue on ${farm?.name || "Farm"}`, accepted: 0, rejected: 0, completed: 0, guidance: [] };
   return {
     recommendationId: `rec-${farm.id}-${top.id}`,
     diseaseName: top.name,
@@ -479,7 +481,7 @@ function buildDynamicRecommendation(diagnosisModel, farm, crop) {
     completed: 0,
     guidance: [
       `Scout ${farm.name} within 24 hours and confirm ${top.name.toLowerCase()} hotspots.`,
-      `Apply the primary intervention suited to ${crop}: ${top.treatment.chemical}.`,
+      `Apply the primary intervention suited to ${crop}: ${top.treatment?.chemical || "Consult specialist"}.`,
       `Reassess in 3-5 days and update image evidence if symptoms expand.`,
     ],
   };
@@ -490,7 +492,7 @@ export function PestsPage() {
   const { currentFarms } = useFarmerData();
   const fallbackFarm = useMemo(() => createDefaultFarm(), []);
   const farms = useMemo(
-    () => (currentFarms.length ? currentFarms : [fallbackFarm]),
+    () => ((Array.isArray(currentFarms) ? currentFarms : []).length ? currentFarms : [fallbackFarm]),
     [currentFarms, fallbackFarm]
   );
   const stored = useMemo(() => loadStoredState(), []);
@@ -549,7 +551,7 @@ export function PestsPage() {
 
       setWeatherState((current) => ({ ...current, loading: true, error: "" }));
       try {
-        const response = await apiClient.weather.forecast(selectedFarm.location.lat, selectedFarm.location.lng, {
+        const response = await apiClient.weather.forecast(selectedFarm?.location?.lat, selectedFarm?.location?.lng, {
           timeoutMs: 4500,
         });
         if (!active) return;
@@ -571,8 +573,12 @@ export function PestsPage() {
     }
 
     loadWeather();
+    const timeout = setTimeout(() => {
+      if (active) setWeatherState(prev => ({ ...prev, loading: false }));
+    }, 10000);
     return () => {
       active = false;
+      clearTimeout(timeout);
     };
   }, [selectedFarm?.id, selectedFarm?.location?.lat, selectedFarm?.location?.lng]);
 
@@ -681,10 +687,10 @@ export function PestsPage() {
     () => {
       const source = backendMode ? backendActionLog : actionLog;
       return source
-        .filter((entry) => entry.recommendationId === activeRecommendation.recommendationId)
+        .filter((entry) => entry.recommendationId === activeRecommendation?.recommendationId)
         .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     },
-    [actionLog, activeRecommendation.recommendationId, backendActionLog, backendMode]
+    [actionLog, activeRecommendation?.recommendationId, backendActionLog, backendMode]
   );
 
   const treatmentEffectiveness = useMemo(() => {
@@ -696,7 +702,7 @@ export function PestsPage() {
 
   const displayedLibrary = useMemo(
     () =>
-      (backendLibrary.length ? backendLibrary : diagnosisModel.ranked).filter((item) => {
+      (backendLibrary.length ? backendLibrary : (diagnosisModel?.ranked || [])).filter((item) => {
         const query = librarySearch.toLowerCase();
         return (
           !query ||
@@ -705,7 +711,7 @@ export function PestsPage() {
           item.affectedCrops.join(" ").toLowerCase().includes(query)
         );
       }),
-    [backendLibrary, diagnosisModel.ranked, librarySearch]
+    [backendLibrary, diagnosisModel?.ranked, librarySearch]
   );
 
   const regionalTracking = useMemo(() => {
@@ -736,8 +742,8 @@ export function PestsPage() {
       {
         id: "diagnosis",
         tone: activeDiagnosis.priority === "Critical" ? "critical" : "review",
-        title: `${activeDiagnosis.topDiagnosis.name} detected for ${selectedCrop}`,
-        detail: `${activeDiagnosis.currentRisk} current risk with ${activeDiagnosis.confidence}% confidence on ${selectedFarm.name}.`,
+        title: `${activeDiagnosis?.topDiagnosis?.name} detected for ${selectedCrop}`,
+        detail: `${activeDiagnosis.currentRisk} current risk with ${activeDiagnosis.confidence}% confidence on ${selectedFarm?.name}.`,
         timestamp: new Date().toISOString(),
       },
       ...trackedRecommendation.map((entry) => ({
@@ -753,7 +759,7 @@ export function PestsPage() {
     ];
 
     return items.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 6);
-  }, [activeDiagnosis, selectedCrop, selectedFarm.name, trackedRecommendation, weatherContribution.explanation, weatherState.lastUpdated]);
+  }, [activeDiagnosis, selectedCrop, selectedFarm?.name, trackedRecommendation, weatherContribution.explanation, weatherState.lastUpdated]);
 
   const submitSymptomCheck = async () => {
     if (backendMode && backendFarmId) {
@@ -772,7 +778,7 @@ export function PestsPage() {
         setBackendActionLog([]);
         setPestState({
           loading: false,
-          notice: `Backend pest diagnosis saved for ${selectedCrop} on ${selectedFarm.name}.`,
+          notice: `Backend pest diagnosis saved for ${selectedCrop} on ${selectedFarm?.name}.`,
           source: "Backend Pest Data",
         });
         return;
@@ -790,7 +796,7 @@ export function PestsPage() {
       id: `history-${Date.now()}`,
       date: new Date().toISOString(),
       monthLabel: new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric" }).format(new Date()),
-      pathogen: diagnosisModel.topDiagnosis.scientificName,
+      pathogen: diagnosisModel?.topDiagnosis?.scientificName || "Unknown pathogen",
       severity: diagnosisModel.currentRisk,
       action: diagnosisModel.priority === "Critical" ? "Immediate field intervention" : "Guided field scouting",
       district: diagnosisModel.district,
@@ -824,7 +830,7 @@ export function PestsPage() {
       id: `pest-action-${Date.now()}`,
       recommendationId: activeRecommendation.recommendationId,
       farmerId: user?.id || "demo-farmer",
-      farmId: selectedFarm.id,
+      farmId: selectedFarm?.id,
       actionType: activeRecommendation.actionType,
       feedbackStatus,
       rejectionReason: "",
@@ -835,8 +841,8 @@ export function PestsPage() {
 
   const downloadProtocol = () => {
     downloadTextFile(
-      `${diagnosisModel.topDiagnosis.name.toLowerCase().replace(/\s+/g, "-")}-protocol.txt`,
-      `Protocol: ${activeDiagnosis.topDiagnosis.name}\nConfidence: ${activeDiagnosis.confidence}%\nRisk: ${activeDiagnosis.currentRisk}\nPriority: ${activeDiagnosis.priority}\n\nChemical treatment:\n${activeDiagnosis.topDiagnosis.treatment.chemical}\n\nOrganic / IPM:\n${activeDiagnosis.topDiagnosis.treatment.organic}\n\nPreventive measure:\n${activeDiagnosis.topDiagnosis.preventionAdvice}`
+      `${(diagnosisModel?.topDiagnosis?.name || "pest").toLowerCase().replace(/\s+/g, "-")}-protocol.txt`,
+      `Protocol: ${activeDiagnosis?.topDiagnosis?.name || "Unknown"}\nConfidence: ${activeDiagnosis?.confidence || 0}%\nRisk: ${activeDiagnosis?.currentRisk || "Unknown"}\nPriority: ${activeDiagnosis?.priority || "Unknown"}\n\nChemical treatment:\n${activeDiagnosis?.topDiagnosis?.treatment?.chemical || "N/A"}\n\nOrganic / IPM:\n${activeDiagnosis?.topDiagnosis?.treatment?.organic || "N/A"}\n\nPreventive measure:\n${activeDiagnosis?.topDiagnosis?.preventionAdvice || "N/A"}`
     );
   };
 
@@ -971,12 +977,12 @@ export function PestsPage() {
             <div className="pdi-diagnosis-card">
               <div className="pdi-diag-image-wrap">
                 <img
-                  src={activeDiagnosis.topDiagnosis.imageUrl}
-                  alt={activeDiagnosis.topDiagnosis.name}
+                  src={activeDiagnosis?.topDiagnosis?.imageUrl}
+                  alt={activeDiagnosis?.topDiagnosis?.name}
                   className="pdi-diag-image"
                   onError={(e) => { e.target.style.opacity = "0"; }}
                 />
-                <span className="pdi-img-letter">{activeDiagnosis.topDiagnosis.name.charAt(0)}</span>
+                <span className="pdi-img-letter">{activeDiagnosis?.topDiagnosis?.name?.charAt(0)}</span>
                 <div className="pdi-diag-image-overlay">
                   <StatusBadge variant={activeDiagnosis.priority === "Critical" ? "error" : activeDiagnosis.priority === "High" ? "warning" : "info"}>
                     {activeDiagnosis.priority} Priority
@@ -987,8 +993,8 @@ export function PestsPage() {
               <div className="pdi-diag-body">
                 <div className="pdi-diag-head">
                   <div>
-                    <h2>{activeDiagnosis.topDiagnosis.name}</h2>
-                    <span className="pdi-diag-sci">{activeDiagnosis.topDiagnosis.scientificName}</span>
+                    <h2>{activeDiagnosis?.topDiagnosis?.name}</h2>
+                    <span className="pdi-diag-sci">{activeDiagnosis?.topDiagnosis?.scientificName}</span>
                   </div>
                 </div>
                 <div className="pdi-diag-meta-grid">
@@ -1011,7 +1017,7 @@ export function PestsPage() {
                 </div>
                 <div className="pdi-diag-weather-line">
                   <ThermometerSun size={14} />
-                  <span>Humidity {weatherContribution.current?.humidity ?? "--"}% &amp; {weatherContribution.current?.temperature ?? "--"}C &mdash; favorable for {activeDiagnosis.topDiagnosis.name.toLowerCase()}</span>
+                  <span>Humidity {weatherContribution.current?.humidity ?? "--"}% &amp; {weatherContribution.current?.temperature ?? "--"}C &mdash; favorable for {activeDiagnosis?.topDiagnosis?.name?.toLowerCase()}</span>
                 </div>
                 <p className="pdi-diag-explanation">{weatherContribution.explanation}</p>
                 <div className="pdi-diag-actions">
@@ -1037,7 +1043,7 @@ export function PestsPage() {
                 <div className="pdi-symptom-info">
                   <div className="pdi-symptom-info-item">
                     <span className="pdi-symptom-info-label">Farm</span>
-                    <strong>{selectedFarm.name}</strong>
+                    <strong>{selectedFarm?.name}</strong>
                   </div>
                   <div className="pdi-symptom-info-item">
                     <span className="pdi-symptom-info-label">Crop</span>
@@ -1137,7 +1143,7 @@ export function PestsPage() {
                 <span className="pdi-treat-icon-bg">Chem</span>
               </div>
               <strong>Chemical Control</strong>
-              <p>{activeDiagnosis.topDiagnosis.treatment.chemical}</p>
+              <p>{activeDiagnosis?.topDiagnosis?.treatment?.chemical}</p>
               <div className="pdi-treat-meta">
                 <span className="pdi-treat-timing"><Clock size={12} /> Apply within 24-48h</span>
                 <span className="pdi-treat-safety"><ShieldAlert size={12} /> Use protective gear</span>
@@ -1150,7 +1156,7 @@ export function PestsPage() {
                 <span className="pdi-treat-icon-bg">IPM</span>
               </div>
               <strong>Organic / IPM Control</strong>
-              <p>{activeDiagnosis.topDiagnosis.treatment.organic}</p>
+              <p>{activeDiagnosis?.topDiagnosis?.treatment?.organic}</p>
               <div className="pdi-treat-meta">
                 <span className="pdi-treat-timing"><Clock size={12} /> Apply at first sign</span>
                 <span className="pdi-treat-safety"><ShieldAlert size={12} /> Safe for beneficials</span>
@@ -1163,7 +1169,7 @@ export function PestsPage() {
                 <span className="pdi-treat-icon-bg">Prev</span>
               </div>
               <strong>Preventive Action</strong>
-              <p>{activeDiagnosis.topDiagnosis.preventionAdvice}</p>
+              <p>{activeDiagnosis?.topDiagnosis?.preventionAdvice}</p>
               <div className="pdi-treat-meta">
                 <span className="pdi-treat-timing"><Clock size={12} /> Ongoing practice</span>
                 <span className="pdi-treat-safety"><ShieldAlert size={12} /> No chemicals needed</span>
@@ -1203,7 +1209,7 @@ export function PestsPage() {
                 <div className="pdi-explain-icon"><Target size={16} /></div>
                 <div>
                   <strong>Symptom Match</strong>
-                  <p>Symptoms of "{selectedSymptom}" match the known profile of {activeDiagnosis.topDiagnosis.name} with strong correlation.</p>
+                   <p>Symptoms of "{selectedSymptom}" match the known profile of {activeDiagnosis?.topDiagnosis?.name} with strong correlation.</p>
                 </div>
               </div>
               <div className="pdi-explain-item">
@@ -1343,7 +1349,7 @@ export function PestsPage() {
               <div className="pdi-rec-guidance">
                 <strong>Steps</strong>
                 <ol>
-                  {activeRecommendation.guidance.map((item) => (<li key={item}>{item}</li>))}
+                   {(Array.isArray(activeRecommendation?.guidance) ? activeRecommendation.guidance : []).map((item) => (<li key={item}>{item}</li>))}
                 </ol>
               </div>
               <div className="pdi-rec-tracking">

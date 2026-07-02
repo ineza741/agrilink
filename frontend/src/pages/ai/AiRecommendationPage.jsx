@@ -398,8 +398,8 @@ function looksLikeUuid(value = "") {
 export function AiRecommendationPage() {
   const { user } = useAuth();
   const { currentProfile, currentFarms } = useFarmerData();
-  const farms = currentFarms.length ? currentFarms : [DEMO_FARM];
-  const [selectedFarmId, setSelectedFarmId] = useState(farms[0]?.id || DEMO_FARM.id);
+  const farms = currentFarms?.length ? currentFarms : [DEMO_FARM];
+  const [selectedFarmId, setSelectedFarmId] = useState(farms?.[0]?.id || DEMO_FARM.id);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [regionFilter, setRegionFilter] = useState("All");
@@ -408,6 +408,7 @@ export function AiRecommendationPage() {
   const [dateRangeFilter, setDateRangeFilter] = useState("7 days");
   const [actionNotice, setActionNotice] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
   const [backendLoading, setBackendLoading] = useState(false);
   const [error, setError] = useState("");
   const [weatherState, setWeatherState] = useState({
@@ -421,22 +422,37 @@ export function AiRecommendationPage() {
   const [backendHistory, setBackendHistory] = useState([]);
   const [backendFeedback, setBackendFeedback] = useState([]);
 
-  const selectedFarm = farms.find((farm) => farm.id === selectedFarmId) || farms[0] || null;
+  const selectedFarm = farms.find((farm) => farm.id === selectedFarmId) || farms?.[0] || null;
   const backendFarmId = selectedFarm?.backendFarmId || (looksLikeUuid(selectedFarm?.id || "") ? selectedFarm.id : "");
   const backendMode = isBackendSessionActive() && Boolean(backendFarmId);
 
   useEffect(() => {
-    if (!selectedFarmId && farms[0]?.id) {
+    if (!selectedFarmId && farms?.[0]?.id) {
       setSelectedFarmId(farms[0].id);
     }
   }, [farms, selectedFarmId]);
 
   useEffect(() => {
     let active = true;
+    let timedOut = false;
+
+    const timeoutId = setTimeout(() => {
+      if (active) {
+        timedOut = true;
+        setLoadingTimedOut(true);
+        setLoading(false);
+        setWeatherState({
+          source: "Demo/local data is being used because live data is unavailable.",
+          current: getFallbackWeather(selectedFarm?.region || DEMO_FARM.region),
+          lastUpdated: new Date().toISOString(),
+        });
+      }
+    }, 5000);
 
     async function loadWeather() {
       if (!selectedFarm) {
         if (active) {
+          clearTimeout(timeoutId);
           setWeatherState({
             source: "Demo Weather Data",
             current: getFallbackWeather(DEMO_FARM.region),
@@ -461,7 +477,9 @@ export function AiRecommendationPage() {
           );
 
           if (!active) return;
+          if (timedOut) return;
 
+          clearTimeout(timeoutId);
           setWeatherState({
             source: "Live Weather Data",
             current: {
@@ -476,21 +494,26 @@ export function AiRecommendationPage() {
             lastUpdated: new Date().toISOString(),
           });
         } else {
-          setWeatherState({
-            source: "Demo Weather Data",
-            current: fallback,
-            lastUpdated: new Date().toISOString(),
-          });
+          if (active && !timedOut) {
+            clearTimeout(timeoutId);
+            setWeatherState({
+              source: "Demo Weather Data",
+              current: fallback,
+              lastUpdated: new Date().toISOString(),
+            });
+          }
         }
       } catch {
-        if (!active) return;
+        if (!active || timedOut) return;
+        clearTimeout(timeoutId);
         setWeatherState({
           source: "Demo Weather Data",
           current: getFallbackWeather(selectedFarm.region),
           lastUpdated: new Date().toISOString(),
         });
       } finally {
-        if (active) {
+        if (active && !timedOut) {
+          clearTimeout(timeoutId);
           setLoading(false);
         }
       }
@@ -500,6 +523,7 @@ export function AiRecommendationPage() {
 
     return () => {
       active = false;
+      clearTimeout(timeoutId);
     };
   }, [selectedFarm]);
 
@@ -536,12 +560,17 @@ export function AiRecommendationPage() {
         setBackendRun(null);
         setBackendHistory([]);
         setBackendFeedback([]);
+        setBackendLoading(false); // Ensure loading is false when backend is not active
+        setLoadingTimedOut(false);
         return null;
       }
 
       setBackendLoading(true);
+      setLoadingTimedOut(false);
+      setActionNotice("");
 
-      try {
+      let timeoutId;
+      const backendFetchPromise = async () => {
         let latest = await phase1BackendService.recommendations.latest(backendFarmId);
 
         if (!latest && generateIfMissing) {
@@ -559,6 +588,22 @@ export function AiRecommendationPage() {
           ? await phase1BackendService.recommendations.listFeedback(latest.id)
           : [];
 
+        return { latest, history, feedback };
+      };
+
+      const timeoutPromise = new Promise((resolve, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error("Backend recommendation fetch timed out."));
+        }, 5000); // 5 seconds timeout
+      });
+
+      try {
+        const { latest, history, feedback } = await Promise.race([
+          backendFetchPromise(),
+          timeoutPromise,
+        ]);
+        clearTimeout(timeoutId);
+
         setBackendRun(latest);
         setBackendHistory(history);
         setBackendFeedback(feedback);
@@ -569,15 +614,25 @@ export function AiRecommendationPage() {
           setActionNotice("Backend recommendation engine is active for this farm.");
         }
 
+        setBackendLoading(false);
+        setLoadingTimedOut(false);
         return latest;
-      } catch {
+      } catch (error) {
+        clearTimeout(timeoutId);
+        console.warn("Failed to refresh backend recommendations:", error);
+
+        if (error.message === "Backend recommendation fetch timed out.") {
+          setLoadingTimedOut(true);
+          setActionNotice("Using demo recommendation engine because live recommendation data timed out.");
+        } else {
+          setActionNotice("Using demo recommendation engine because backend recommendation data is not available yet.");
+        }
+
         setBackendRun(null);
         setBackendHistory([]);
         setBackendFeedback([]);
-        setActionNotice("Using demo recommendation engine because backend recommendation data is not available yet.");
-        return null;
-      } finally {
         setBackendLoading(false);
+        return null;
       }
     },
     [activeWeather, backendFarmId, backendMode, weatherState.source],
@@ -639,13 +694,13 @@ export function AiRecommendationPage() {
   }, [backendRun, communityInsight, farmerName, market, pest, selectedFarm, soil, storedActions, weather]);
 
   useEffect(() => {
-    if (!selectedRecommendationId && recommendations[0]?.id) {
+    if (!selectedRecommendationId && recommendations?.[0]?.id) {
       setSelectedRecommendationId(recommendations[0].id);
     }
   }, [recommendations, selectedRecommendationId]);
 
   const selectedRecommendation =
-    recommendations.find((item) => item.id === selectedRecommendationId) || recommendations[0] || null;
+    recommendations.find((item) => item.id === selectedRecommendationId) || recommendations?.[0] || null;
 
   const filteredRecommendations = useMemo(() => {
     return recommendations.filter((item) => {
@@ -711,12 +766,13 @@ export function AiRecommendationPage() {
   }, [recommendations]);
 
   const priorityRecommendation = useMemo(() => {
-    return [...recommendations].sort((a, b) => {
+    const safeRecs = Array.isArray(recommendations) ? recommendations : [];
+    return [...safeRecs].sort((a, b) => {
       const priorityRank = { Critical: 4, High: 3, Medium: 2, Low: 1 };
       const aScore = priorityRank[a.priority] * 100 + a.confidence;
       const bScore = priorityRank[b.priority] * 100 + b.confidence;
       return bScore - aScore;
-    })[0] || null;
+    })?.[0] || null;
   }, [recommendations]);
 
   const analytics = useMemo(() => {
@@ -893,7 +949,7 @@ export function AiRecommendationPage() {
                   return;
                 }
 
-                setSelectedFarmId(selectedFarm?.id || farms[0]?.id || "");
+                setSelectedFarmId(selectedFarm?.id || farms?.[0]?.id || "");
               }}
             >
               <RefreshCcw size={16} />
@@ -1035,7 +1091,11 @@ export function AiRecommendationPage() {
       {loading || backendLoading ? (
         <div className="recommendation-state-card">
           <LoaderCircle size={18} className="spin" />
-          <span>Loading AI recommendation engine...</span>
+          <span>
+            {loadingTimedOut 
+              ? "Demo/local data is being used because live data is unavailable." 
+              : "Loading AI recommendation engine..."}
+          </span>
         </div>
       ) : error ? (
         <div className="recommendation-state-card error">
@@ -1044,7 +1104,7 @@ export function AiRecommendationPage() {
             <p>{error}</p>
           </div>
           <div className="recommendation-modal-actions">
-            <button type="button" className="recommendation-secondary-button" onClick={() => setSelectedFarmId(selectedFarm?.id || farms[0]?.id || "")}>
+            <button type="button" className="recommendation-secondary-button" onClick={() => setSelectedFarmId(selectedFarm?.id || farms?.[0]?.id || "")}>
               Retry
             </button>
             <button type="button" className="recommendation-primary-button" onClick={() => window.location.reload()}>
@@ -1326,10 +1386,10 @@ export function AiRecommendationPage() {
                   <strong>Scientific References &amp; Historical Similar Cases</strong>
                 </div>
                 <ol>
-                  {selectedRecommendation.scientificReferences.map((item) => (
+                  {(selectedRecommendation.scientificReferences || []).map((item) => (
                     <li key={item}>{item}</li>
                   ))}
-                  {selectedRecommendation.historicalCases.map((item) => (
+                  {(selectedRecommendation.historicalCases || []).map((item) => (
                     <li key={item}>{item}</li>
                   ))}
                 </ol>

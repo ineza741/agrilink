@@ -588,6 +588,7 @@ export function mapBackendFarmToFrontendFarm(farm, ownerId, existingFarm = null)
       mapX: existingFarm?.location?.mapX ?? mapCoordinates.mapX,
       mapY: existingFarm?.location?.mapY ?? mapCoordinates.mapY,
       label: existingFarm?.location?.label || locationLabel,
+      boundary: existingFarm?.location?.boundary || farm.farmBoundary || null,
     },
     photoName: existingFarm?.photoName || "",
     status: existingFarm?.status || "active",
@@ -689,6 +690,7 @@ export function buildBackendFarmPayload(farmInput) {
     currentCrop: farmInput.primaryCrop || "Maize",
     cropStage: farmInput.cropStage || "Vegetative",
     ownershipType: farmInput.ownershipType || farmInput.plotLabel || "Farmer managed",
+    farmBoundary: farmInput.location?.boundary || null,
   };
 }
 

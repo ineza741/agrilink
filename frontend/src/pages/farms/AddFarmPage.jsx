@@ -9,6 +9,19 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useFarmerData } from "../../context/FarmerDataContext";
 import { getCropImageUrl, getFarmHeroImageUrl } from "../../data/cropImages";
+import "leaflet/dist/leaflet.css";
+import L from "leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polygon, Polyline, CircleMarker, useMapEvents, useMap } from "react-leaflet";
+import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
+import markerIcon from "leaflet/dist/images/marker-icon.png";
+import markerShadow from "leaflet/dist/images/marker-shadow.png";
+
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: markerIcon2x,
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
+});
 
 const initialHistoryRow = {
   crop: "", season: "", yield: "", challenges: "",
@@ -23,7 +36,7 @@ const initialForm = {
   district: "", sector: "", village: "", description: "",
   region: "", irrigationType: "", primaryCrop: "", photoName: "",
   cooperativeName: "",
-  location: { lat: -1.9441, lng: 29.8744, mapX: 50, mapY: 50, label: "" },
+  location: { lat: -1.9441, lng: 29.8744, mapX: 50, mapY: 50, label: "", boundary: null },
   history: [{ ...initialHistoryRow, crop: "Maize", season: "2025 Season B", yield: "4.3 t/ha", challenges: "Armyworm outbreaks after heavy rainfall" }],
 };
 
@@ -50,7 +63,115 @@ const irrigationOptions = [
 
 const stepLabels = ["Farmer Information", "Farm Location", "Crop & Documentation", "Review & Submit"];
 
+function LocationMarker({ position, onLocationChange }) {
+  useMapEvents({
+    click(e) {
+      onLocationChange(e.latlng.lat, e.latlng.lng);
+    },
+  });
+
+  return position ? (
+    <Marker position={position}>
+      <Popup>
+        {Number(position[0]).toFixed(4)}, {Number(position[1]).toFixed(4)}
+      </Popup>
+    </Marker>
+  ) : null;
+}
+
+function MapRefCapture({ mapRef }) {
+  const map = useMap();
+  useEffect(() => {
+    mapRef.current = map;
+  }, [map, mapRef]);
+  return null;
+}
+
+function ReviewMap({ lat, lng, boundary }) {
+  const position = lat ? [lat, lng] : null;
+  return (
+    <MapContainer
+      center={position || [-1.9441, 30.0619]}
+      zoom={13}
+      className="af-review-map-inner"
+      scrollWheelZoom={true}
+      dragging={true}
+      zoomControl={true}
+    >
+      <TileLayer
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      />
+      {position && <Marker position={position} draggable={false} />}
+      {boundary && boundary.length >= 3 && <BoundaryPolygon vertices={boundary} />}
+      <ReviewMapFitter position={position} boundary={boundary} />
+    </MapContainer>
+  );
+}
+
+function ReviewMapFitter({ position, boundary }) {
+  const map = useMap();
+  useEffect(() => {
+    if (boundary && boundary.length >= 3) {
+      const bounds = L.latLngBounds(boundary.map((v) => [v[0], v[1]]));
+      map.fitBounds(bounds, { padding: [20, 20] });
+    } else if (position) {
+      map.setView(position, 13);
+    }
+  }, [map, position, boundary]);
+  return null;
+}
+
+function calculatePolygonArea(vertices) {
+  if (!vertices || vertices.length < 3) return 0;
+  const avgLat = vertices.reduce((sum, v) => sum + v[0], 0) / vertices.length;
+  const avgLatRad = (avgLat * Math.PI) / 180;
+  const metersPerDegreeLng = 111320 * Math.cos(avgLatRad);
+  let area = 0;
+  for (let i = 0; i < vertices.length; i++) {
+    const j = (i + 1) % vertices.length;
+    area += vertices[i][1] * metersPerDegreeLng * vertices[j][0] * 111320
+          - vertices[j][1] * metersPerDegreeLng * vertices[i][0] * 111320;
+  }
+  return Math.abs(area) / 20000;
+}
+
+function BoundaryDrawer({ vertices, onAddVertex }) {
+  useMapEvents({
+    click(e) {
+      onAddVertex(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return (
+    <>
+      {vertices.map((vertex, i) => (
+        <CircleMarker key={i} center={vertex} radius={6} pathOptions={{ color: '#2E7D32', fillColor: '#fff', fillOpacity: 1, weight: 2 }} />
+      ))}
+      {vertices.length >= 2 && (
+        <Polyline positions={vertices} pathOptions={{ color: '#2E7D32', weight: 2, dashArray: '6, 4' }} />
+      )}
+    </>
+  );
+}
+
+function BoundaryPolygon({ vertices }) {
+  if (!vertices || vertices.length < 3) return null;
+  return (
+    <Polygon
+      positions={vertices}
+      pathOptions={{
+        color: '#2E7D32',
+        weight: 2,
+        fillColor: 'rgba(46, 125, 50, 0.12)',
+        fillOpacity: 1,
+      }}
+    />
+  );
+}
+
 function buildFormFromFarm(farm) {
+  const loc = farm?.location ?? {};
+  const hist = Array.isArray(farm?.history) ? farm.history : [];
   return {
     name: farm.name,
     plotLabel: farm.plotLabel,
@@ -66,14 +187,15 @@ function buildFormFromFarm(farm) {
     photoName: farm.photoName,
     cooperativeName: farm.cooperativeName || "",
     location: {
-      lat: farm.location.lat,
-      lng: farm.location.lng,
-      mapX: farm.location.mapX,
-      mapY: farm.location.mapY,
-      label: farm.location.label || "",
+      lat: loc.lat,
+      lng: loc.lng,
+      mapX: loc.mapX,
+      mapY: loc.mapY,
+      label: loc.label || "",
+      boundary: loc.boundary || null,
     },
-    history: farm.history.length
-      ? farm.history.map((e) => ({ crop: e.crop, season: e.season, yield: e.yield, challenges: e.challenges }))
+    history: hist.length
+      ? hist.map((e) => ({ crop: e.crop, season: e.season, yield: e.yield, challenges: e.challenges }))
       : [{ ...initialHistoryRow }],
   };
 }
@@ -81,7 +203,7 @@ function buildFormFromFarm(farm) {
 export function AddFarmPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const mapRef = useRef(null);
+  const leafletMapRef = useRef(null);
   const { user } = useAuth();
   const { currentFarms, saveFarm, saveBulkRegistration } = useFarmerData();
   const editId = searchParams.get("edit");
@@ -98,6 +220,14 @@ export function AddFarmPage() {
   const [photoPreview, setPhotoPreview] = useState(null);
   const [dragOver, setDragOver] = useState(false);
   const [mapFullscreen, setMapFullscreen] = useState(false);
+  const [boundaryMode, setBoundaryMode] = useState(false);
+  const [boundaryVertices, setBoundaryVertices] = useState([]);
+
+  useEffect(() => {
+    if (leafletMapRef.current) {
+      setTimeout(() => leafletMapRef.current.invalidateSize(), 300);
+    }
+  }, [mapFullscreen]);
 
   useEffect(() => {
     if (farmToEdit) {
@@ -111,6 +241,8 @@ export function AddFarmPage() {
     }
     setPhotoPreview(null);
     setFeedback("");
+    setBoundaryMode(false);
+    setBoundaryVertices([]);
   }, [farmToEdit]);
 
   const handleFieldChange = (e) => {
@@ -129,44 +261,64 @@ export function AddFarmPage() {
     }));
   };
 
-  const handleMapSelect = (e) => {
-    const rect = mapRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const mapX = ((e.clientX - rect.left) / rect.width) * 100;
-    const mapY = ((e.clientY - rect.top) / rect.height) * 100;
-    const lat = -2.05 + (mapY / 100) * 0.3;
-    const lng = 29.7 + (mapX / 100) * 0.35;
+  const handleMapSelect = (lat, lng) => {
     setForm((prev) => ({
       ...prev,
       location: {
         ...prev.location,
-        mapX: Number(mapX.toFixed(1)),
-        mapY: Number(mapY.toFixed(1)),
         lat: Number(lat.toFixed(5)),
         lng: Number(lng.toFixed(5)),
       },
     }));
   };
 
+  const handleBoundaryAddVertex = (lat, lng) => {
+    setBoundaryVertices((prev) => [...prev, [lat, lng]]);
+  };
+
+  const handleBoundaryComplete = () => {
+    if (boundaryVertices.length < 3) {
+      setFeedback("Draw at least 3 points to complete the boundary.");
+      return;
+    }
+    const area = calculatePolygonArea(boundaryVertices);
+    setForm((prev) => ({
+      ...prev,
+      sizeHectares: area.toFixed(1),
+      location: {
+        ...prev.location,
+        boundary: boundaryVertices,
+      },
+    }));
+    setBoundaryMode(false);
+    setBoundaryVertices([]);
+    setFeedback(`Farm boundary saved. Approximate area: ${area.toFixed(1)} ha`);
+  };
+
+  const handleBoundaryCancel = () => {
+    setBoundaryMode(false);
+    setBoundaryVertices([]);
+    setFeedback("");
+  };
+
   const detectMyLocation = () => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        const mapX = ((lng - 29.7) / 0.35) * 100;
-        const mapY = ((lat + 2.05) / 0.3) * 100;
+        const { latitude: lat, longitude: lng } = pos.coords;
         setForm((prev) => ({
           ...prev,
           location: {
             ...prev.location,
-            lat: Number(lat.toFixed(5)), lng: Number(lng.toFixed(5)),
-            mapX: Number(Math.max(0, Math.min(100, mapX)).toFixed(1)),
-            mapY: Number(Math.max(0, Math.min(100, mapY)).toFixed(1)),
+            lat: Number(lat.toFixed(5)),
+            lng: Number(lng.toFixed(5)),
           },
         }));
+        if (leafletMapRef.current) {
+          leafletMapRef.current.flyTo([lat, lng], leafletMapRef.current.getZoom());
+        }
       },
-      () => setFeedback("Could not detect location. Check GPS permissions."),
+      () => setFeedback("Location permission is unavailable. Please click on the map to select your farm location."),
       { enableHighAccuracy: true, timeout: 10000 }
     );
   };
@@ -329,7 +481,7 @@ export function AddFarmPage() {
 
   const renderFloatingInput = (props) => {
     const { name, label, icon: Icon, type = "text", value, onChange, placeholder, ...rest } = props;
-    const hasValue = value && String(value).length > 0;
+    const hasValue = value !== undefined && value !== null && String(value).length > 0;
     return (
       <div className={`af-floating-group ${hasValue ? "has-value" : ""}`}>
         {Icon && <Icon size={16} className="af-floating-icon" />}
@@ -397,26 +549,36 @@ export function AddFarmPage() {
       </div>
       <div className="af-location-layout">
         <div className="af-map-section">
-          <div
-            ref={mapRef}
-            className={`af-map-container ${mapFullscreen ? "fullscreen" : ""}`}
-            onClick={handleMapSelect}
-          >
-            <div className="af-map-terrain" />
-            <div className="af-map-grid" />
-            <div className="af-map-center-marker">
-              <Target size={24} />
-            </div>
-            <div
-              className="af-map-pin"
-              style={{ left: `${form.location.mapX}%`, top: `${form.location.mapY}%` }}
+          <div className={`af-map-container leaflet-map ${mapFullscreen ? "fullscreen" : ""}`}>
+            <MapContainer
+              center={[form.location.lat || -1.9441, form.location.lng || 30.0619]}
+              zoom={13}
+              className="af-map-inner"
+              scrollWheelZoom={true}
             >
-              <MapPin size={28} fill="#2E7D32" color="#fff" />
-            </div>
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              {boundaryMode ? (
+                <BoundaryDrawer
+                  vertices={boundaryVertices}
+                  onAddVertex={handleBoundaryAddVertex}
+                />
+              ) : (
+                <LocationMarker
+                  position={form.location.lat ? [form.location.lat, form.location.lng] : null}
+                  onLocationChange={handleMapSelect}
+                />
+              )}
+              {form.location.boundary && !boundaryMode && (
+                <BoundaryPolygon vertices={form.location.boundary} />
+              )}
+              <MapRefCapture mapRef={leafletMapRef} />
+            </MapContainer>
             <div className="af-map-coords-badge">
-              {form.location.lat.toFixed(4)}, {form.location.lng.toFixed(4)}
+              {Number(form.location?.lat ?? 0).toFixed(4)}, {Number(form.location?.lng ?? 0).toFixed(4)}
             </div>
-            <div className="af-map-hint">Click on the map to drop a pin</div>
             <button
               type="button"
               className="af-map-fullscreen-btn"
@@ -447,20 +609,51 @@ export function AddFarmPage() {
             </div>
             <div className="af-location-stat">
               <span className="af-location-stat-label">Area (ha)</span>
-              <span className="af-location-stat-value">{form.sizeHectares || "—"}</span>
+              <span className="af-location-stat-value">
+                {form.location.boundary ? calculatePolygonArea(form.location.boundary).toFixed(1) : form.sizeHectares || "—"}
+              </span>
             </div>
           </div>
           <div className="af-location-actions">
             <button type="button" className="af-location-btn" onClick={detectMyLocation}>
               <Navigation size={16} /> Detect My Location
             </button>
-            <button type="button" className="af-location-btn" onClick={() => setFeedback("Boundary drawing is available in the full GIS module.")}>
-              <Maximize2 size={16} /> Draw Farm Boundary
+            <button type="button" className={`af-location-btn ${boundaryMode ? "active" : ""}`} onClick={() => {
+              if (boundaryMode) {
+                handleBoundaryCancel();
+              } else {
+                if (form.location.boundary) {
+                  setForm((prev) => ({
+                    ...prev,
+                    location: { ...prev.location, boundary: null },
+                  }));
+                  setFeedback("Farm boundary removed.");
+                } else {
+                  setBoundaryMode(true);
+                  setBoundaryVertices(form.location.boundary || []);
+                  setFeedback("Click on the map to add boundary points. Complete the polygon when done.");
+                }
+              }
+            }}>
+              <Maximize2 size={16} /> {form.location.boundary && !boundaryMode ? "Clear Boundary" : boundaryMode ? "Cancel Drawing" : "Draw Farm Boundary"}
             </button>
             <button type="button" className="af-location-btn primary" onClick={detectMyLocation}>
               <MapPin size={16} /> Use Current GPS
             </button>
           </div>
+          {boundaryMode && (
+            <div className="af-boundary-controls">
+              <span className="af-boundary-count">{boundaryVertices.length} point{boundaryVertices.length !== 1 ? "s" : ""} placed</span>
+              <div className="af-boundary-buttons">
+                <button type="button" className="af-location-btn" onClick={handleBoundaryCancel}>
+                  Cancel
+                </button>
+                <button type="button" className="af-location-btn primary" onClick={handleBoundaryComplete} disabled={boundaryVertices.length < 3}>
+                  <Check size={14} /> Complete Boundary
+                </button>
+              </div>
+            </div>
+          )}
           <div className="af-location-irrigation">
             {renderFloatingInput({ name: "irrigationType", label: "Irrigation Type", icon: Sprout, type: "select", value: form.irrigationType, onChange: handleFieldChange, options: irrigationOptions })}
             {renderFloatingInput({ name: "cooperativeName", label: "Cooperative", icon: User, value: form.cooperativeName, onChange: handleFieldChange })}
@@ -621,15 +814,22 @@ export function AddFarmPage() {
 
           <div className="af-review-card">
             <h3><MapPin size={16} /> Location</h3>
-            <div className="af-review-map-sm" onClick={handleMapSelect}>
-              <div className="af-review-map-inner">
-                <MapPin size={24} fill="#2E7D32" color="#fff" />
-                <span>{form.location.lat.toFixed(4)}, {form.location.lng.toFixed(4)}</span>
-              </div>
+            <div className="af-review-map-sm">
+              <ReviewMap
+                lat={form.location.lat}
+                lng={form.location.lng}
+                boundary={form.location.boundary}
+              />
+            </div>
+            <div className="af-review-map-coords">
+              {Number(form.location?.lat ?? 0).toFixed(4)}, {Number(form.location?.lng ?? 0).toFixed(4)}
             </div>
             <div className="af-review-rows">
               <div className="af-review-row"><span>Irrigation</span><strong>{form.irrigationType || "—"}</strong></div>
               <div className="af-review-row"><span>Cooperative</span><strong>{form.cooperativeName || "—"}</strong></div>
+              {form.location.boundary && (
+                <div className="af-review-row"><span>Boundary</span><strong>{form.location.boundary.length} points ({calculatePolygonArea(form.location.boundary).toFixed(1)} ha)</strong></div>
+              )}
             </div>
           </div>
 
@@ -702,6 +902,7 @@ export function AddFarmPage() {
       "GPS coordinates help extension officers find your farm.",
       "Click the map roughly near your farm location.",
       "Use 'Detect My Location' for automatic GPS coordinates.",
+      "Click 'Draw Farm Boundary' to outline the farm perimeter on the map.",
     ],
     3: [
       "Select the crop you grow most of the year.",
@@ -779,7 +980,7 @@ export function AddFarmPage() {
         <h4><MapPin size={14} /> Weather</h4>
         <p className="af-sidebar-ai-text">
           {form.location.lat
-            ? `Current conditions at ${form.location.lat.toFixed(2)}°S, ${form.location.lng.toFixed(2)}°E: Mild, 22°C`
+            ? `Current conditions at ${Number(form.location?.lat ?? 0).toFixed(2)}°S, ${Number(form.location?.lng ?? 0).toFixed(2)}°E: Mild, 22°C`
             : "Set location to view weather data."}
         </p>
       </div>

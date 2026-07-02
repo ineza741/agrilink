@@ -337,48 +337,58 @@ function createSoilImprovementInsights(values, form, healthScore) {
 function buildRecommendationDescription(crop, analysis, selectedFarm) {
   if (!crop) return null;
 
-  const values = analysis.values;
+  const values = analysis?.values || { ph: 6.5, nitrogen: 38, phosphorus: 21, potassium: 17, organicMatter: 2.7 };
   const concerns = [];
   const actions = [];
 
-  if (values.ph < crop.phRange[0]) {
-    concerns.push(`pH is below ${crop.name}'s preferred range of ${crop.phRange[0]}-${crop.phRange[1]}`);
+  const minPh = crop.phRange?.[0] ?? 6.0;
+  const maxPh = crop.phRange?.[1] ?? 7.0;
+  const reqN = crop.npk?.n ?? 30;
+  const reqP = crop.npk?.p ?? 20;
+  const reqK = crop.npk?.k ?? 20;
+  const reqOm = crop.organicMatterMin ?? 2.0;
+  const cropName = crop.name || "Crop";
+
+  if (values.ph < minPh) {
+    concerns.push(`pH is below ${cropName}'s preferred range of ${minPh}-${maxPh}`);
     actions.push("Correct soil acidity before planting so nutrient uptake is not restricted.");
-  } else if (values.ph > crop.phRange[1]) {
-    concerns.push(`pH is above ${crop.name}'s preferred range of ${crop.phRange[0]}-${crop.phRange[1]}`);
+  } else if (values.ph > maxPh) {
+    concerns.push(`pH is above ${cropName}'s preferred range of ${minPh}-${maxPh}`);
     actions.push("Use soil-acidifying nutrition and added organic matter before establishment.");
   }
 
-  if (values.nitrogen < crop.npk.n) {
+  if (values.nitrogen < reqN) {
     concerns.push("nitrogen is lower than this crop ideally needs");
-    actions.push(`Raise nitrogen closer to ${crop.npk.n} using split applications around early growth.`);
+    actions.push(`Raise nitrogen closer to ${reqN} using split applications around early growth.`);
   }
 
-  if (values.phosphorus < crop.npk.p) {
+  if (values.phosphorus < reqP) {
     concerns.push("phosphorus is slightly limiting");
-    actions.push(`Boost phosphorus toward ${crop.npk.p} for stronger rooting and early vigor.`);
+    actions.push(`Boost phosphorus toward ${reqP} for stronger rooting and early vigor.`);
   }
 
-  if (values.potassium < crop.npk.k) {
+  if (values.potassium < reqK) {
     concerns.push("potassium is below the preferred level");
-    actions.push(`Increase potassium toward ${crop.npk.k} to support water balance and crop strength.`);
+    actions.push(`Increase potassium toward ${reqK} to support water balance and crop strength.`);
   }
 
-  if (values.organicMatter < crop.organicMatterMin) {
+  if (values.organicMatter < reqOm) {
     concerns.push("organic matter is under the crop's preferred threshold");
     actions.push("Build organic matter with compost and crop residues before the next planting cycle.");
   }
 
-  if (!crop.soilTypes.includes(selectedFarm.landType || selectedFarm.soilType || "Loamy")) {
-    actions.push(`Monitor this plot carefully because ${crop.name} performs best on ${crop.soilTypes.join(" or ")} soils.`);
+  const cropSoilTypes = Array.isArray(crop.soilTypes) ? crop.soilTypes : [];
+  if (selectedFarm && !cropSoilTypes.includes(selectedFarm.landType || selectedFarm.soilType || "Loamy")) {
+    actions.push(`Monitor this plot carefully because ${cropName} performs best on ${cropSoilTypes.join(" or ") || "suitable"} soils.`);
   }
 
+  const farmName = selectedFarm?.name || "the active plot";
   const summary =
     crop.match >= 85
-      ? `${crop.name} is a strong fit for ${selectedFarm.name} because the current soil profile already supports most of its nutrient and pH requirements during the ${analysis.climateContext?.seasonLabel?.toLowerCase() || "current"} window.`
+      ? `${cropName} is a strong fit for ${farmName} because the current soil profile already supports most of its nutrient and pH requirements during the ${analysis?.climateContext?.seasonLabel?.toLowerCase() || "current"} window.`
       : crop.match >= 70
-        ? `${crop.name} can perform well on ${selectedFarm.name}, but a few nutrient and soil-balance adjustments should be made before planting in the current ${analysis.climateContext?.seasonLabel?.toLowerCase() || "seasonal"} conditions.`
-        : `${crop.name} is still possible on ${selectedFarm.name}, but the soil needs clear correction steps before this crop becomes a safe choice.`;
+        ? `${cropName} can perform well on ${farmName}, but a few nutrient and soil-balance adjustments should be made before planting in the current ${analysis?.climateContext?.seasonLabel?.toLowerCase() || "seasonal"} conditions.`
+        : `${cropName} is still possible on ${farmName}, but the soil needs clear correction steps before this crop becomes a safe choice.`;
 
   return {
     summary,
@@ -767,12 +777,12 @@ function calculateSoilAnalysis(form, selectedFarm, climateContext, soilSourceMod
     secondary: suitableCrops[1],
     recommendation:
       suitableCrops[0]?.match >= 85
-        ? `Prioritize ${suitableCrops[0].name} on ${selectedFarm.name} and rotate with ${suitableCrops[1]?.name || "legumes"} next season.`
-        : `Apply nutrient corrections before planting. ${suitableCrops[0]?.name} is currently the strongest fit after soil balancing.`,
+        ? `Prioritize ${suitableCrops[0]?.name || "crop"} on ${selectedFarm?.name || "farm"} and rotate with ${suitableCrops[1]?.name || "legumes"} next season.`
+        : `Apply nutrient corrections before planting. ${suitableCrops[0]?.name || "crop"} is currently the strongest fit after soil balancing.`,
   };
 
   const cropRotationPlan = [
-    `${selectedFarm.primaryCrop || suitableCrops[0].name} -> ${suitableCrops[1]?.name || "Soybean"} -> Cover crop`,
+    `${selectedFarm?.primaryCrop || suitableCrops[0]?.name || "crop"} -> ${suitableCrops[1]?.name || "Soybean"} -> Cover crop`,
     values.organicMatter < 2.5
       ? "Include legumes or cover crops next cycle to rebuild soil organic matter."
       : "Maintain residue return to preserve current soil structure.",
@@ -818,9 +828,9 @@ function getDistrictEstimate(region) {
 export function SoilCropPage() {
   const { currentFarms } = useFarmerData();
   const fallbackFarm = useMemo(() => createDefaultFarm(), []);
-  const farms = currentFarms.length ? currentFarms : [fallbackFarm];
+  const farms = currentFarms?.length ? currentFarms : [fallbackFarm];
   const backendMode = isBackendSessionActive();
-  const [selectedFarmId, setSelectedFarmId] = useState(farms[0]?.id || "soil-default-farm");
+  const [selectedFarmId, setSelectedFarmId] = useState(farms?.[0]?.id || "soil-default-farm");
   const [libraryFilters, setLibraryFilters] = useState({
     search: "",
     season: "All",
@@ -855,12 +865,12 @@ export function SoilCropPage() {
 
   useEffect(() => {
     if (!farms.some((farm) => farm.id === selectedFarmId)) {
-      setSelectedFarmId(farms[0]?.id || "soil-default-farm");
+      setSelectedFarmId(farms?.[0]?.id || "soil-default-farm");
     }
   }, [farms, selectedFarmId]);
 
   const selectedFarm = useMemo(
-    () => farms.find((farm) => farm.id === selectedFarmId) || farms[0],
+    () => farms.find((farm) => farm.id === selectedFarmId) || farms?.[0] || null,
     [farms, selectedFarmId]
   );
   const selectedFarmCoordinates = `${selectedFarm?.location?.lat || 0}:${selectedFarm?.location?.lng || 0}`;
@@ -889,8 +899,9 @@ export function SoilCropPage() {
 
         if (!active) return;
 
-        const latestSoilTest = suitabilityPayload?.latestSoilTest || historyRows[0] || null;
-        setBackendSoilHistory(historyRows);
+        const historyRowsSafe = Array.isArray(historyRows) ? historyRows : [];
+        const latestSoilTest = suitabilityPayload?.latestSoilTest || historyRowsSafe?.[0] || null;
+        setBackendSoilHistory(historyRowsSafe);
         setBackendLatestSoilTest(latestSoilTest);
         setBackendSoilMode(latestSoilTest ? "backend" : "local");
 
@@ -1091,14 +1102,14 @@ export function SoilCropPage() {
 
   useEffect(() => {
     setSelectedRecommendationName((current) =>
-      effectiveSuitableCrops.some((crop) => crop.name === current)
+      effectiveSuitableCrops?.some((crop) => crop.name === current)
         ? current
-        : effectiveSuitableCrops[0]?.name || ""
+        : effectiveSuitableCrops?.[0]?.name || ""
     );
   }, [effectiveSuitableCrops]);
 
   const selectedRecommendation = useMemo(
-    () => effectiveSuitableCrops.find((crop) => crop.name === selectedRecommendationName) || effectiveSuitableCrops[0] || null,
+    () => effectiveSuitableCrops.find((crop) => crop.name === selectedRecommendationName) || effectiveSuitableCrops?.[0] || null,
     [effectiveSuitableCrops, selectedRecommendationName]
   );
 
@@ -1340,13 +1351,13 @@ export function SoilCropPage() {
             <div className="sc-kpi-trend up"><ArrowUp size={14} /></div>
           </div>
         </AppCard>
-        <AppCard className="sc-kpi-card">
+<AppCard className="sc-kpi-card">
           <div className="sc-kpi-inner">
             <div className="sc-kpi-icon-wrap blue"><Target size={22} /></div>
             <div className="sc-kpi-info">
               <span className="sc-kpi-label">Suitability Score</span>
-              <strong className="sc-kpi-value">{effectiveSuitableCrops[0]?.match || 0}<small>%</small></strong>
-              <span className="sc-kpi-sub">{effectiveSuitableCrops[0]?.name || "—"} best match</span>
+              <strong className="sc-kpi-value">{effectiveSuitableCrops?.[0]?.match || 0}<small>%</small></strong>
+              <span className="sc-kpi-sub">{effectiveSuitableCrops?.[0]?.name || "—"} best match</span>
             </div>
             <div className="sc-kpi-trend up"><ArrowUp size={14} /></div>
           </div>
@@ -1685,7 +1696,7 @@ export function SoilCropPage() {
                 <div className="sc-conf-bar-fill" style={{ width: `${Math.min(effectiveHealthScore, 95)}%` }} />
               </div>
               <span>Health Score <strong>{effectiveHealthScore}%</strong></span>
-              <span>Suitability <strong>{effectiveSuitableCrops[0]?.match || 0}%</strong></span>
+              <span>Suitability <strong>{effectiveSuitableCrops?.[0]?.match || 0}%</strong></span>
             </div>
           </AppCard>
 
@@ -1704,8 +1715,8 @@ export function SoilCropPage() {
           <h3>AI Crop Recommendations</h3>
           <StatusBadge variant="success">Top Yield Confidence</StatusBadge>
         </div>
-        <div className="sc-rec-grid">
-          {effectiveSuitableCrops.slice(0, 3).map((crop, index) => (
+<div className="sc-rec-grid">
+          {(Array.isArray(effectiveSuitableCrops) ? effectiveSuitableCrops : []).slice(0, 3).map((crop, index) => (
             <button key={crop.name} type="button" onClick={() => setSelectedRecommendationName(crop.name)} className={`sc-rec-card ${selectedRecommendation?.name === crop.name ? "selected" : ""}`}>
               <div className="sc-rec-img-wrap">
                 <img src={getCropImageUrl(crop.name) || crop.imageUrl} alt={crop.name} className="sc-rec-img" loading="lazy" />

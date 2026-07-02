@@ -80,12 +80,12 @@ export function ProfilePage() {
   );
 
   const metrics = useMemo(() => {
-    const totalAcreage = currentFarms.reduce((sum, farm) => sum + Number(farm.sizeHectares || 0), 0);
-    const verifiedFarms = currentFarms.filter((farm) => farm.verificationStatus === "verified").length;
+    const totalAcreage = (currentFarms || []).reduce((sum, farm) => sum + Number(farm.sizeHectares || 0), 0);
+    const verifiedFarms = (currentFarms || []).filter((farm) => farm.verificationStatus === "verified").length;
     return [
       { label: "Total Acreage", value: totalAcreage.toFixed(totalAcreage % 1 === 0 ? 0 : 1), unit: "ha" },
       { label: "Profile Complete", value: `${completeness}%` },
-      { label: "Verified Farms", value: `${verifiedFarms}/${currentFarms.length || 0}` },
+      { label: "Verified Farms", value: `${verifiedFarms}/${(currentFarms?.length || 0)}` },
     ];
   }, [completeness, currentFarms]);
 
@@ -104,12 +104,14 @@ export function ProfilePage() {
   };
 
   const handleSave = async () => {
+    if (!user) return;
     await updateProfile(user.id, form);
     setIsEditing(false);
     setFeedback("Profile details updated successfully.");
   };
 
   const handleSubmitForReview = () => {
+    if (!user) return;
     submitProfileForApproval(user.id);
     setFeedback("Profile submitted for verification and approval.");
   };
@@ -310,7 +312,7 @@ export function ProfilePage() {
             </div>
 
             <div className="profile-farm-grid">
-              {currentFarms.map((farm) => (
+              {(currentFarms || []).map((farm) => (
                 <div key={farm.id} className="profile-farm-card-modern">
                   <div className="profile-farm-card-media">
                     <img
@@ -334,7 +336,7 @@ export function ProfilePage() {
                     <div style={{ marginTop: "8px" }}>
                       <span style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: 600 }}>Crop History:</span>
                       <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "4px" }}>
-                        {farm.history.map((entry) => (
+                        {(farm.history || []).map((entry) => (
                           <span key={entry.id} style={{ padding: "2px 8px", borderRadius: "6px", background: "var(--light-green)", color: "var(--primary-green)", fontSize: "11px", fontWeight: 600 }}>
                             {entry.crop} ({entry.season})
                           </span>

@@ -278,9 +278,9 @@ function buildMarketData({ farm, crop, timeframe }) {
   });
 
   const forecasts = buildForecastWindows(basePrice, profile.growth30, profile.volatility, profile.demand);
-  const bestMarket = markets[0];
+  const bestMarket = markets?.[0];
   const aiDecision =
-    forecasts[0].forecastChange >= 4
+    (forecasts?.[0]?.forecastChange ?? 0) >= 4
       ? "Wait 7 Days"
       : profile.export > basePrice * 1.22 && bestMarket?.province !== "Kigali City"
         ? "Export Opportunity"
@@ -290,7 +290,7 @@ function buildMarketData({ farm, crop, timeframe }) {
 
   const aiReason =
     aiDecision === "Wait 7 Days"
-      ? `Demand forecast is increasing and prices are expected to rise by ${forecasts[0].forecastChange}%.`
+      ? `Demand forecast is increasing and prices are expected to rise by ${forecasts?.[0]?.forecastChange ?? 0}%.`
       : aiDecision === "Export Opportunity"
         ? "Export and wholesale spreads are strong enough to justify a premium selling channel."
         : aiDecision === "Sell Now"
@@ -344,11 +344,11 @@ function buildMarketData({ farm, crop, timeframe }) {
 
 export function MarketPage() {
   const { currentFarms } = useFarmerData();
-  const farms = currentFarms.length ? currentFarms : [createDefaultFarm()];
+  const farms = currentFarms?.length ? currentFarms : [createDefaultFarm()];
   const stored = useMemo(() => loadStoredState(), []);
-  const [selectedFarmId, setSelectedFarmId] = useState(farms[0]?.id || "market-default-farm");
+  const [selectedFarmId, setSelectedFarmId] = useState(farms?.[0]?.id || "market-default-farm");
   const [selectedCrop, setSelectedCrop] = useState(
-    normalizeCropSelection(stored.selectedCrop || farms[0]?.primaryCrop || "Wheat")
+    normalizeCropSelection(stored.selectedCrop || farms?.[0]?.primaryCrop || "Wheat")
   );
   const [timeframe, setTimeframe] = useState(stored.timeframe || "30D");
   const [targetPrice, setTargetPrice] = useState(stored.targetPrice || "750");
@@ -367,12 +367,12 @@ export function MarketPage() {
 
   useEffect(() => {
     if (!farms.some((farm) => farm.id === selectedFarmId)) {
-      setSelectedFarmId(farms[0]?.id || "market-default-farm");
+      setSelectedFarmId(farms?.[0]?.id || "market-default-farm");
     }
   }, [farms, selectedFarmId]);
 
   const selectedFarm = useMemo(
-    () => farms.find((farm) => farm.id === selectedFarmId) || farms[0],
+    () => farms.find((farm) => farm.id === selectedFarmId) || farms?.[0] || null,
     [farms, selectedFarmId]
   );
 
@@ -587,9 +587,9 @@ export function MarketPage() {
             <strong className="mk-kpi-value">{formatRwf(market.currentPrice)}</strong>
             <span className="mk-kpi-sub">/{selectedCrop} kg</span>
           </div>
-          <span className={`mk-kpi-trend ${market.forecasts[0].forecastChange >= 0 ? "up" : "down"}`}>
-            {market.forecasts[0].forecastChange >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-            {market.forecasts[0].forecastChange >= 0 ? "+" : ""}{market.forecasts[0].forecastChange}%
+          <span className={`mk-kpi-trend ${(market.forecasts?.[0]?.forecastChange ?? 0) >= 0 ? "up" : "down"}`}>
+            {(market.forecasts?.[0]?.forecastChange ?? 0) >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+            {(market.forecasts?.[0]?.forecastChange ?? 0) >= 0 ? "+" : ""}{market.forecasts?.[0]?.forecastChange ?? 0}%
           </span>
         </div>
         <div className="mk-kpi-card">
@@ -861,7 +861,7 @@ export function MarketPage() {
               <div className="mk-logi-card">
                 <Route size={18} />
                 <strong>Route Accessibility</strong>
-                <p>{market.logisticsTips[0]}</p>
+                <p>{market.logisticsTips?.[0]}</p>
               </div>
               <div className="mk-logi-card">
                 <Truck size={18} />

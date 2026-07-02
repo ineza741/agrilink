@@ -196,9 +196,9 @@ function buildAnalyticsData({ farm, cropType, dateRange, reportTemplate, chartFi
 function AdminAnalyticsView() {
   const { user } = useAuth();
   const stored = useMemo(() => { try { return JSON.parse(localStorage.getItem(ADMIN_REPORTS_STORAGE_KEY) || "{}"); } catch { return {}; } }, []);
-  const [selectedMethodology, setSelectedMethodology] = useState(methodologyCards.find((item) => item.active)?.title || methodologyCards[0].title);
+  const [selectedMethodology, setSelectedMethodology] = useState(methodologyCards.find((item) => item.active)?.title || methodologyCards[0]?.title);
   const [exportSelection, setExportSelection] = useState(exportChecks);
-  const [selectedTemplate, setSelectedTemplate] = useState(stored.selectedTemplate || adminReportTemplates[0]);
+  const [selectedTemplate, setSelectedTemplate] = useState(stored.selectedTemplate || adminReportTemplates?.[0]);
   const [selectedCompliance, setSelectedCompliance] = useState(stored.selectedCompliance || "MINAGRI");
   const [selectedComparison, setSelectedComparison] = useState(stored.selectedComparison || "Region vs Region");
   const [selectedExportFormat, setSelectedExportFormat] = useState(stored.selectedExportFormat || "CSV");
@@ -479,7 +479,7 @@ function AdminAnalyticsView() {
 function FarmerAnalyticsView() {
   const { user } = useAuth();
   const { currentFarms } = useFarmerData();
-  const farms = currentFarms.length ? currentFarms : [createDefaultFarm()];
+  const farms = (Array.isArray(currentFarms) ? currentFarms : []).length ? currentFarms : [createDefaultFarm()];
   const stored = useMemo(() => loadStoredState(), []);
   const [selectedFarmId, setSelectedFarmId] = useState(farms[0]?.id || "analytics-default-farm");
   const [dateRange, setDateRange] = useState(stored.dateRange || "6M");
@@ -498,12 +498,13 @@ function FarmerAnalyticsView() {
 
   useEffect(() => {
     let isMounted = true;
+    const safetyTimeout = window.setTimeout(() => { if (isMounted) setIsLoading(false); }, 10000);
     async function loadBackendAnalytics() {
       if (!selectedFarmId || !isBackendSessionActive() || user?.role !== "farmer") return;
       setIsLoading(true); setBackendError("");
       try { const [dashboard, history] = await Promise.all([phase1BackendService.analytics.farmDashboard(selectedFarmId, { dateRange, cropType, activityFilter, reportTemplate, chartFilter }), phase1BackendService.analytics.farmHistory(selectedFarmId)]); if (!isMounted) return; setBackendDashboard(dashboard || null); setBackendHistory(Array.isArray(history) ? history : []); } catch { if (!isMounted) return; setBackendDashboard(null); setBackendHistory([]); setBackendError("Demo analytics mode active."); } finally { if (isMounted) setIsLoading(false); }
     }
-    loadBackendAnalytics(); return () => { isMounted = false; };
+    loadBackendAnalytics(); return () => { isMounted = false; window.clearTimeout(safetyTimeout); };
   }, [activityFilter, chartFilter, cropType, dateRange, reportTemplate, selectedFarmId, user?.role]);
 
   useEffect(() => { if (!farms.some((farm) => farm.id === selectedFarmId)) setSelectedFarmId(farms[0]?.id || "analytics-default-farm"); }, [farms, selectedFarmId]);
@@ -517,9 +518,9 @@ function FarmerAnalyticsView() {
     { title: "Estimated Yield", value: `${analytics.yieldTons.toLocaleString()} t`, note: `${Math.min(99, analytics.confidence)}% forecast confidence`, tone: "green", icon: Sprout },
   ];
 
-  const maxYield = Math.max(...analytics.actualSeries, ...analytics.targetSeries);
-  const maxRevenue = Math.max(...analytics.revenueSeries.map((item) => item.revenue));
-  const maxCosts = Math.max(...analytics.revenueSeries.map((item) => item.costs));
+  const maxYield = (analytics.actualSeries.length || analytics.targetSeries.length) ? Math.max(...analytics.actualSeries, ...analytics.targetSeries) : 0;
+  const maxRevenue = analytics.revenueSeries.length ? Math.max(...analytics.revenueSeries.map((item) => item.revenue)) : 0;
+  const maxCosts = analytics.revenueSeries.length ? Math.max(...analytics.revenueSeries.map((item) => item.costs)) : 0;
   const trendLabel = getTrendLabel(analytics.trendDelta);
   const filteredRows = activityFilter === "All" ? analytics.reportRows : analytics.reportRows.filter((row) => activityFilter === "Verified" ? row.status === "Verified" : row.status !== "Verified");
   const activeTemplateDescription = backendDashboard?.activeTemplateDescription || reportTemplateDescriptions[reportTemplate] || "Template-specific reporting view for the selected farm.";
@@ -528,11 +529,11 @@ function FarmerAnalyticsView() {
     if (isBackendSessionActive() && user?.role === "farmer" && selectedFarm?.id) { try { const exportRecord = await phase1BackendService.analytics.exportFarm(selectedFarm.id, { format, dateRange, cropType, activityFilter, reportTemplate, chartFilter }); if (exportRecord) setBackendHistory((current) => [exportRecord, ...current].slice(0, 20)); } catch {} }
     if (format === "excel") { downloadCsvFile("farm-analytics.csv", [["Period", "Yield", "Revenue", "Score", "Status"], ...filteredRows.map((row) => [row.period, row.yield, row.revenue, row.score, row.status])]); return; }
     if (format === "json") { downloadJsonFile("farm-analytics.json", analytics); return; }
-    downloadTextFile(`${format === "report" ? "farm-report" : "farm-analytics-share"}.txt`, `Farm Analytics\nFarm: ${selectedFarm.name}\nTemplate: ${analytics.reportTemplateLabel}\nMode: ${backendDashboard ? "Backend Analytics" : DEMO_MODE ? "Demo Analytics" : "Live Analytics"}\nYield: ${analytics.yieldTons} t\nRevenue: ${formatRwf(analytics.revenue)}\nCosts: ${formatRwf(analytics.costs)}\nROI: ${analytics.roi}%`);
+    downloadTextFile(`${format === "report" ? "farm-report" : "farm-analytics-share"}.txt`, `Farm Analytics\nFarm: ${selectedFarm?.name}\nTemplate: ${analytics.reportTemplateLabel}\nMode: ${backendDashboard ? "Backend Analytics" : DEMO_MODE ? "Demo Analytics" : "Live Analytics"}\nYield: ${analytics.yieldTons} t\nRevenue: ${formatRwf(analytics.revenue)}\nCosts: ${formatRwf(analytics.costs)}\nROI: ${analytics.roi}%`);
   };
 
   const aiInsights = backendDashboard?.aiInsights?.map((item) => ({ ...item, icon: resolveAnalyticsIcon(item.icon, Sparkles) })) || [
-    { label: "Key Finding", body: `${selectedFarm.primaryCrop || "Primary crop"} performance is ${analytics.yieldTons >= analytics.regionalYield ? "above" : "slightly below"} the regional average for this reporting window.`, icon: Sparkles },
+    { label: "Key Finding", body: `${selectedFarm?.primaryCrop || "Primary crop"} performance is ${analytics.yieldTons >= analytics.regionalYield ? "above" : "slightly below"} the regional average for this reporting window.`, icon: Sparkles },
     { label: "Yield Improvement", body: `${Math.max(3, Math.round((analytics.yieldTons / Math.max(analytics.previousSeasonYield, 1) - 1) * 100))}% improvement opportunity is possible through tighter irrigation and nutrient timing.`, icon: TrendingUp },
     { label: "Cost Reduction", body: `Input optimization can reduce operating pressure by about ${analytics.costReductionOpportunity}% if labor and fertilizer timing are synchronized.`, icon: Wallet },
     { label: "Risk Observation", body: `${analytics.riskLevel} operational risk is driven mainly by ${analytics.waterEfficiency < 64 ? "water efficiency" : "seasonal cost pressure"} in this cycle.`, icon: AlertTriangle },

@@ -434,10 +434,10 @@ function buildWeatherAlerts(weather, district, sector) {
     ];
   }
 
-  const rain = weather.daily.rain_sum || weather.daily.precipitation_sum || [];
-  const maxTemp = weather.daily.temperature_2m_max || [];
-  const wind = weather.daily.wind_speed_10m_max || [];
-  const probability = weather.daily.precipitation_probability_max || [];
+  const rain = Array.isArray(weather?.daily?.rain_sum) ? weather.daily.rain_sum : (Array.isArray(weather?.daily?.precipitation_sum) ? weather.daily.precipitation_sum : []);
+  const maxTemp = Array.isArray(weather?.daily?.temperature_2m_max) ? weather.daily.temperature_2m_max : [];
+  const wind = Array.isArray(weather?.daily?.wind_speed_10m_max) ? weather.daily.wind_speed_10m_max : [];
+  const probability = Array.isArray(weather?.daily?.precipitation_probability_max) ? weather.daily.precipitation_probability_max : [];
   const alerts = [];
 
   if (rain.some((value) => Number(value || 0) >= 30)) {
@@ -505,7 +505,7 @@ function FarmerRegionalAlerts({ state, setState }) {
   const [weatherState, setWeatherState] = useState({ loading: true, data: null });
   const [reportTitle, setReportTitle] = useState("");
   const [reportBody, setReportBody] = useState("");
-  const farms = currentFarms.length ? currentFarms : [];
+  const farms = (Array.isArray(currentFarms) ? currentFarms : []).length ? currentFarms : [];
 
   useEffect(() => {
     if (selectedFarmId || !farms.length) return;
@@ -547,7 +547,7 @@ function FarmerRegionalAlerts({ state, setState }) {
 
   const nearbyOutbreaks = useMemo(
     () =>
-      state.outbreaks
+      (Array.isArray(state.outbreaks) ? state.outbreaks : [])
         .map((item) => ({
           ...item,
           distanceKm: haversineKm(baseCoords.lat, baseCoords.lng, item.lat, item.lng),
@@ -560,7 +560,7 @@ function FarmerRegionalAlerts({ state, setState }) {
 
   const nearbyMarkets = useMemo(
     () =>
-      state.marketAlerts
+      (Array.isArray(state.marketAlerts) ? state.marketAlerts : [])
         .map((item) => ({
           ...item,
           distanceKm: haversineKm(baseCoords.lat, baseCoords.lng, item.lat, item.lng),
@@ -573,7 +573,7 @@ function FarmerRegionalAlerts({ state, setState }) {
 
   const districtAdvisories = useMemo(
     () =>
-      state.advisories
+      (Array.isArray(state.advisories) ? state.advisories : [])
         .filter((item) => item.district === district)
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
         .slice(0, 4),
@@ -582,7 +582,7 @@ function FarmerRegionalAlerts({ state, setState }) {
 
   const communityReports = useMemo(
     () =>
-      state.communityReports
+      (Array.isArray(state.communityReports) ? state.communityReports : [])
         .filter((item) => item.district === district)
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
         .slice(0, 5),
@@ -896,7 +896,7 @@ function AdminRegionalDashboard({ state, setState, backendAdminMode, backendPayl
 
     const sectorMap = new Map();
 
-    selectedProfile?.outbreaks.forEach((item) => {
+    selectedProfile?.outbreaks?.forEach((item) => {
       const current = sectorMap.get(item.sector) || {
         sector: item.sector,
         weatherRiskScore: selectedProfile.weatherRisk,
@@ -912,7 +912,7 @@ function AdminRegionalDashboard({ state, setState, backendAdminMode, backendPayl
       sectorMap.set(item.sector, current);
     });
 
-    selectedProfile?.reports.forEach((item) => {
+    selectedProfile?.reports?.forEach((item) => {
       const current = sectorMap.get(item.sector) || {
         sector: item.sector,
         weatherRiskScore: selectedProfile.weatherRisk,
@@ -926,7 +926,7 @@ function AdminRegionalDashboard({ state, setState, backendAdminMode, backendPayl
       sectorMap.set(item.sector, current);
     });
 
-    selectedProfile?.markets.forEach((item) => {
+    selectedProfile?.markets?.forEach((item) => {
       const current = sectorMap.get(item.sector) || {
         sector: item.sector,
         weatherRiskScore: selectedProfile.weatherRisk,
@@ -1111,7 +1111,7 @@ function AdminRegionalDashboard({ state, setState, backendAdminMode, backendPayl
           <div className="rm-summary-icon red"><TriangleAlert size={18} /></div>
           <div className="rm-summary-info">
             <span>Active Regional Alerts</span>
-            <strong>{selectedProfile?.outbreaks.length + selectedProfile?.reports.length}</strong>
+            <strong>{(selectedProfile?.outbreaks?.length || 0) + (selectedProfile?.reports?.length || 0)}</strong>
           </div>
         </article>
         <article className="rm-summary-card">
@@ -1215,7 +1215,7 @@ function AdminRegionalDashboard({ state, setState, backendAdminMode, backendPayl
                 <strong>Extension advisory pressure</strong>
                 <small>Regional advisory workload</small>
               </div>
-              <span>{selectedProfile?.advisories.length || 0} live</span>
+              <span>{(selectedProfile?.advisories?.length || 0)} live</span>
             </div>
           </div>
         </aside>

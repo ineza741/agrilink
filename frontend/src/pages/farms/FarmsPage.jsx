@@ -233,9 +233,10 @@ function FarmerFarmsView() {
   const [query, setQuery] = useState("");
 
   const visibleFarms = useMemo(() => {
+    const safeFarms = Array.isArray(currentFarms) ? currentFarms : [];
     const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return currentFarms;
-    return currentFarms.filter((farm) =>
+    if (!normalizedQuery) return safeFarms;
+    return safeFarms.filter((farm) =>
       [farm.name, farm.region, farm.primaryCrop, farm.plotLabel]
         .join(" ")
         .toLowerCase()
@@ -244,16 +245,17 @@ function FarmerFarmsView() {
   }, [currentFarms, query]);
 
   const farmMetrics = useMemo(() => {
-    const totalAcreage = currentFarms.reduce((sum, farm) => sum + Number(farm.sizeHectares || 0), 0);
-    const verifiedFarms = currentFarms.filter((farm) => farm.verificationStatus === "verified").length;
-    const cooperativePlots = currentFarms.filter((farm) => farm.cooperativeName).length;
+    const safeFarms = Array.isArray(currentFarms) ? currentFarms : [];
+    const totalAcreage = safeFarms.reduce((sum, farm) => sum + Number(farm.sizeHectares || 0), 0);
+    const verifiedFarms = safeFarms.filter((farm) => farm.verificationStatus === "verified").length;
+    const cooperativePlots = safeFarms.filter((farm) => farm.cooperativeName).length;
     return [
       { label: "Total Acreage", value: totalAcreage.toFixed(totalAcreage % 1 === 0 ? 0 : 1), unit: "ha" },
-      { label: "Verified Farms", value: `${verifiedFarms}/${currentFarms.length || 0}` },
-      { label: "Profile Completeness", value: `${getProfileCompleteness(user.id)}%` },
+      { label: "Verified Farms", value: `${verifiedFarms}/${safeFarms.length || 0}` },
+      { label: "Profile Completeness", value: `${getProfileCompleteness(user?.id)}%` },
       { label: "Cooperative Plots", value: `${cooperativePlots}` },
     ];
-  }, [currentFarms, getProfileCompleteness, user.id]);
+  }, [currentFarms, getProfileCompleteness, user?.id]);
 
   return (
     <PageShell>
@@ -360,9 +362,9 @@ function FarmerFarmsView() {
                   </div>
                 </div>
 
-                {farm.history.length > 0 ? (
+                {Array.isArray(farm.history) && farm.history.length > 0 ? (
                   <div className="farm-card-history">
-                    {farm.history.map((item) => {
+                    {(farm.history || []).map((item) => {
                       const chipKey = Object.keys(cropEmoji).find(
                         (k) => k.toLowerCase() === (item.crop || "").toLowerCase()
                       ) || Object.keys(cropEmoji).find(
@@ -450,9 +452,9 @@ function AdminFarmsView() {
   const itemsPerPage = 5;
 
   const adminRecords = useMemo(() => {
-    return adminFarmerRows.map((row) => {
-      const farms = getFarmsByOwner(row.userId);
-      const primaryFarm = farms[0];
+    return (Array.isArray(adminFarmerRows) ? adminFarmerRows : []).map((row) => {
+      const farms = getFarmsByOwner(row.userId) || [];
+      const primaryFarm = farms?.[0];
       return {
         ...row,
         contact: row.profile?.contact || "Not provided",
@@ -517,7 +519,7 @@ function AdminFarmsView() {
     const deactivatedFarmers =
       adminDashboardSummary?.deactivatedFarmers ??
       adminRecords.filter((row) => row.status === "deactivated" || row.status === "rejected").length;
-    const totalFarms = adminDashboardSummary?.totalFarms ?? data.farms.length;
+    const totalFarms = adminDashboardSummary?.totalFarms ?? (data?.farms?.length ?? 0);
     const regionCounts = adminRecords.reduce((accumulator, row) => {
       accumulator[row.region] = (accumulator[row.region] || 0) + row.farmCount;
       return accumulator;
@@ -826,12 +828,12 @@ function AdminFarmsView() {
         "Mode: Local Demo Registry Data",
         `Generated: ${formatReadableDate(new Date().toISOString())}`,
         "",
-        `Total Farmers: ${summaryCards[0].value}`,
-        `Verified Farmers: ${summaryCards[1].value}`,
-        `Pending Approval: ${summaryCards[2].value}`,
-        `Deactivated Farmers: ${summaryCards[3].value}`,
-        `Total Farms: ${summaryCards[4].value}`,
-        `Top Region: ${summaryCards[5].value}`,
+        `Total Farmers: ${summaryCards?.[0]?.value ?? 0}`,
+        `Verified Farmers: ${summaryCards?.[1]?.value ?? 0}`,
+        `Pending Approval: ${summaryCards?.[2]?.value ?? 0}`,
+        `Deactivated Farmers: ${summaryCards?.[3]?.value ?? 0}`,
+        `Total Farms: ${summaryCards?.[4]?.value ?? 0}`,
+        `Top Region: ${summaryCards?.[5]?.value ?? "Unknown"}`,
         "",
         "Visible Farmer Records",
         ...exportRows.map(
@@ -844,7 +846,7 @@ function AdminFarmsView() {
     })();
   };
 
-  const selectedFarmerFarms = profileModalFarmer ? getFarmsByOwner(profileModalFarmer.userId) : [];
+  const selectedFarmerFarms = profileModalFarmer ? (getFarmsByOwner(profileModalFarmer.userId) || []) : [];
 
   return (
     <section className="fm-page">

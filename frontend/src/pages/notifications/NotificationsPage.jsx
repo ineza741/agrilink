@@ -163,6 +163,7 @@ export function NotificationsPage() {
   }, [adminFacingMode, backendEnabled, backendFarmId, farmSignature]);
 
   useEffect(() => { refreshBackendCenter(); }, [refreshBackendCenter]);
+  useEffect(() => { if (!backendEnabled) return; const safetyTimeout = setTimeout(() => { setBackendLoading(false); }, 12000); return () => clearTimeout(safetyTimeout); }, [backendEnabled]);
   useEffect(() => { if (!statusMessage) return; const timeoutId = window.setTimeout(() => setStatusMessage(""), 3200); return () => window.clearTimeout(timeoutId); }, [statusMessage]);
 
   const sortedNotifications = useMemo(() => sortAlerts(notifications), [notifications]);
@@ -205,13 +206,13 @@ export function NotificationsPage() {
   const priorityAlert = useMemo(() => sortAlerts(sortedNotifications.filter((item) => !item.archived && item.ackStatus !== "confirmed"))[0], [sortedNotifications]);
   const categoryStats = useMemo(() => categoryDefinitions.filter((item) => item.id !== "all").map((item) => ({ label: item.label, value: sortedNotifications.filter((alert) => alert.category === item.id && !alert.archived).length })), [sortedNotifications]);
   const severityStats = useMemo(() => ["critical", "high", "warning", "info"].map((severity) => ({ label: getSeverityLabel(severity), value: sortedNotifications.filter((item) => item.severity === severity && !item.archived).length, tone: severity })), [sortedNotifications]);
-  const channelAnalytics = useMemo(() => { const channels = ["in-app", "sms", "email", "push"]; return channels.map((channel) => ({ key: channel, label: channelLabel(channel), value: sortedNotifications.filter((item) => item.channels.includes(channel)).length })); }, [sortedNotifications]);
+  const channelAnalytics = useMemo(() => { const channels = ["in-app", "sms", "email", "push"]; return channels.map((channel) => ({ key: channel, label: channelLabel(channel), value: sortedNotifications.filter((item) => (item.channels || []).includes(channel)).length })); }, [sortedNotifications]);
   const deliveryAnalytics = useMemo(() => deliveryStatuses.map((status) => ({ label: status, value: sortedNotifications.filter((item) => item.deliveryStatus === status).length })), [sortedNotifications]);
   const monthlyTrend = useMemo(() => { const monthMap = new Map(); sortedNotifications.forEach((item) => { const label = new Date(item.createdAt).toLocaleDateString("en-GB", { month: "short" }); monthMap.set(label, (monthMap.get(label) || 0) + 1); }); return [...monthMap.entries()].map(([label, value]) => ({ label, value })); }, [sortedNotifications]);
   const analyticsHighlights = useMemo(() => { const byCategory = categoryStats.reduce((best, current) => (current.value > best.value ? current : best), { label: "No alerts", value: 0 }); const byCropMap = new Map(); sortedNotifications.forEach((item) => { byCropMap.set(item.crop, (byCropMap.get(item.crop) || 0) + 1); }); const mostAffectedCrop = [...byCropMap.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "Maize"; const confirmed = sortedNotifications.filter((item) => item.deliveryStatus === "Acknowledged" || item.ackStatus === "confirmed").length; const resolutionRate = sortedNotifications.length ? Math.round((confirmed / sortedNotifications.length) * 100) : 0; return { mostFrequentType: byCategory.label, mostAffectedCrop, resolutionRate }; }, [categoryStats, sortedNotifications]);
   const aiRecommendation = useMemo(() => recommendationSnippet(priorityAlert), [priorityAlert]);
 
-  const syncAlertRecord = (updatedAlert) => { setNotifications((current) => current.map((item) => (item.id === updatedAlert.id ? normalizeNotifications([updatedAlert], primaryFarm)[0] : item))); };
+  const syncAlertRecord = (updatedAlert) => { if (!updatedAlert?.id) return; setNotifications((current) => current.map((item) => (item.id === updatedAlert.id ? normalizeNotifications([updatedAlert], primaryFarm)[0] : item))); };
 
   const markAllAsRead = async () => {
     if (backendEnabled) { try { const nextAlerts = await phase1BackendService.notifications.markAllRead(backendFarmId); if (Array.isArray(nextAlerts) && nextAlerts.length > 0) { setNotifications(normalizeNotifications(nextAlerts, primaryFarm)); setStatusMessage("All active alerts marked as read."); return; } } catch (error) { console.error("Notifications mark-all-read failed:", error); } }
@@ -530,7 +531,7 @@ export function NotificationsPage() {
                               </div>
                             </div>
                             <div className="notif-alert-channels">
-                              {alert.channels.map((channel) => (
+                              {(alert.channels || []).map((channel) => (
                                 <span key={`${alert.id}-${channel}`} className="notif-channel-badge">{channelLabel(channel)}</span>
                               ))}
                             </div>

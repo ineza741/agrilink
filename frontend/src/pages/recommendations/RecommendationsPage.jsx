@@ -573,11 +573,11 @@ function buildSoilSignals(farm, soilData) {
 
 function buildWeatherSignals(forecastData) {
   const daily = forecastData?.daily || {};
-  const rain7d = (daily.rain_sum || []).reduce((sum, value) => sum + Number(value || 0), 0);
-  const avgRainProbability = average((daily.precipitation_probability_max || []).map((value) => Number(value || 0)));
-  const maxWind = Math.max(...(daily.wind_speed_10m_max || [0]).map((value) => Number(value || 0)));
-  const maxTemp = Math.max(...(daily.temperature_2m_max || [0]).map((value) => Number(value || 0)));
-  const humidityPeak = Math.max(...(daily.relative_humidity_2m_max || [0]).map((value) => Number(value || 0)));
+  const rain7d = (Array.isArray(daily.rain_sum) ? daily.rain_sum : []).reduce((sum, value) => sum + Number(value || 0), 0);
+  const avgRainProbability = average((Array.isArray(daily.precipitation_probability_max) ? daily.precipitation_probability_max : []).map((value) => Number(value || 0)));
+  const maxWind = Math.max(...(Array.isArray(daily.wind_speed_10m_max) ? daily.wind_speed_10m_max : [0]).map((value) => Number(value || 0)));
+  const maxTemp = Math.max(...(Array.isArray(daily.temperature_2m_max) ? daily.temperature_2m_max : [0]).map((value) => Number(value || 0)));
+  const humidityPeak = Math.max(...(Array.isArray(daily.relative_humidity_2m_max) ? daily.relative_humidity_2m_max : [0]).map((value) => Number(value || 0)));
 
   return {
     rainfall7d: Number(rain7d.toFixed(1)),
@@ -850,7 +850,7 @@ function buildWeatherFallback(farm) {
 function FarmerRecommendationsView() {
   const { user } = useAuth();
   const { currentFarms, currentProfile } = useFarmerData();
-  const farms = currentFarms.length ? currentFarms : [createDefaultFarm()];
+  const farms = (Array.isArray(currentFarms) ? currentFarms : []).length ? currentFarms : [createDefaultFarm()];
 
   const [selectedFarmId, setSelectedFarmId] = useState(farms[0]?.id || "rec-default-farm");
   const [feedback, setFeedback] = useState(() => loadFeedback());
@@ -900,7 +900,7 @@ function FarmerRecommendationsView() {
       }));
 
       try {
-        const feedbackEntry = feedback[selectedFarm.id] || { accepted: 0, rejected: 0, decisions: {}, records: [] };
+        const feedbackEntry = feedback[selectedFarm?.id] || { accepted: 0, rejected: 0, decisions: {}, records: [] };
         const [weatherResult, soilResult] = await Promise.allSettled([
           apiClient.weather.forecast(selectedFarm.location.lat, selectedFarm.location.lng),
           apiClient.soil.estimate(selectedFarm.location.lat, selectedFarm.location.lng),
@@ -940,8 +940,19 @@ function FarmerRecommendationsView() {
     }
 
     generateRecommendations();
+    const safetyTimeout = setTimeout(() => {
+      if (!cancelled) {
+        setRecommendationState((current) => {
+          if (current.loading) {
+            return { loading: false, error: "Recommendation generation timed out. Please try again.", dataset: null };
+          }
+          return current;
+        });
+      }
+    }, 15000);
     return () => {
       cancelled = true;
+      clearTimeout(safetyTimeout);
     };
   }, [currentProfile?.email, feedback, selectedFarm, user?.id]);
 
@@ -981,7 +992,7 @@ function FarmerRecommendationsView() {
 
   const persistDecision = (recommendation, feedbackStatus, rejectionReasonValue = null) => {
     setFeedback((current) => {
-      const farmEntry = current[selectedFarm.id] || { accepted: 0, rejected: 0, decisions: {}, records: [] };
+      const farmEntry = current[selectedFarm?.id] || { accepted: 0, rejected: 0, decisions: {}, records: [] };
       const previous = farmEntry.decisions?.[recommendation.id]?.feedbackStatus;
       let accepted = farmEntry.accepted || 0;
       let rejected = farmEntry.rejected || 0;
@@ -994,7 +1005,7 @@ function FarmerRecommendationsView() {
       const record = {
         recommendationId: recommendation.id,
         farmerId: user?.id || currentProfile?.email || "farmer-local",
-        farmId: selectedFarm.id,
+        farmId: selectedFarm?.id,
         actionType: recommendation.type,
         feedbackStatus,
         rejectionReason: feedbackStatus === "rejected" ? rejectionReasonValue || "Other reason" : null,
@@ -1003,7 +1014,7 @@ function FarmerRecommendationsView() {
 
       return {
         ...current,
-        [selectedFarm.id]: {
+        [selectedFarm?.id]: {
           accepted,
           rejected,
           decisions: {
@@ -1048,8 +1059,8 @@ function FarmerRecommendationsView() {
       <div className="recommendation-dashboard-strip">
         <article className="prototype-panel recommendation-summary-card">
           <span>Personalized farm</span>
-          <strong>{selectedFarm.name}</strong>
-          <p>{selectedFarm.region} · {selectedFarm.primaryCrop || "Mixed crop profile"}</p>
+          <strong>{selectedFarm?.name}</strong>
+          <p>{selectedFarm?.region} · {selectedFarm?.primaryCrop || "Mixed crop profile"}</p>
         </article>
         <article className="prototype-panel recommendation-summary-card">
           <span>Primary driver</span>
@@ -1132,7 +1143,7 @@ function FarmerRecommendationsView() {
                   <div key={`${item.id}-schedule`} className="recommendation-scheduler-table-row">
                     <strong>{selectedFarm.primaryCrop || "Field Crop"}</strong>
                     <span>{item.stage}</span>
-                    <span>{item.meta.actionLabel}</span>
+                    <span>{item.meta?.actionLabel}</span>
                     <span>{item.bestWindow}</span>
                     <span className={`recommendation-priority-label ${item.priority.toLowerCase()}`}>{item.priority}</span>
                     <span>{item.status}</span>
@@ -1158,18 +1169,18 @@ function FarmerRecommendationsView() {
 
           <div className="recommendation-card-list">
             {visibleRecommendations.map((item) => {
-              const Icon = item.meta.icon;
+              const Icon = item.meta?.icon;
               const isExpanded = Boolean(expanded[item.id]);
               return (
                 <article key={item.id} className="prototype-panel recommendation-card functional">
                   <div className="recommendation-card-head">
                     <div className="recommendation-head-main">
-                      <div className={`recommendation-icon tone-${item.meta.tone}`}>
+                      <div className={`recommendation-icon tone-${item.meta?.tone}`}>
                         <Icon size={18} />
                       </div>
                       <div>
                         <div className="recommendation-badge-row">
-                          <span className="recommendation-category-badge">{item.meta.category}</span>
+                          <span className="recommendation-category-badge">{item.meta?.category}</span>
                           <span className={`recommendation-priority-label ${item.priority.toLowerCase()}`}>{item.priority}</span>
                         </div>
                         <h2>{item.title}</h2>
@@ -1186,7 +1197,7 @@ function FarmerRecommendationsView() {
                   <div className="recommendation-rank-row">
                     <span className="recommendation-rank-badge">Priority #{item.rank}</span>
                     <span className="recommendation-driver-chip">{item.marketDriver}</span>
-                    <span className={`recommendation-status-chip ${item.status.toLowerCase()}`}>
+                    <span className={`recommendation-status-chip ${(item.status || "").toLowerCase()}`}>
                       {item.status}
                     </span>
                   </div>
@@ -1306,7 +1317,7 @@ function FarmerRecommendationsView() {
           <div className="recommendation-advisory-head">
             <div>
               <h2>{currentAdvisory.title}</h2>
-              <p>{currentAdvisory.meta.category} · {currentAdvisory.bestWindow}</p>
+              <p>{currentAdvisory?.meta?.category || "General"} · {currentAdvisory.bestWindow}</p>
             </div>
             <button type="button" className="recommendation-close-button" onClick={() => setAdvisoryRecommendationId(null)}>
               <X size={16} />
@@ -1314,9 +1325,9 @@ function FarmerRecommendationsView() {
           </div>
 
           <div className="recommendation-advisory-steps">
-            <div><strong>Step 1: What to do</strong><p>{currentAdvisory.guidance[0]}</p></div>
+            <div><strong>Step 1: What to do</strong><p>{currentAdvisory.guidance?.[0] || ""}</p></div>
             <div><strong>Step 2: When to do it</strong><p>{currentAdvisory.bestWindow}</p></div>
-            <div><strong>Step 3: Required inputs</strong><p>{currentAdvisory.requiredInputs.join(", ")}</p></div>
+            <div><strong>Step 3: Required inputs</strong><p>{(currentAdvisory.requiredInputs || []).join(", ")}</p></div>
             <div><strong>Step 4: Expected benefit</strong><p>{currentAdvisory.expectedBenefit}</p></div>
             <div><strong>Step 5: Risk if ignored</strong><p>{currentAdvisory.riskIfIgnored}</p></div>
           </div>
@@ -2003,7 +2014,7 @@ function AdminContentManagementViewV2() {
   }, [page, totalPages]);
 
   const contentStats = useMemo(() => {
-    const allEntries = Object.values(entries).flat();
+    const allEntries = Object.values(entries || {}).flat();
     return [
       { label: "Total Crops", value: entries.Crops?.length || 0, icon: Sprout, tone: "green" },
       { label: "Total Pests", value: entries.Pests?.length || 0, icon: Bug, tone: "amber" },
@@ -2308,7 +2319,7 @@ function AdminContentManagementViewV2() {
   };
 
   const getWorkflowCount = (stage) =>
-    Object.values(entries).flat().filter((item) => item.status === stage).length;
+    Object.values(entries || {}).flat().filter((item) => item.status === stage).length;
 
   const nodeTypeClass = (type) => {
     const map = { Crop: 'crop', Pest: 'pest', Soil: 'soil', Rule: 'rule', Fertilizer: 'fert' };
@@ -2580,7 +2591,7 @@ function AdminContentManagementViewV2() {
             <div className="cm-side-body" style={{ padding: '8px 18px' }}>
               <div className="cm-timeline">
                 {modifications.map((item, index) => {
-                  const parts = item.meta.split('·');
+                  const parts = (item.meta || "").split('·');
                   const source = parts[0]?.trim() || '';
                   const timestamp = parts[1]?.trim() || item.meta;
                   return (

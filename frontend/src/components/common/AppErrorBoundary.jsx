@@ -12,6 +12,7 @@ export class AppErrorBoundary extends React.Component {
     this.state = {
       hasError: false,
       error: null,
+      componentStack: null,
     };
   }
 
@@ -23,9 +24,12 @@ export class AppErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    if (import.meta.env.DEV) {
-      console.error("AppErrorBoundary caught an error", error, errorInfo);
-    }
+    const componentName = this.props.componentName || "Unknown Page/Component";
+    const componentStack = errorInfo?.componentStack || "No stack trace available";
+    this.setState({ componentStack });
+    console.error("AppErrorBoundary caught an error:", error);
+    console.error("Location:", componentName);
+    console.error("Component stack:", componentStack);
   }
 
   handleReload = () => {
@@ -50,6 +54,9 @@ export class AppErrorBoundary extends React.Component {
               dashboard to continue the demonstration.
             </p>
             <small>{getErrorMessage(this.state.error)}</small>
+            <small style={{ color: "#d97706", marginTop: "4px", display: "block" }}>
+              Location: {this.props.componentName || "Unknown page"}
+            </small>
           </div>
           <div className="app-runtime-fallback-actions">
             <button type="button" className="header-sync-button" onClick={this.handleReload}>

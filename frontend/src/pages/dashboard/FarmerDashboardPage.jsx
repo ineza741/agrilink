@@ -5,10 +5,7 @@ import {
   BrainCircuit,
   CloudSun,
   Download,
-  Droplets,
   FlaskConical,
-  Fuel,
-  Gauge,
   MapPin,
   ShieldCheck,
   Sprout,
@@ -24,7 +21,6 @@ import { downloadJsonFile } from "../../utils/actions";
 const MARKET_STORAGE_KEY = "agri-feed-market-module-v1";
 const PEST_STORAGE_KEY = "agri-feed-pest-module-v1";
 const FEEDBACK_STORAGE_KEY = "agri-feed-recommendation-feedback-v2";
-const IRRIGATION_STORAGE_KEY = "agri-feed-irrigation-module-v1";
 const NOTIFICATION_STORAGE_KEY = "agri-feed-notification-module-v1";
 
 function clamp(value, min, max) {
@@ -49,22 +45,29 @@ function formatRwf(value) {
 }
 
 function formatShortDate(dateValue) {
+  if (!dateValue) return "--";
+  const d = new Date(dateValue);
+  if (isNaN(d.getTime())) return "--";
   return new Intl.DateTimeFormat("en-ZA", {
     day: "2-digit",
     month: "short",
-  }).format(new Date(dateValue));
+  }).format(d);
 }
 
 function formatLongDate(dateValue) {
+  if (!dateValue) return "--";
+  const d = new Date(dateValue);
+  if (isNaN(d.getTime())) return "--";
   return new Intl.DateTimeFormat("en-ZA", {
     day: "2-digit",
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(dateValue));
+  }).format(d);
 }
 
 function inferGrowthStage(farm) {
+  if (!farm) return "Unknown";
   const cropName = (farm.primaryCrop || "").toLowerCase();
   if (cropName.includes("corn") || cropName.includes("maize")) return "Vegetative";
   if (cropName.includes("bean")) return "Flowering";
@@ -174,10 +177,11 @@ function buildPestSignals(farm, pestState) {
 
 function buildWeatherAlerts(weather) {
   const daily = weather?.daily || {};
-  const totalRain = (daily.rain_sum || []).reduce((sum, value) => sum + Number(value || 0), 0);
-  const maxTemp = Math.max(...(daily.temperature_2m_max || [0]).map((value) => Number(value || 0)));
-  const maxWind = Math.max(...(daily.wind_speed_10m_max || [0]).map((value) => Number(value || 0)));
-  const heavyRainDays = (daily.rain_sum || []).filter((value) => Number(value || 0) >= 30).length;
+  const rainSum = Array.isArray(daily.rain_sum) ? daily.rain_sum : [];
+  const totalRain = rainSum.reduce((sum, value) => sum + Number(value || 0), 0);
+  const maxTemp = Math.max(0, ...(Array.isArray(daily.temperature_2m_max) ? daily.temperature_2m_max : [0]).map((value) => Number(value || 0)));
+  const maxWind = Math.max(0, ...(Array.isArray(daily.wind_speed_10m_max) ? daily.wind_speed_10m_max : [0]).map((value) => Number(value || 0)));
+  const heavyRainDays = rainSum.filter((value) => Number(value || 0) >= 30).length;
 
   const alerts = [];
   if (heavyRainDays > 0) {
@@ -215,34 +219,8 @@ function buildWeatherAlerts(weather) {
   return alerts;
 }
 
-function buildResourceRows(irrigationState, farm) {
-  const waterUsage = clamp(Math.round((Number(irrigationState?.soilMoisture || 28) / 90) * 100), 18, 92);
-  const fertilizerUsage = clamp(Math.round((Number(irrigationState?.targetYield || 12) / 18) * 100), 18, 90);
-  const fuelConsumption = clamp(Math.round((Number(irrigationState?.budget || 2200) / 3500) * 100), 16, 88);
-  const irrigationEfficiency = clamp(
-    Math.round(
-      72 +
-        (farm.irrigationType?.toLowerCase().includes("drip")
-          ? 16
-          : farm.irrigationType?.toLowerCase().includes("iot")
-            ? 12
-            : 6) -
-        (100 - waterUsage) * 0.12
-    ),
-    42,
-    96
-  );
-
-  return [
-    { label: "Water Usage", value: waterUsage, tone: "blue" },
-    { label: "Fertilizer Usage", value: fertilizerUsage, tone: "green" },
-    { label: "Fuel Consumption", value: fuelConsumption, tone: "amber" },
-    { label: "Irrigation Efficiency", value: irrigationEfficiency, tone: "sky" },
-  ];
-}
-
 function buildTasks({ farm, soilSignals, weatherForecast, pestSignals, recommendationState }) {
-  const rain7d = (weatherForecast?.daily?.rain_sum || []).reduce((sum, value) => sum + Number(value || 0), 0);
+  const rain7d = (Array.isArray(weatherForecast?.daily?.rain_sum) ? weatherForecast.daily.rain_sum : []).reduce((sum, value) => sum + Number(value || 0), 0);
   const now = new Date();
   return [
     {
@@ -272,6 +250,11 @@ function buildTasks({ farm, soilSignals, weatherForecast, pestSignals, recommend
 }
 
 function buildSummaryCards({ farms, farm, weather, soilSignals, alerts, recommendationState, marketSignals }) {
+  if (!Array.isArray(farms)) farms = [];
+  if (!Array.isArray(alerts)) alerts = [];
+  if (!soilSignals) soilSignals = {};
+  if (!marketSignals) marketSignals = {};
+  if (!recommendationState) recommendationState = {};
   const farmSize = farms.reduce((sum, item) => sum + Number(item.sizeHectares || 0), 0);
   const activeFields = farms.length;
   const mainCrops = [...new Set(farms.map((item) => item.primaryCrop).filter(Boolean))].slice(0, 2);
@@ -351,6 +334,8 @@ function normalizeSeverity(severity) {
 }
 
 function buildActivityFeed({ alerts, recentActivity }) {
+  if (!Array.isArray(alerts)) alerts = [];
+  if (!Array.isArray(recentActivity)) recentActivity = [];
   const alertItems = alerts.map((alert, index) => ({
     id: `alert-${index}-${alert.title}`,
     tone: normalizeSeverity(alert.severity),
@@ -392,11 +377,11 @@ function buildRecentActivity({ pestState, feedbackState, marketState, notificati
       detail: `Soil profile reviewed for ${farm.name}.`,
       timestamp: new Date().toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" }),
     },
-    ...(recentNotifications[0]
+    ...(recentNotifications?.[0]
       ? [{
           title: "Weather Alert Triggered",
-          detail: recentNotifications[0].title || "Weather advisory updated.",
-          timestamp: recentNotifications[0].timeAgo || "Recently",
+          detail: recentNotifications?.[0]?.title || "Weather advisory updated.",
+          timestamp: recentNotifications?.[0]?.timeAgo || "Recently",
         }]
       : []),
     ...(recommendationRecord
@@ -435,7 +420,6 @@ export function FarmerDashboardPage() {
     summaryCards: [],
     activityFeed: [],
     tasks: [],
-    resourceRows: [],
     recommendationState: null,
     soilSignals: null,
     marketSignals: null,
@@ -449,12 +433,15 @@ export function FarmerDashboardPage() {
   }, [farms, selectedFarmId]);
 
   const selectedFarm = useMemo(
-    () => farms.find((farm) => farm.id === selectedFarmId) || farms[0] || null,
+    () => farms.find((farm) => farm.id === selectedFarmId) || farms?.[0] || null,
     [farms, selectedFarmId]
   );
 
   useEffect(() => {
     let cancelled = false;
+    const safetyTimeout = setTimeout(() => {
+      if (!cancelled) setDashboardState(prev => prev.loading ? { ...prev, loading: false, error: "Data load timed out. Showing demo data." } : prev);
+    }, 15000);
 
     async function loadDashboard() {
       if (!selectedFarm) {
@@ -465,7 +452,6 @@ export function FarmerDashboardPage() {
           summaryCards: [],
           activityFeed: [],
           tasks: [],
-          resourceRows: [],
         }));
         return;
       }
@@ -473,12 +459,11 @@ export function FarmerDashboardPage() {
       setDashboardState((current) => ({ ...current, loading: true, error: "" }));
 
       try {
-        const weather = await apiClient.weather.forecast(selectedFarm.location.lat, selectedFarm.location.lng);
+        const weather = await apiClient.weather.forecast(selectedFarm?.location?.lat, selectedFarm?.location?.lng);
         const soilSignals = buildSoilSignals(selectedFarm);
         const pestState = loadStoredState(PEST_STORAGE_KEY);
         const feedbackState = loadStoredState(FEEDBACK_STORAGE_KEY);
         const marketState = loadStoredState(MARKET_STORAGE_KEY);
-        const irrigationState = loadStoredState(IRRIGATION_STORAGE_KEY);
         const notificationState = loadStoredState(NOTIFICATION_STORAGE_KEY);
         const marketSignals = buildMarketSignals(selectedFarm);
         const weatherAlerts = buildWeatherAlerts(weather);
@@ -507,13 +492,13 @@ export function FarmerDashboardPage() {
                 type: "Pest",
                 title: "Pest pressure elevated",
                 severity: pestSignals.pestRisk >= 82 ? "Critical" : "High",
-                message: `Regional pest pressure for ${selectedFarm.primaryCrop || "this crop"} is elevated.`,
+                message: `Regional pest pressure for ${selectedFarm?.primaryCrop || "this crop"} is elevated.`,
               }]
             : [];
         const allAlerts = [...weatherAlerts, ...soilAlerts, ...pestAlerts];
 
-        const recommendationTopRecord = Object.values(feedbackState?.[selectedFarm.id]?.decisions || {}).at(-1);
-        const totalRain = (weather.daily?.rain_sum || []).reduce((sum, value) => sum + Number(value || 0), 0);
+        const recommendationTopRecord = Object.values(feedbackState?.[selectedFarm?.id]?.decisions || {}).at(-1);
+        const totalRain = (Array.isArray(weather.daily?.rain_sum) ? weather.daily.rain_sum : []).reduce((sum, value) => sum + Number(value || 0), 0);
         const topActionType =
           soilSignals.nitrogenStatus === "Low"
             ? "Fertilize"
@@ -605,7 +590,6 @@ export function FarmerDashboardPage() {
           alerts: allAlerts,
           recentActivity,
         });
-        const resourceRows = buildResourceRows(irrigationState, selectedFarm);
         const fieldHealth =
           soilSignals.score >= 75 && pestSignals.pestRisk < 60
             ? "Healthy"
@@ -623,7 +607,6 @@ export function FarmerDashboardPage() {
             summaryCards,
             activityFeed,
             tasks,
-            resourceRows,
             recommendationState,
             fieldHealth,
           });
@@ -639,7 +622,6 @@ export function FarmerDashboardPage() {
             summaryCards: [],
             activityFeed: [],
             tasks: [],
-            resourceRows: [],
             recommendationState: null,
             fieldHealth: "Unknown",
           });
@@ -650,11 +632,12 @@ export function FarmerDashboardPage() {
     loadDashboard();
     return () => {
       cancelled = true;
+      clearTimeout(safetyTimeout);
     };
   }, [farms, selectedFarm, currentProfile?.email]);
 
   const mapEmbedUrl = selectedFarm
-    ? `https://www.openstreetmap.org/export/embed.html?bbox=${(selectedFarm.location.lng - 0.02).toFixed(4)}%2C${(selectedFarm.location.lat - 0.02).toFixed(4)}%2C${(selectedFarm.location.lng + 0.02).toFixed(4)}%2C${(selectedFarm.location.lat + 0.02).toFixed(4)}&layer=mapnik&marker=${selectedFarm.location.lat.toFixed(4)}%2C${selectedFarm.location.lng.toFixed(4)}`
+    ? `https://www.openstreetmap.org/export/embed.html?bbox=${(Number(selectedFarm?.location?.lng ?? 0) - 0.02).toFixed(4)}%2C${(Number(selectedFarm?.location?.lat ?? 0) - 0.02).toFixed(4)}%2C${(Number(selectedFarm?.location?.lng ?? 0) + 0.02).toFixed(4)}%2C${(Number(selectedFarm?.location?.lat ?? 0) + 0.02).toFixed(4)}&layer=mapnik&marker=${Number(selectedFarm?.location?.lat ?? 0).toFixed(4)}%2C${Number(selectedFarm?.location?.lng ?? 0).toFixed(4)}`
     : "";
 
   const quickActions = [
@@ -799,15 +782,15 @@ export function FarmerDashboardPage() {
             <article className="prototype-panel command-map-panel">
               <div className="dashboard-section-head">
                 <h2>Farm Location &amp; Field Overview</h2>
-                <span>{selectedFarm.plotLabel || "Main field"}</span>
+                <span>{selectedFarm?.plotLabel || "Main field"}</span>
               </div>
               <div className="command-map-shell">
                 <div className="field-map-live command-map-frame">
                   <iframe title="Farm map overview" src={mapEmbedUrl} loading="lazy" />
                 </div>
                 <div className="command-map-meta">
-                  <div><strong>Farm Name</strong><span>{selectedFarm.name}</span></div>
-                  <div><strong>Current Crop</strong><span>{selectedFarm.primaryCrop || "Not assigned"}</span></div>
+                  <div><strong>Farm Name</strong><span>{selectedFarm?.name}</span></div>
+                  <div><strong>Current Crop</strong><span>{selectedFarm?.primaryCrop || "Not assigned"}</span></div>
                   <div><strong>Growth Stage</strong><span>{inferGrowthStage(selectedFarm)}</span></div>
                   <div><strong>Field Health</strong><span>{dashboardState.fieldHealth}</span></div>
                 </div>
@@ -821,7 +804,7 @@ export function FarmerDashboardPage() {
                   </button>
                   <a
                     className="dashboard-primary-link"
-                    href={`https://www.google.com/maps?q=${selectedFarm.location.lat},${selectedFarm.location.lng}`}
+                    href={`https://www.google.com/maps?q=${selectedFarm?.location?.lat},${selectedFarm?.location?.lng}`}
                     target="_blank"
                     rel="noreferrer"
                   >
@@ -830,20 +813,6 @@ export function FarmerDashboardPage() {
                 </div>
               </div>
             </article>
-          </div>
-
-          <div className="command-resource-strip">
-            {dashboardState.resourceRows.map((row) => (
-              <article key={row.label} className="prototype-panel command-resource-card">
-                <div className="resource-item-top">
-                  <span>{row.label}</span>
-                  <strong>{row.value}%</strong>
-                </div>
-                <div className="resource-bar-track compact">
-                  <div className={`resource-bar-fill tone-${row.tone}`} style={{ width: `${row.value}%` }} />
-                </div>
-              </article>
-            ))}
           </div>
 
           <div className="command-lower-grid">
