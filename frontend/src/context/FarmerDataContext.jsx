@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "./AuthContext";
 import { authService } from "../services/auth";
 import {
@@ -595,6 +595,10 @@ export function FarmerDataProvider({ children }) {
   const [backendTimedOut, setBackendTimedOut] = useState(false);
   const [backendError, setBackendError] = useState(null);
   const BACKEND_TIMEOUT_MS = 5000; // 5 seconds
+  const dataFarmsRef = useRef(data.farms);
+  dataFarmsRef.current = data.farms;
+  const updateCurrentUserRef = useRef(updateCurrentUser);
+  updateCurrentUserRef.current = updateCurrentUser;
 
 
   useEffect(() => {
@@ -628,9 +632,9 @@ export function FarmerDataProvider({ children }) {
         setBackendError(null);
       }
 
-      const backendFetchPromise = Promise.all([
+      const backendFetchPromise = Promise.allSettled([
         phase1BackendService.farmers.me(),
-        phase1BackendService.farms.my(user.id, data.farms.filter((farm) => farm.ownerId === user.id)),
+        phase1BackendService.farms.my(user.id, dataFarmsRef.current.filter((farm) => farm.ownerId === user.id)),
       ]);
 
       const timeoutPromise = new Promise((resolve, reject) => {
@@ -640,7 +644,7 @@ export function FarmerDataProvider({ children }) {
       });
 
       try {
-        const [backendProfile, backendFarms] = await Promise.race([
+        const [profileResult, farmsResult] = await Promise.race([
           backendFetchPromise,
           timeoutPromise,
         ]);
@@ -649,6 +653,16 @@ export function FarmerDataProvider({ children }) {
           return;
         }
         clearTimeout(timeoutId);
+
+        const backendProfile = profileResult.status === 'fulfilled' ? profileResult.value : null;
+        const backendFarms = farmsResult.status === 'fulfilled' ? farmsResult.value : null;
+
+        if (profileResult.status === 'rejected') {
+          console.warn("Farmer profile fetch failed:", profileResult.reason);
+        }
+        if (farmsResult.status === 'rejected') {
+          console.warn("Farmer farms fetch failed:", farmsResult.reason);
+        }
 
         setData((current) =>
           mergeBackendFarmsIntoData(
@@ -661,25 +675,27 @@ export function FarmerDataProvider({ children }) {
         const userProfile = mapBackendProfileToFrontendProfile({
           user: {
             id: user.id,
-            fullName: backendProfile.fullName || user.name,
-            email: backendProfile.email || user.email,
-            phone: backendProfile.contact || user.contact,
+            fullName: (backendProfile?.fullName || user.name),
+            email: (backendProfile?.email || user.email),
+            phone: backendProfile?.contact || user.contact,
           },
-          ...backendProfile,
+          ...(backendProfile || {}),
         });
 
-        await updateCurrentUser({
-          name: userProfile.fullName,
-          fullName: userProfile.fullName,
-          contact: userProfile.contact,
-          region: userProfile.region,
-          district: backendProfile.district || user.district,
-          sector: backendProfile.sector || user.sector,
-          experienceLevel: userProfile.experienceLevel,
-          primaryCrop: backendProfile.primaryCrop || user.primaryCrop,
-          verificationStatus: backendProfile.verificationStatus || user.verificationStatus,
-          profileCompleteness: backendProfile.profileCompleteness || user.profileCompleteness || 0,
-        });
+        if (backendProfile) {
+          await updateCurrentUserRef.current({
+            name: userProfile.fullName,
+            fullName: userProfile.fullName,
+            contact: userProfile.contact,
+            region: userProfile.region,
+            district: backendProfile.district || user.district,
+            sector: backendProfile.sector || user.sector,
+            experienceLevel: userProfile.experienceLevel,
+            primaryCrop: backendProfile.primaryCrop || user.primaryCrop,
+            verificationStatus: backendProfile.verificationStatus || user.verificationStatus,
+            profileCompleteness: backendProfile.profileCompleteness || user.profileCompleteness || 0,
+          });
+        }
 
         if (isMounted) {
           setIsBackendLoading(false);
@@ -709,7 +725,7 @@ export function FarmerDataProvider({ children }) {
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, [user?.id, isBackendSessionActive, BACKEND_TIMEOUT_MS, data.farms, updateCurrentUser]);
+  }, [user?.id, isBackendSessionActive, BACKEND_TIMEOUT_MS]);
 
   useEffect(() => {
     let isMounted = true;
@@ -733,7 +749,7 @@ export function FarmerDataProvider({ children }) {
         setBackendError(null);
       }
 
-      const backendFetchPromise = Promise.all([
+      const backendFetchPromise = Promise.allSettled([
         phase1BackendService.farmers.list(),
         phase1BackendService.admin.dashboardSummary(),
       ]);
@@ -745,7 +761,7 @@ export function FarmerDataProvider({ children }) {
       });
 
       try {
-        const [records, summary] = await Promise.race([
+        const [recordsResult, summaryResult] = await Promise.race([
           backendFetchPromise,
           timeoutPromise,
         ]);
@@ -755,6 +771,17 @@ export function FarmerDataProvider({ children }) {
         }
         clearTimeout(timeoutId);
 
+        const records = recordsResult.status === 'fulfilled' ? recordsResult.value : [];
+        const summary = summaryResult.status === 'fulfilled' ? summaryResult.value : null;
+
+        const errors = [recordsResult, summaryResult]
+          .filter(r => r.status === 'rejected')
+          .map(r => r.reason);
+
+        if (errors.length > 0) {
+          console.warn("Partial admin data fetch failures:", errors);
+        }
+
         setBackendAdminRows(records.map((record) => record.row));
         setBackendAdminSummary(summary);
         setData((current) => mergeBackendRegistryIntoData(current, records));
@@ -762,7 +789,7 @@ export function FarmerDataProvider({ children }) {
         if (isMounted) {
           setIsBackendLoading(false);
           setBackendTimedOut(false);
-          setBackendError(null);
+          setBackendError(errors.length > 0 ? errors[0] : null);
         }
       } catch (error) {
         if (!isMounted) {
@@ -791,7 +818,7 @@ export function FarmerDataProvider({ children }) {
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, [user?.id, user?.role, isBackendSessionActive, BACKEND_TIMEOUT_MS, data.farms]);
+  }, [user?.id, user?.role, isBackendSessionActive, BACKEND_TIMEOUT_MS]);
 
   const value = useMemo(() => {
     const currentProfile = user?.role === "farmer" ? data.profiles[user.id] : null;

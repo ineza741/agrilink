@@ -777,10 +777,152 @@ async function addRecommendationFeedback(user, runId, payload) {
   return mapFeedbackRecord(created);
 }
 
+async function exportRecommendationPdf(user, farmId) {
+  const farm = await ensureFarmAccess(user, farmId);
+  const run = await prisma.aiRecommendationRun.findFirst({
+    where: { farmId },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const PDFDocument = require("pdfkit");
+  const doc = new PDFDocument({ margin: 50, size: "A4" });
+
+  const buffers = [];
+  doc.on("data", (chunk) => buffers.push(chunk));
+
+  return new Promise((resolve, reject) => {
+    doc.on("end", () => resolve(Buffer.concat(buffers)));
+    doc.on("error", reject);
+
+    const recommendations = Array.isArray(run?.recommendations) ? run.recommendations : [];
+
+    doc.fontSize(18).font("Helvetica-Bold").text("AI Recommendation Report", { align: "center" });
+    doc.moveDown(0.5);
+    doc.fontSize(10).font("Helvetica").text(`Farm: ${farm.farmName}`, { align: "center" });
+    doc.text(`Farmer: ${run?.farmerName || "N/A"}`, { align: "center" });
+    doc.text(`Crop: ${run?.cropName || farm.currentCrop}`, { align: "center" });
+    doc.text(`Region: ${run?.regionLabel || [farm.sector, farm.district, farm.province].filter(Boolean).join(", ")}`, { align: "center" });
+    doc.text(`Generated: ${run?.createdAt ? new Date(run.createdAt).toISOString().split("T")[0] : "N/A"}`, { align: "center" });
+    doc.moveDown(1);
+
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+    doc.moveDown(1);
+
+    if (!recommendations.length) {
+      doc.fontSize(12).text("No recommendations available for this farm.");
+    } else {
+      for (const rec of recommendations) {
+        if (doc.y > 700) {
+          doc.addPage();
+        }
+
+        doc.fontSize(13).font("Helvetica-Bold").fillColor("#1a56db").text(rec.title || "Recommendation");
+        doc.moveDown(0.3);
+
+        doc.fontSize(10).font("Helvetica").fillColor("#000");
+        doc.text(`Category: ${rec.category || "N/A"}     Priority: ${rec.priority || "N/A"}     Confidence: ${rec.confidence || 0}%`);
+        doc.text(`Status: ${rec.status || "Generated"}     Created: ${rec.generatedAt ? new Date(rec.generatedAt).toISOString().split("T")[0] : "N/A"}`);
+        doc.moveDown(0.3);
+
+        if (rec.problemDetected) {
+          doc.font("Helvetica-Bold").text("Problem Detected:");
+          doc.font("Helvetica").text(rec.problemDetected);
+          doc.moveDown(0.2);
+        }
+
+        if (rec.recommendedAction) {
+          doc.font("Helvetica-Bold").text("Recommended Action:");
+          doc.font("Helvetica").text(rec.recommendedAction);
+          doc.moveDown(0.2);
+        }
+
+        if (rec.description) {
+          doc.font("Helvetica-Bold").text("Explanation:");
+          doc.font("Helvetica").text(rec.description);
+          doc.moveDown(0.2);
+        }
+
+        if (rec.expectedOutcome) {
+          doc.font("Helvetica-Bold").text("Expected Outcome:");
+          doc.font("Helvetica").text(rec.expectedOutcome);
+        }
+
+        doc.moveDown(0.5);
+        doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#ccc").stroke();
+        doc.moveDown(0.5);
+      }
+    }
+
+    doc.end();
+  });
+}
+
+async function exportRecommendationExcel(user, farmId) {
+  const farm = await ensureFarmAccess(user, farmId);
+  const run = await prisma.aiRecommendationRun.findFirst({
+    where: { farmId },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const ExcelJS = require("exceljs");
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Recommendations");
+
+  sheet.columns = [
+    { header: "Title", key: "title", width: 40 },
+    { header: "Category", key: "category", width: 18 },
+    { header: "Priority", key: "priority", width: 12 },
+    { header: "Confidence (%)", key: "confidence", width: 14 },
+    { header: "Problem Detected", key: "problem", width: 40 },
+    { header: "Recommended Action", key: "action", width: 50 },
+    { header: "Explanation", key: "explanation", width: 50 },
+    { header: "Expected Outcome", key: "outcome", width: 40 },
+    { header: "Status", key: "status", width: 14 },
+    { header: "Created Date", key: "createdAt", width: 14 },
+  ];
+
+  sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+  sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1a56db" } };
+
+  const recommendations = Array.isArray(run?.recommendations) ? run.recommendations : [];
+
+  recommendations.forEach((rec) => {
+    sheet.addRow({
+      title: rec.title || "",
+      category: rec.category || "",
+      priority: rec.priority || "",
+      confidence: rec.confidence || 0,
+      problem: rec.problemDetected || "",
+      action: rec.recommendedAction || "",
+      explanation: rec.description || "",
+      outcome: rec.expectedOutcome || "",
+      status: rec.status || "Generated",
+      createdAt: rec.generatedAt ? new Date(rec.generatedAt).toISOString().split("T")[0] : "",
+    });
+  });
+
+  sheet.addRow({});
+  const infoRow = sheet.addRow({
+    title: "Farm Name",
+    category: farm.farmName,
+  });
+  infoRow.getCell(2).font = { bold: true };
+  sheet.addRow({ title: "Farmer", category: run?.farmerName || "N/A" });
+  sheet.addRow({ title: "Crop", category: run?.cropName || farm.currentCrop });
+  sheet.addRow({ title: "Region", category: run?.regionLabel || "N/A" });
+  sheet.addRow({ title: "Generated", category: run?.createdAt ? new Date(run.createdAt).toISOString().split("T")[0] : "N/A" });
+  sheet.addRow({ title: "Total Recommendations", category: recommendations.length });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer);
+}
+
 module.exports = {
   generateRecommendationRun,
   getLatestRecommendationRun,
   listRecommendationRunHistory,
   listRecommendationFeedback,
   addRecommendationFeedback,
+  exportRecommendationPdf,
+  exportRecommendationExcel,
 };

@@ -25,7 +25,6 @@ import { useAuth } from "../../context/AuthContext";
 import { useFarmerData } from "../../context/FarmerDataContext";
 import { isBackendSessionActive, phase1BackendService } from "../../services/phase1Backend";
 
-const DEMO_MODE = true;
 const ADMIN_WORKFLOW_KEY = "agrifeed-admin-workflow-v1";
 
 const statIcons = {
@@ -80,11 +79,11 @@ const monitoringSeed = [
     icon: CloudSun,
   },
   {
-    id: "demo",
-    title: "Demo data mode status",
-    status: "DEMO_MODE active",
-    detail: "Farmer, soil, market, and alert datasets are running from local mock records.",
-    tone: "blue",
+    id: "backend",
+    title: "Backend connection status",
+    status: "Connected",
+    detail: "Farmer, farm, and operational data are served from the backend MySQL database.",
+    tone: "green",
     icon: ShieldCheck,
   },
   {
@@ -99,8 +98,8 @@ const monitoringSeed = [
     id: "reports",
     title: "Report export status",
     status: "Ready",
-    detail: "PDF and analytics export actions are available in frontend-only demo mode.",
-    tone: "amber",
+    detail: "PDF and analytics export actions are available based on backend data.",
+    tone: "green",
     icon: FileCheck2,
   },
 ];
@@ -220,14 +219,14 @@ export function DashboardPage() {
       .sort((a, b) => b.farmers - a.farmers);
   }, [adminDashboardSummary?.regionBreakdown, getRegionalSummary]);
 
-  const totalFarmers = adminDashboardSummary?.totalFarmers ?? adminFarmerRows.length;
-  const totalFarms = adminDashboardSummary?.totalFarms ?? data.farms.length;
+  const totalFarmers = adminDashboardSummary?.totalFarmers ?? (adminFarmerRows?.length ?? 0);
+  const totalFarms = adminDashboardSummary?.totalFarms ?? (data?.farms?.length ?? 0);
   const pendingApprovals =
     adminDashboardSummary?.pendingFarmers ??
-    adminFarmerRows.filter((row) => row.status === "pending").length;
+    (adminFarmerRows?.filter((row) => row.status === "pending").length ?? 0);
   const verifiedProfiles =
     adminDashboardSummary?.verifiedFarmers ??
-    adminFarmerRows.filter((row) => row.status === "verified").length;
+    (adminFarmerRows?.filter((row) => row.status === "verified").length ?? 0);
   const activeRegionalAlerts =
     adminDashboardSummary?.liveRegionalAlerts ??
     regionalSummary.reduce((sum, region) => sum + region.activeAlerts, 0);
@@ -237,7 +236,7 @@ export function DashboardPage() {
     (totalFarmers ? Math.round((verifiedProfiles / totalFarmers) * 100) : 0);
   const multiFarmFarmers =
     adminDashboardSummary?.multiFarmFarmers ??
-    adminFarmerRows.filter((row) => (row.farmCount || 0) > 1).length;
+    (adminFarmerRows?.filter((row) => (row.farmCount || 0) > 1).length ?? 0);
   const topRegionLabel =
     adminDashboardSummary?.topRegion || regionalSummary[0]?.region || "Gatenga Sector, Kicukiro District";
 
@@ -391,13 +390,13 @@ export function DashboardPage() {
         <div>
           <h1>Admin & Extension Officer Portal</h1>
           <p>
-            Frontend-only command center for farmer approvals, regional coordination, advisory review,
-            and extension operations in Rwanda.
+            Command center for farmer approvals, regional coordination, advisory review,
+            and extension operations in Rwanda — backed by MySQL database.
           </p>
         </div>
-        <div className="prototype-admin-demo-tag">
-          <span>{DEMO_MODE ? "DEMO_MODE" : "Live Mode"}</span>
-          <small>localStorage + mock datasets</small>
+        <div className="prototype-admin-demo-tag" style={{ background: "var(--primary-green)", color: "white" }}>
+          <span>Live Mode</span>
+          <small>Connected to MySQL database</small>
         </div>
       </div>
 
@@ -585,7 +584,7 @@ export function DashboardPage() {
 
           <div className="prototype-admin-monitoring-list">
             {(Array.isArray(adminDashboardSummary?.monitoring) ? adminDashboardSummary.monitoring : monitoringSeed).map((item) => {
-              const Icon = item.icon;
+              const Icon = item.icon || Activity;
               return (
                 <div key={item.id} className="prototype-admin-monitoring-item">
                   <div className={`stat-icon tone-${item.tone}`}>

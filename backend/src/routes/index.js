@@ -13,6 +13,7 @@ const notificationRoutes = require("./notificationRoutes");
 const analyticsRoutes = require("./analyticsRoutes");
 const weatherRoutes = require("./weatherRoutes");
 const communityRoutes = require("./communityRoutes");
+const cropPriceRoutes = require("./cropPriceRoutes");
 
 const router = express.Router();
 
@@ -30,5 +31,6 @@ router.use("/analytics", analyticsRoutes);
 router.use("/weather", weatherRoutes);
 router.use("/community", communityRoutes);
 router.use("/admin", adminRoutes);
+router.use("/crop-prices", cropPriceRoutes);
 
 module.exports = router;

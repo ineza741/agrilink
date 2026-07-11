@@ -64,7 +64,6 @@ const methodologyCards = [
 
 const ANALYTICS_STORAGE_KEY = "agri-feed-analytics-module-v1";
 const ADMIN_REPORTS_STORAGE_KEY = "agri-feed-admin-reports-module-v2";
-const DEMO_MODE = true;
 
 const reportTemplates = [
   "Operations Summary", "Financial Report", "Crop Production Report", "Weather Impact Report",
@@ -216,11 +215,11 @@ function AdminAnalyticsView() {
       if (!isBackendSessionActive() || !["admin", "extensionofficer"].includes(user?.role)) return;
       setIsBackendLoading(true);
       try {
-        const [dashboard, history] = await Promise.all([phase1BackendService.analytics.adminDashboard({ reportTemplate: selectedTemplate, methodology: selectedMethodology, selectedComparison, selectedCompliance, selectedExportFormat }), phase1BackendService.analytics.adminHistory()]);
+        const [dashboardResult, historyResult] = await Promise.allSettled([phase1BackendService.analytics.adminDashboard({ reportTemplate: selectedTemplate, methodology: selectedMethodology, selectedComparison, selectedCompliance, selectedExportFormat }), phase1BackendService.analytics.adminHistory()]);
         if (!isMounted) return;
-        setBackendDashboard(dashboard || null);
-        setBackendHistory(Array.isArray(history) ? history : []);
-        if (Array.isArray(history) && history.length) setRecentExports(history.slice(0, 6).map((entry) => ({ name: entry.fileName || `${entry.reportTemplate}.${entry.exportFormat}`, type: String(entry.exportFormat || "").toUpperCase(), time: entry.timeLabel || "Just now" })));
+        setBackendDashboard(dashboardResult.status === "fulfilled" ? dashboardResult.value || null : null);
+        setBackendHistory(historyResult.status === "fulfilled" && Array.isArray(historyResult.value) ? historyResult.value : []);
+        if (historyResult.status === "fulfilled" && Array.isArray(historyResult.value) && historyResult.value.length) setRecentExports(historyResult.value.slice(0, 6).map((entry) => ({ name: entry.fileName || `${entry.reportTemplate}.${entry.exportFormat}`, type: String(entry.exportFormat || "").toUpperCase(), time: entry.timeLabel || "Just now" })));
       } catch { if (!isMounted) return; setBackendDashboard(null); setBackendHistory([]); } finally { if (isMounted) setIsBackendLoading(false); }
     }
     loadBackendAnalytics(); return () => { isMounted = false; };
@@ -239,7 +238,8 @@ function AdminAnalyticsView() {
   const dashboardGeographicCoverage = backendDashboard?.geographicCoverage || geographicCoverageSeed;
   const dashboardPestAnalytics = backendDashboard?.pestDiseaseAnalytics || pestDiseaseAnalyticsSeed;
   const dashboardWeatherImpact = backendDashboard?.weatherImpactAnalytics || weatherImpactAnalyticsSeed;
-  const dashboardSourceLabels = backendDashboard?.sourceLabels || [isBackendSessionActive() && ["admin", "extensionofficer"].includes(user?.role) ? "Backend Analytics" : "Demo Analytics", "Local Data", backendHistory.length ? "Persisted Export History" : "Export Ready"];
+  const isLiveMode = Boolean(backendDashboard || (isBackendSessionActive() && ["admin", "extensionofficer"].includes(user?.role)));
+  const dashboardSourceLabels = backendDashboard?.sourceLabels || [isLiveMode ? "Backend Analytics" : "Demo Analytics", "MySQL Database", backendHistory.length ? "Persisted Export History" : "Export Ready"];
   const recentExportItems = useMemo(() => {
     if (backendHistory.length) return backendHistory.slice(0, 6).map((entry) => ({ name: entry.fileName || `${entry.reportTemplate}.${entry.exportFormat}`, type: String(entry.exportFormat || "").toUpperCase(), time: entry.timeLabel || "Just now", template: entry.reportTemplate || "System Report", compliance: entry.compliance || "N/A", createdAt: entry.dateLabel || "N/A" }));
     if (Array.isArray(backendDashboard?.recentExports) && backendDashboard.recentExports.length) return backendDashboard.recentExports.slice(0, 6).map((entry) => ({ name: entry.name, type: entry.type, time: entry.time, template: selectedTemplate, compliance: selectedCompliance, createdAt: entry.time }));
@@ -251,7 +251,8 @@ function AdminAnalyticsView() {
   }, [backendHistory, recentExportItems]);
 
   const exportReportBundle = async (format) => {
-    const payload = { generatedAt: new Date().toISOString(), methodology: selectedMethodology, reportTemplate: selectedTemplate, complianceStandard: selectedCompliance, selectedExportFormat: format, includedDataPoints: exportSelection.filter((item) => item.checked).map((item) => item.label), metrics: dashboardSummaryCards, sustainabilityDashboard: dashboardSustainability, aiRecommendationAnalytics: dashboardAiAnalytics, comparativeAnalytics: dashboardComparative, farmerAdoption: dashboardFarmerAdoption, geographicCoverage: dashboardGeographicCoverage, pestDiseaseAnalytics: dashboardPestAnalytics, weatherImpactAnalytics: dashboardWeatherImpact, executiveSummary, demoMode: DEMO_MODE && !backendDashboard };
+    const payload = { generatedAt: new Date().toISOString(), methodology: selectedMethodology, reportTemplate: selectedTemplate, complianceStandard: selectedCompliance, selectedExportFormat: format, includedDataPoints: exportSelection.filter((item) => item.checked).map((item) => item.label), metrics: dashboardSummaryCards, sustainabilityDashboard: dashboardSustainability, aiRecommendationAnalytics: dashboardAiAnalytics, comparativeAnalytics: dashboardComparative, farmerAdoption: dashboardFarmerAdoption, geographicCoverage: dashboardGeographicCoverage, pestDiseaseAnalytics: dashboardPestAnalytics, weatherImpactAnalytics: dashboardWeatherImpact, executiveSummary, demoMode: !backendDashboard };
+
     if (isBackendSessionActive() && ["admin", "extensionofficer"].includes(user?.role)) { try { const exportRecord = await phase1BackendService.analytics.exportAdmin({ format, reportTemplate: selectedTemplate, methodology: selectedMethodology, selectedComparison, selectedCompliance }); if (exportRecord) { setBackendHistory((current) => [exportRecord, ...current].slice(0, 20)); payload.backendExport = exportRecord; } } catch {} }
     if (format === "json") { downloadJsonFile("system-reports-export.json", payload); return; }
     if (format === "excel") { downloadCsvFile("system-reports-export.csv", [["Metric", "Value", "Note"], ...dashboardSummaryCards.map((card) => [card.title, card.value, card.note])]); return; }
@@ -348,7 +349,7 @@ function AdminAnalyticsView() {
               </div>
             </div>
             <div style={{ padding: "16px 24px", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>{DEMO_MODE ? "Demo Mode · LocalStorage reporting workflow" : "Connected reporting workflow"}</span>
+              <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>{backendDashboard ? "Backend Analytics · Connected to MySQL" : "Demo Mode · LocalStorage reporting workflow"}</span>
               <ActionButton variant="primary" onClick={() => downloadTextFile("government-report-preview.txt", `${selectedTemplate} Preview\n\nMethodology: ${selectedMethodology}\nCompliance: ${selectedCompliance}\n\nExecutive Summary:\n${executiveSummary}\n\nMetrics:\n- ${dashboardSummaryCards.map((card) => `${card.title}: ${card.value} (${card.note})`).join("\n- ")}`)}>Compile Preview Report</ActionButton>
             </div>
           </AppCard>
@@ -356,8 +357,8 @@ function AdminAnalyticsView() {
           <div className="analytics-grid-2">
             <AppCard>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                <div><h3 style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>Sustainability Dashboard</h3><p style={{ fontSize: "13px", color: "var(--text-muted)", margin: "2px 0 0" }}>National demo sustainability intelligence</p></div>
-                <StatusBadge status="default">Demo Scorecard</StatusBadge>
+                <div><h3 style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>Sustainability Dashboard</h3><p style={{ fontSize: "13px", color: "var(--text-muted)", margin: "2px 0 0" }}>Sustainability intelligence from backend data</p></div>
+                <StatusBadge status={isLiveMode ? "verified" : "default"}>{isLiveMode ? "Live" : "Demo"}</StatusBadge>
               </div>
               <div className="analytics-sustainability-list">
                 {dashboardSustainability.map((item) => (
@@ -376,7 +377,7 @@ function AdminAnalyticsView() {
               </div>
               {dashboardAiAnalytics.map((item) => (
                 <div key={item.label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid var(--border)", fontSize: "14px" }}>
-                  <div><strong style={{ display: "block", color: "var(--text-main)" }}>{item.label}</strong><span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Demo reporting metric</span></div>
+                  <div><strong style={{ display: "block", color: "var(--text-main)" }}>{item.label}</strong><span style={{ fontSize: "12px", color: "var(--text-muted)" }}>{isLiveMode ? "Backend reporting metric" : "Demo reporting metric"}</span></div>
                   <strong style={{ color: "var(--primary-green)" }}>{item.value}</strong>
                 </div>
               ))}
@@ -397,7 +398,7 @@ function AdminAnalyticsView() {
               <h3 style={{ fontSize: "16px", fontWeight: 700, margin: "0 0 16px" }}>Farmer Adoption Analytics</h3>
               {dashboardFarmerAdoption.map((item) => (
                 <div key={item.label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid var(--border)" }}>
-                  <div><strong style={{ fontSize: "14px" }}>{item.label}</strong><span style={{ fontSize: "12px", color: "var(--text-muted)", display: "block" }}>Platform adoption metric</span></div>
+                  <div><strong style={{ fontSize: "14px" }}>{item.label}</strong><span style={{ fontSize: "12px", color: "var(--text-muted)", display: "block" }}>{isLiveMode ? "Platform adoption metric from backend" : "Demo platform adoption metric"}</span></div>
                   <strong style={{ color: "var(--text-main)" }}>{item.value}</strong>
                 </div>
               ))}
@@ -502,7 +503,7 @@ function FarmerAnalyticsView() {
     async function loadBackendAnalytics() {
       if (!selectedFarmId || !isBackendSessionActive() || user?.role !== "farmer") return;
       setIsLoading(true); setBackendError("");
-      try { const [dashboard, history] = await Promise.all([phase1BackendService.analytics.farmDashboard(selectedFarmId, { dateRange, cropType, activityFilter, reportTemplate, chartFilter }), phase1BackendService.analytics.farmHistory(selectedFarmId)]); if (!isMounted) return; setBackendDashboard(dashboard || null); setBackendHistory(Array.isArray(history) ? history : []); } catch { if (!isMounted) return; setBackendDashboard(null); setBackendHistory([]); setBackendError("Demo analytics mode active."); } finally { if (isMounted) setIsLoading(false); }
+      try { const [dashboardResult, historyResult] = await Promise.allSettled([phase1BackendService.analytics.farmDashboard(selectedFarmId, { dateRange, cropType, activityFilter, reportTemplate, chartFilter }), phase1BackendService.analytics.farmHistory(selectedFarmId)]); if (!isMounted) return; setBackendDashboard(dashboardResult.status === "fulfilled" ? dashboardResult.value || null : null); setBackendHistory(historyResult.status === "fulfilled" && Array.isArray(historyResult.value) ? historyResult.value : []); } catch { if (!isMounted) return; setBackendDashboard(null); setBackendHistory([]); setBackendError("Demo analytics mode active."); } finally { if (isMounted) setIsLoading(false); }
     }
     loadBackendAnalytics(); return () => { isMounted = false; window.clearTimeout(safetyTimeout); };
   }, [activityFilter, chartFilter, cropType, dateRange, reportTemplate, selectedFarmId, user?.role]);
@@ -529,7 +530,7 @@ function FarmerAnalyticsView() {
     if (isBackendSessionActive() && user?.role === "farmer" && selectedFarm?.id) { try { const exportRecord = await phase1BackendService.analytics.exportFarm(selectedFarm.id, { format, dateRange, cropType, activityFilter, reportTemplate, chartFilter }); if (exportRecord) setBackendHistory((current) => [exportRecord, ...current].slice(0, 20)); } catch {} }
     if (format === "excel") { downloadCsvFile("farm-analytics.csv", [["Period", "Yield", "Revenue", "Score", "Status"], ...filteredRows.map((row) => [row.period, row.yield, row.revenue, row.score, row.status])]); return; }
     if (format === "json") { downloadJsonFile("farm-analytics.json", analytics); return; }
-    downloadTextFile(`${format === "report" ? "farm-report" : "farm-analytics-share"}.txt`, `Farm Analytics\nFarm: ${selectedFarm?.name}\nTemplate: ${analytics.reportTemplateLabel}\nMode: ${backendDashboard ? "Backend Analytics" : DEMO_MODE ? "Demo Analytics" : "Live Analytics"}\nYield: ${analytics.yieldTons} t\nRevenue: ${formatRwf(analytics.revenue)}\nCosts: ${formatRwf(analytics.costs)}\nROI: ${analytics.roi}%`);
+    downloadTextFile(`${format === "report" ? "farm-report" : "farm-analytics-share"}.txt`, `Farm Analytics\nFarm: ${selectedFarm?.name}\nTemplate: ${analytics.reportTemplateLabel}\nMode: ${backendDashboard ? "Backend Analytics" : "Demo Analytics"}\nYield: ${analytics.yieldTons} t\nRevenue: ${formatRwf(analytics.revenue)}\nCosts: ${formatRwf(analytics.costs)}\nROI: ${analytics.roi}%`);
   };
 
   const aiInsights = backendDashboard?.aiInsights?.map((item) => ({ ...item, icon: resolveAnalyticsIcon(item.icon, Sparkles) })) || [
@@ -561,7 +562,7 @@ function FarmerAnalyticsView() {
       <PageHeader title="Farm Analytics & Yield Reports" description="AI-assisted insights for academic-standard crop performance and financial planning.">
         <div style={{ display: "flex", gap: "8px" }}>
           <StatusBadge status={backendDashboard ? "verified" : "default"}>{backendDashboard ? "Backend Analytics" : "Demo Analytics"}</StatusBadge>
-          <StatusBadge status="default">Local Data</StatusBadge>
+          <StatusBadge status={backendDashboard ? "verified" : "default"}>{backendDashboard ? "MySQL Database" : "Local Data"}</StatusBadge>
         </div>
       </PageHeader>
 

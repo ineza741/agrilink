@@ -1,4 +1,4 @@
-﻿const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api").replace(
+﻿const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api").replace(
   /\/$/,
   ""
 );
@@ -145,10 +145,53 @@ async function requestJson(path, options = {}) {
   }
 }
 
+async function uploadFile(path, file, farmId = null, timeoutMs = 30000) {
+  const token = getStoredAccessToken();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  const formData = new FormData();
+  formData.append("file", file);
+  if (farmId) formData.append("farmId", farmId);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+      signal: controller.signal,
+    });
+
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
+
+    if (!response.ok) {
+      throw new Error(payload?.message || `Upload failed with status ${response.status}`);
+    }
+
+    return payload;
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`Upload timed out after ${timeoutMs / 1000} seconds.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export function mapBackendUserToFrontendUser(user) {
   if (!user) return null;
 
   const profile = user.farmerProfile || null;
+  const moProfile = user.marketOfficerProfile || null;
 
   return {
     id: user.id,
@@ -159,14 +202,21 @@ export function mapBackendUserToFrontendUser(user) {
     phone: user.phone,
     role: normalizeRole(user.role),
     isActive: Boolean(user.isActive),
-    region: profile?.region || "",
-    district: profile?.district || "",
-    sector: profile?.sector || "",
+    accountStatus: user.accountStatus || "APPROVED",
+    approvedAt: user.approvedAt || null,
+    rejectionReason: user.rejectionReason || null,
+    region: profile?.region || moProfile ? [moProfile?.sector, moProfile?.district].filter(Boolean).join(", ") : "",
+    district: profile?.district || moProfile?.district || "",
+    sector: profile?.sector || moProfile?.sector || "",
     experienceLevel: profile?.experienceLevel || "Intermediate",
     primaryCrop: profile?.primaryCrop || "Maize",
     verificationStatus: normalizeVerificationStatus(profile?.verificationStatus),
     profileCompleteness: profile?.profileCompleteness || 0,
     farmerProfileId: profile?.id || "",
+    marketOfficerProfileId: moProfile?.id || "",
+    marketName: moProfile?.marketName || "",
+    organization: moProfile?.organization || "",
+    employeeNumber: moProfile?.employeeNumber || "",
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
     authSource: "backend",
@@ -725,6 +775,26 @@ export const phase1BackendService = {
 
       return persistBackendAuth(response?.data);
     },
+    async registerMarketOfficer(payload) {
+      const response = await requestJson("/auth/register-market-officer", {
+        method: "POST",
+        body: {
+          fullName: payload.fullName || payload.name || "",
+          email: payload.email || "",
+          phone: payload.contact || payload.phone || "",
+          password: payload.password || "",
+          marketName: payload.marketName || "",
+          district: payload.district || "",
+          sector: payload.sector || "",
+          organization: payload.organization || null,
+          employeeNumber: payload.employeeNumber || null,
+          notes: payload.notes || null,
+        },
+        token: null,
+      });
+
+      return response?.data || null;
+    },
     async registerFarmerForAdmin(payload) {
       const response = await requestJson("/auth/register", {
         method: "POST",
@@ -739,6 +809,13 @@ export const phase1BackendService = {
     },
     async me() {
       const response = await requestJson("/auth/me");
+      return mapBackendUserToFrontendUser(response?.data);
+    },
+    async updateProfile(payload) {
+      const response = await requestJson("/auth/me", {
+        method: "PATCH",
+        body: payload,
+      });
       return mapBackendUserToFrontendUser(response?.data);
     },
   },
@@ -927,6 +1004,10 @@ export const phase1BackendService = {
         fertilizerRecommendation: mapBackendFertilizerRecommendation(data.fertilizerRecommendation),
       };
     },
+    async uploadAndExtract(file, farmId) {
+      const response = await uploadFile("/soil-tests/upload", file, farmId);
+      return response?.data || null;
+    },
   },
   irrigation: {
     async calculate(farmId, payload) {
@@ -963,6 +1044,40 @@ export const phase1BackendService = {
         method: "DELETE",
       });
       return response?.data || { deleted: true };
+    },
+    // --- Irrigation Records ---
+    async listRecords(farmId, params = {}) {
+      const query = new URLSearchParams();
+      if (params.limit) query.set("limit", String(params.limit));
+      const suffix = query.toString() ? `?${query.toString()}` : "";
+      const response = await requestJson(`/irrigation/farms/${farmId}/records${suffix}`);
+      return Array.isArray(response?.data) ? response.data : [];
+    },
+    async createRecord(farmId, payload) {
+      const response = await requestJson(`/irrigation/farms/${farmId}/records`, {
+        method: "POST",
+        body: payload,
+      });
+      return response?.data || null;
+    },
+    async updateRecord(recordId, payload) {
+      const response = await requestJson(`/irrigation/records/${recordId}`, {
+        method: "PATCH",
+        body: payload,
+      });
+      return response?.data || null;
+    },
+    // --- Soil Moisture ---
+    async latestMoisture(farmId) {
+      const response = await requestJson(`/irrigation/farms/${farmId}/moisture`);
+      return response?.data || null;
+    },
+    async createMoisture(farmId, payload) {
+      const response = await requestJson(`/irrigation/farms/${farmId}/moisture`, {
+        method: "POST",
+        body: payload,
+      });
+      return response?.data || null;
     },
   },
   market: {
@@ -1299,6 +1414,149 @@ export const phase1BackendService = {
         body: payload,
       });
       return response?.data || null;
+    },
+    async listMarketOfficers(params = {}) {
+      const query = new URLSearchParams();
+      if (params.status) query.set("status", params.status);
+      if (params.search) query.set("search", params.search);
+      const suffix = query.toString() ? `?${query.toString()}` : "";
+      const response = await requestJson(`/admin/market-officers${suffix}`);
+      return Array.isArray(response?.data) ? response.data : [];
+    },
+    async listPendingMarketOfficers() {
+      const response = await requestJson("/admin/market-officers/pending");
+      return Array.isArray(response?.data) ? response.data : [];
+    },
+    async getMarketOfficerById(id) {
+      const response = await requestJson(`/admin/market-officers/${id}`);
+      return response?.data || null;
+    },
+    async approveMarketOfficer(id) {
+      const response = await requestJson(`/admin/market-officers/${id}/approve`, {
+        method: "PATCH",
+        body: {},
+      });
+      return response?.data || null;
+    },
+    async rejectMarketOfficer(id, reason) {
+      const response = await requestJson(`/admin/market-officers/${id}/reject`, {
+        method: "PATCH",
+        body: { reason },
+      });
+      return response?.data || null;
+    },
+    async suspendMarketOfficer(id) {
+      const response = await requestJson(`/admin/market-officers/${id}/suspend`, {
+        method: "PATCH",
+        body: {},
+      });
+      return response?.data || null;
+    },
+    async reactivateMarketOfficer(id) {
+      const response = await requestJson(`/admin/market-officers/${id}/reactivate`, {
+        method: "PATCH",
+        body: {},
+      });
+      return response?.data || null;
+    },
+  },
+  cropPrices: {
+    async list(params = {}) {
+      const query = new URLSearchParams();
+      if (params.cropName) query.set("cropName", params.cropName);
+      if (params.district) query.set("district", params.district);
+      if (params.marketName) query.set("marketName", params.marketName);
+      if (params.status) query.set("status", params.status);
+      if (params.search) query.set("search", params.search);
+      const suffix = query.toString() ? `?${query.toString()}` : "";
+      const response = await requestJson(`/crop-prices${suffix}`);
+      return Array.isArray(response?.data) ? response.data : [];
+    },
+    async current() {
+      const response = await requestJson("/crop-prices/current");
+      return Array.isArray(response?.data) ? response.data : [];
+    },
+    async official() {
+      const response = await requestJson("/crop-prices/official");
+      return response?.data || {};
+    },
+    async byCrop(cropName) {
+      const response = await requestJson(`/crop-prices/crop/${encodeURIComponent(cropName)}`);
+      return response?.data || null;
+    },
+    async history(params = {}) {
+      const query = new URLSearchParams();
+      if (params.cropName) query.set("cropName", params.cropName);
+      if (params.marketName) query.set("marketName", params.marketName);
+      if (params.district) query.set("district", params.district);
+      const suffix = query.toString() ? `?${query.toString()}` : "";
+      const response = await requestJson(`/crop-prices/history${suffix}`);
+      return Array.isArray(response?.data) ? response.data : [];
+    },
+    async dashboard() {
+      const response = await requestJson("/crop-prices/dashboard");
+      return response?.data || null;
+    },
+    async create(payload) {
+      const response = await requestJson("/crop-prices", {
+        method: "POST",
+        body: payload,
+      });
+      return response?.data || null;
+    },
+    async update(id, payload) {
+      const response = await requestJson(`/crop-prices/${id}`, {
+        method: "PATCH",
+        body: payload,
+      });
+      return response?.data || null;
+    },
+    async deactivate(id) {
+      const response = await requestJson(`/crop-prices/${id}/deactivate`, {
+        method: "PATCH",
+        body: {},
+      });
+      return response?.data || null;
+    },
+    async exportPdf() {
+      const token = getStoredAccessToken();
+      const response = await fetch(`${API_BASE_URL}/crop-prices/export/pdf`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error("Export failed");
+      return response.blob();
+    },
+    async exportExcel() {
+      const token = getStoredAccessToken();
+      const response = await fetch(`${API_BASE_URL}/crop-prices/export/excel`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error("Export failed");
+      return response.blob();
+    },
+    async exportHistoryPdf(params = {}) {
+      const query = new URLSearchParams();
+      if (params.cropName) query.set("cropName", params.cropName);
+      if (params.marketName) query.set("marketName", params.marketName);
+      const suffix = query.toString() ? `?${query.toString()}` : "";
+      const token = getStoredAccessToken();
+      const response = await fetch(`${API_BASE_URL}/crop-prices/history/export/pdf${suffix}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error("Export failed");
+      return response.blob();
+    },
+    async exportHistoryExcel(params = {}) {
+      const query = new URLSearchParams();
+      if (params.cropName) query.set("cropName", params.cropName);
+      if (params.marketName) query.set("marketName", params.marketName);
+      const suffix = query.toString() ? `?${query.toString()}` : "";
+      const token = getStoredAccessToken();
+      const response = await fetch(`${API_BASE_URL}/crop-prices/history/export/excel${suffix}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error("Export failed");
+      return response.blob();
     },
   },
 };

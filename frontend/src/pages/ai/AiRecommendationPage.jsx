@@ -1,42 +1,37 @@
 import {
   AlertTriangle,
-  ArrowRight,
-  BadgeCheck,
   BarChart3,
   BrainCircuit,
-  CalendarClock,
+
   CheckCircle2,
   ClipboardList,
   CloudRain,
   Download,
   Droplets,
+  FileSpreadsheet,
+  FileText,
   Filter,
   FlaskConical,
   History,
   LoaderCircle,
   MapPinned,
   RefreshCcw,
-  Search,
   Send,
   ShieldAlert,
   Sparkles,
-  Sprout,
   Store,
-  ThermometerSun,
-  TrendingUp,
-  Waves,
   Wheat,
   XCircle,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import StyledTabButton from "../../components/common/StyledTabButton";
 import { useAuth } from "../../context/AuthContext";
 import { useFarmerData } from "../../context/FarmerDataContext";
 import { apiClient } from "../../services/api";
 import { isBackendSessionActive, phase1BackendService } from "../../services/phase1Backend";
-import { downloadJsonFile, downloadTextFile } from "../../utils/actions";
+import { downloadTextFile } from "../../utils/actions";
 
-const DEMO_MODE = true;
 const AI_RECOMMENDATION_STORAGE_KEY = "agri-feed-ai-recommendation-center-v1";
 
 const FILTER_TABS = [
@@ -95,20 +90,6 @@ const REJECTION_OPTIONS = [
   "Wrong timing",
   "Other reason",
 ];
-
-const DEMO_FARM = {
-  id: "demo-ai-farm",
-  name: "Gatenga Demonstration Plot",
-  region: "Gatenga Sector, Kicukiro District, Kigali City",
-  sizeHectares: 3.5,
-  primaryCrop: "Beans",
-  irrigationType: "Sprinkler Irrigation",
-  location: {
-    lat: -1.9983,
-    lng: 30.1038,
-    label: "Gatenga Sector, Kicukiro District, Kigali City, Rwanda",
-  },
-};
 
 function formatShortDate(value) {
   return new Intl.DateTimeFormat("en-GB", {
@@ -398,15 +379,15 @@ function looksLikeUuid(value = "") {
 export function AiRecommendationPage() {
   const { user } = useAuth();
   const { currentProfile, currentFarms } = useFarmerData();
-  const farms = currentFarms?.length ? currentFarms : [DEMO_FARM];
-  const [selectedFarmId, setSelectedFarmId] = useState(farms?.[0]?.id || DEMO_FARM.id);
-  const [searchTerm, setSearchTerm] = useState("");
+  const farms = currentFarms?.length ? currentFarms : [];
+  const [selectedFarmId, setSelectedFarmId] = useState(farms?.[0]?.id || "");
+  const [clearFiltersKey, setClearFiltersKey] = useState(0);
   const [activeTab, setActiveTab] = useState("all");
   const [regionFilter, setRegionFilter] = useState("All");
   const [cropFilter, setCropFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [dateRangeFilter, setDateRangeFilter] = useState("7 days");
-  const [actionNotice, setActionNotice] = useState("");
+  const [actionLoading, setActionLoading] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
   const [backendLoading, setBackendLoading] = useState(false);
@@ -422,12 +403,25 @@ export function AiRecommendationPage() {
   const [backendHistory, setBackendHistory] = useState([]);
   const [backendFeedback, setBackendFeedback] = useState([]);
 
-  const selectedFarm = farms.find((farm) => farm.id === selectedFarmId) || farms?.[0] || null;
+  const selectedFarm = useMemo(
+    () => farms.find((farm) => farm.id === selectedFarmId) || farms?.[0] || null,
+    [farms, selectedFarmId]
+  );
   const backendFarmId = selectedFarm?.backendFarmId || (looksLikeUuid(selectedFarm?.id || "") ? selectedFarm.id : "");
   const backendMode = isBackendSessionActive() && Boolean(backendFarmId);
 
   useEffect(() => {
-    if (!selectedFarmId && farms?.[0]?.id) {
+    if (!farms?.length) return;
+
+    if (isBackendSessionActive()) {
+      const backendFarm = farms.find((f) => f.backendFarmId || looksLikeUuid(f.id));
+      if (backendFarm && backendFarm.id !== selectedFarmId) {
+        setSelectedFarmId(backendFarm.id);
+        return;
+      }
+    }
+
+    if (!selectedFarmId) {
       setSelectedFarmId(farms[0].id);
     }
   }, [farms, selectedFarmId]);
@@ -443,7 +437,7 @@ export function AiRecommendationPage() {
         setLoading(false);
         setWeatherState({
           source: "Demo/local data is being used because live data is unavailable.",
-          current: getFallbackWeather(selectedFarm?.region || DEMO_FARM.region),
+          current: getFallbackWeather(selectedFarm?.region || farms?.[0]?.region || "Gatenga Sector, Kicukiro District, Kigali City"),
           lastUpdated: new Date().toISOString(),
         });
       }
@@ -455,7 +449,7 @@ export function AiRecommendationPage() {
           clearTimeout(timeoutId);
           setWeatherState({
             source: "Demo Weather Data",
-            current: getFallbackWeather(DEMO_FARM.region),
+            current: getFallbackWeather(farms?.[0]?.region || "Gatenga Sector, Kicukiro District, Kigali City"),
             lastUpdated: new Date().toISOString(),
           });
           setLoading(false);
@@ -532,7 +526,7 @@ export function AiRecommendationPage() {
   }, [storedActions]);
 
   const fallbackWeather = useMemo(
-    () => getFallbackWeather(selectedFarm?.region || DEMO_FARM.region),
+    () => getFallbackWeather(selectedFarm?.region || farms?.[0]?.region || "Gatenga Sector, Kicukiro District, Kigali City"),
     [selectedFarm],
   );
 
@@ -554,20 +548,40 @@ export function AiRecommendationPage() {
     COMMUNITY_PROFILES[selectedFarm?.region] ||
     COMMUNITY_PROFILES.default;
 
+  const activeWeatherRef = useRef(activeWeather);
+  activeWeatherRef.current = activeWeather;
+  const weatherSourceRef = useRef(weatherState.source);
+  weatherSourceRef.current = weatherState.source;
+
+  const fetchBackendData = useCallback(async () => {
+    if (!backendMode || !backendFarmId) {
+      return { latest: null, history: [], feedback: [] };
+    }
+
+    const [latest, history, feedback] = await Promise.all([
+      phase1BackendService.recommendations.latest(backendFarmId).catch(() => null),
+      phase1BackendService.recommendations.history(backendFarmId).catch(() => []),
+      phase1BackendService.recommendations.latest(backendFarmId)
+        .then((r) => r?.id ? phase1BackendService.recommendations.listFeedback(r.id) : [])
+        .catch(() => []),
+    ]);
+
+    return { latest, history, feedback };
+  }, [backendFarmId, backendMode]);
+
   const refreshBackendRecommendations = useCallback(
     async ({ generateIfMissing = false, successNotice = "" } = {}) => {
       if (!backendMode || !backendFarmId) {
         setBackendRun(null);
         setBackendHistory([]);
         setBackendFeedback([]);
-        setBackendLoading(false); // Ensure loading is false when backend is not active
+        setBackendLoading(false);
         setLoadingTimedOut(false);
         return null;
       }
 
       setBackendLoading(true);
       setLoadingTimedOut(false);
-      setActionNotice("");
 
       let timeoutId;
       const backendFetchPromise = async () => {
@@ -575,10 +589,10 @@ export function AiRecommendationPage() {
 
         if (!latest && generateIfMissing) {
           latest = await phase1BackendService.recommendations.generate(backendFarmId, {
-            weatherSourceLabel: weatherState.source,
+            weatherSourceLabel: weatherSourceRef.current,
             weather: {
-              ...activeWeather,
-              source: weatherState.source,
+              ...activeWeatherRef.current,
+              source: weatherSourceRef.current,
             },
           });
         }
@@ -594,24 +608,24 @@ export function AiRecommendationPage() {
       const timeoutPromise = new Promise((resolve, reject) => {
         timeoutId = setTimeout(() => {
           reject(new Error("Backend recommendation fetch timed out."));
-        }, 5000); // 5 seconds timeout
+        }, 5000);
       });
 
       try {
-        const { latest, history, feedback } = await Promise.race([
+        const result = await Promise.race([
           backendFetchPromise(),
           timeoutPromise,
         ]);
         clearTimeout(timeoutId);
+
+        const { latest, history, feedback } = result;
 
         setBackendRun(latest);
         setBackendHistory(history);
         setBackendFeedback(feedback);
 
         if (successNotice) {
-          setActionNotice(successNotice);
-        } else if (latest) {
-          setActionNotice("Backend recommendation engine is active for this farm.");
+          toast.success(successNotice);
         }
 
         setBackendLoading(false);
@@ -623,9 +637,9 @@ export function AiRecommendationPage() {
 
         if (error.message === "Backend recommendation fetch timed out.") {
           setLoadingTimedOut(true);
-          setActionNotice("Using demo recommendation engine because live recommendation data timed out.");
+          toast.warning("Live recommendation data timed out. Using demo data.");
         } else {
-          setActionNotice("Using demo recommendation engine because backend recommendation data is not available yet.");
+          toast.warning("Backend recommendation data is not available yet. Using demo data.");
         }
 
         setBackendRun(null);
@@ -635,7 +649,7 @@ export function AiRecommendationPage() {
         return null;
       }
     },
-    [activeWeather, backendFarmId, backendMode, weatherState.source],
+    [backendFarmId, backendMode],
   );
 
   useEffect(() => {
@@ -668,30 +682,33 @@ export function AiRecommendationPage() {
   const recommendations = useMemo(() => {
     if (!selectedFarm) return [];
 
+    let baseRecommendations;
     if (backendRun?.recommendations?.length) {
-      return backendRun.recommendations;
+      baseRecommendations = backendRun.recommendations;
+    } else if (backendMode && backendRun === null) {
+      return [];
+    } else {
+      baseRecommendations = buildRecommendationSet({
+        farm: selectedFarm,
+        farmerName,
+        weather,
+        soil,
+        market,
+        pest,
+        community: communityInsight,
+      });
     }
 
-    const generated = buildRecommendationSet({
-      farm: selectedFarm,
-      farmerName,
-      weather,
-      soil,
-      market,
-      pest,
-      community: communityInsight,
-    });
-
-    return generated.map((item) => {
+    return baseRecommendations.map((item) => {
       const stored = storedActions[item.id];
       return {
         ...item,
         workflowStatus: stored?.workflowStatus || item.workflowStatus,
         status: stored?.status || item.status,
-        actionLog: stored?.actionLog || [],
+        actionLog: stored?.actionLog || item.actionLog || [],
       };
     });
-  }, [backendRun, communityInsight, farmerName, market, pest, selectedFarm, soil, storedActions, weather]);
+  }, [backendRun, backendMode, communityInsight, farmerName, market, pest, selectedFarm, soil, storedActions, weather]);
 
   useEffect(() => {
     if (!selectedRecommendationId && recommendations?.[0]?.id) {
@@ -702,34 +719,33 @@ export function AiRecommendationPage() {
   const selectedRecommendation =
     recommendations.find((item) => item.id === selectedRecommendationId) || recommendations?.[0] || null;
 
+  const normalizeCategory = (cat) => {
+    const c = String(cat || "").toLowerCase().trim();
+    if (["pest", "pests", "pests & diseases"].includes(c)) return "pests";
+    return c;
+  };
+
   const filteredRecommendations = useMemo(() => {
     return recommendations.filter((item) => {
+      const recCategory = normalizeCategory(item.category);
+
       const matchesTab =
         activeTab === "all" ? true :
-        activeTab === "critical" ? item.priority === "Critical" || item.priority === "High" :
-        activeTab === "review" ? item.status === "Pending Review" || item.workflowStatus === "Rejected" :
-        activeTab === "pests" ? item.category === "pests" :
-        activeTab === "soil" ? item.category === "soil" :
-        activeTab === "crop" ? item.category === "crop" :
-        item.category === activeTab;
+        activeTab === "critical" ? (item.priority === "Critical" || item.priority === "High") :
+        activeTab === "review" ? (item.status === "Pending Review" || item.workflowStatus === "Rejected" || item.workflowStatus === "Pending Review") :
+        recCategory === activeTab;
 
-      const haystack = [
-        item.title,
-        item.description,
-        item.region,
-        item.farmer,
-        item.crop,
-        item.category,
-        item.priority,
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      const matchesSearch = !searchTerm || haystack.includes(searchTerm.toLowerCase());
       const matchesRegion = regionFilter === "All" || item.region === regionFilter;
       const matchesCrop = cropFilter === "All" || item.crop === cropFilter;
+
+      const normalizedStatus = String(item.status || "").toLowerCase().trim();
+      const normalizedWorkflow = String(item.workflowStatus || "").toLowerCase().trim();
+      const filterStatus = String(statusFilter).toLowerCase().trim();
       const matchesStatus =
-        statusFilter === "All" || item.status === statusFilter || item.workflowStatus === statusFilter;
+        statusFilter === "All" ||
+        normalizedStatus === filterStatus ||
+        normalizedWorkflow === filterStatus ||
+        (filterStatus === "pending review" && (normalizedStatus === "pending review" || normalizedWorkflow === "rejected"));
 
       const ageDays = Math.max(
         0,
@@ -741,9 +757,20 @@ export function AiRecommendationPage() {
         (dateRangeFilter === "30 days" && ageDays <= 30) ||
         (dateRangeFilter === "90 days" && ageDays <= 90);
 
-      return matchesTab && matchesSearch && matchesRegion && matchesCrop && matchesStatus && matchesDate;
+      return matchesTab && matchesRegion && matchesCrop && matchesStatus && matchesDate;
     });
-  }, [activeTab, cropFilter, dateRangeFilter, recommendations, regionFilter, searchTerm, statusFilter]);
+  }, [activeTab, cropFilter, dateRangeFilter, recommendations, regionFilter, statusFilter, clearFiltersKey]);
+
+  const hasActiveFilters = activeTab !== "all" || regionFilter !== "All" || cropFilter !== "All" || statusFilter !== "All" || dateRangeFilter !== "7 days";
+
+  const clearFilters = () => {
+    setActiveTab("all");
+    setRegionFilter("All");
+    setCropFilter("All");
+    setStatusFilter("All");
+    setDateRangeFilter("7 days");
+    setClearFiltersKey((k) => k + 1);
+  };
 
   const summaryCards = useMemo(() => {
     const total = recommendations.length;
@@ -803,9 +830,12 @@ export function AiRecommendationPage() {
     };
   }, [backendRun, recommendations]);
 
-  const updateRecommendationWorkflow = async (recommendation, nextStatus, notice, extra = {}) => {
-    if (backendMode && backendRun?.id) {
-      try {
+  const updateRecommendationWorkflow = async (recommendation, nextStatus, extra = {}) => {
+    const actionKey = `${recommendation.id}-${nextStatus}`;
+    setActionLoading(actionKey);
+
+    try {
+      if (backendMode && backendRun?.id) {
         await phase1BackendService.recommendations.addFeedback(backendRun.id, {
           recommendationId: recommendation.id,
           actionType: recommendation.category || "AI Recommendation",
@@ -813,45 +843,131 @@ export function AiRecommendationPage() {
           rejectionReason: extra.reason || extra.rejectionReason || null,
           note: extra.note || null,
         });
-        await refreshBackendRecommendations({ successNotice: notice });
-        return;
-      } catch {
-        setActionNotice("Backend feedback sync failed, so the page is continuing with local workflow tracking.");
-      }
-    }
 
-    setStoredActions((current) => {
-      const previous = current[recommendation.id] || { actionLog: [] };
-      return {
-        ...current,
-        [recommendation.id]: {
-          ...previous,
-          status: nextStatus === "Rejected" ? "Pending Review" : previous.status || recommendation.status,
-          workflowStatus: nextStatus,
-          actionLog: [
-            {
-              status: nextStatus,
-              timestamp: new Date().toISOString(),
-              ...extra,
+        setStoredActions((current) => {
+          const previous = current[recommendation.id] || { actionLog: [] };
+          return {
+            ...current,
+            [recommendation.id]: {
+              ...previous,
+              status: nextStatus === "Rejected" ? "Pending Review" : previous.status || recommendation.status,
+              workflowStatus: nextStatus,
+              actionLog: [
+                {
+                  status: nextStatus,
+                  timestamp: new Date().toISOString(),
+                  ...extra,
+                },
+                ...(previous.actionLog || []),
+              ].slice(0, 10),
             },
-            ...(previous.actionLog || []),
-          ].slice(0, 10),
-        },
+          };
+        });
+
+        await refreshBackendRecommendations({});
+
+        const toastMessages = {
+          Approved: { title: "Recommendation approved", desc: `The ${recommendation.category} recommendation for ${recommendation.crop} has been approved.` },
+          Rejected: { title: "Recommendation rejected", desc: "The recommendation was rejected successfully." },
+          Sent: { title: "Recommendation sent", desc: "The recommendation was sent to the farmer." },
+          Viewed: { title: "Historical comparison ready", desc: "Historical farm records have been loaded for comparison." },
+        };
+        const msg = toastMessages[nextStatus] || { title: "Action completed", desc: "The recommendation status has been updated." };
+        toast.success(msg.title, { description: msg.desc });
+        return;
+      }
+
+      setStoredActions((current) => {
+        const previous = current[recommendation.id] || { actionLog: [] };
+        return {
+          ...current,
+          [recommendation.id]: {
+            ...previous,
+            status: nextStatus === "Rejected" ? "Pending Review" : previous.status || recommendation.status,
+            workflowStatus: nextStatus,
+            actionLog: [
+              {
+                status: nextStatus,
+                timestamp: new Date().toISOString(),
+                ...extra,
+              },
+              ...(previous.actionLog || []),
+            ].slice(0, 10),
+          },
+        };
+      });
+
+      const localMessages = {
+        Approved: { title: "Recommendation approved", desc: `The ${recommendation.category} recommendation has been approved.` },
+        Rejected: { title: "Recommendation rejected", desc: "The recommendation was rejected successfully." },
+        Sent: { title: "Recommendation sent", desc: "The recommendation was sent to the farmer." },
+        Viewed: { title: "Historical comparison ready", desc: "Historical farm records have been loaded for comparison." },
       };
-    });
-    setActionNotice(notice);
+      const localMsg = localMessages[nextStatus] || { title: "Action completed", desc: "The recommendation status has been updated." };
+      toast.success(localMsg.title, { description: localMsg.desc });
+    } catch (err) {
+      toast.error("Action failed", {
+        description: err?.message || "Something went wrong. Please try again.",
+      });
+    } finally {
+      setActionLoading(null);
+    }
   };
 
-  const exportReport = () => {
-    downloadJsonFile("ai-recommendation-report.json", {
-      demoMode: DEMO_MODE,
-      farm: selectedFarm,
-      farmer: farmerName,
-      weatherSource: weatherState.source,
-      generatedAt: new Date().toISOString(),
-      recommendations,
-    });
-    setActionNotice("Recommendation report exported for presentation use.");
+  const exportPdf = () => {
+    if (backendMode && backendFarmId) {
+      const token = localStorage.getItem("agri-feed-access-token");
+      const url = `${import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api"}/recommendations/farms/${backendFarmId}/export/pdf`;
+
+      fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error("Export failed");
+          return res.blob();
+        })
+        .then((blob) => {
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(blob);
+          link.download = "recommendation-report.pdf";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(link.href);
+          toast.success("PDF exported", { description: "Report downloaded successfully." });
+        })
+        .catch(() => toast.error("Export failed", { description: "Unable to download PDF. Please try again." }));
+    } else {
+      toast.warning("Backend required", { description: "Connect to backend to export PDF reports." });
+    }
+  };
+
+  const exportExcel = () => {
+    if (backendMode && backendFarmId) {
+      const token = localStorage.getItem("agri-feed-access-token");
+      const url = `${import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api"}/recommendations/farms/${backendFarmId}/export/excel`;
+
+      fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error("Export failed");
+          return res.blob();
+        })
+        .then((blob) => {
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(blob);
+          link.download = "recommendation-report.xlsx";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(link.href);
+          toast.success("Excel exported", { description: "Report downloaded successfully." });
+        })
+        .catch(() => toast.error("Export failed", { description: "Unable to download Excel. Please try again." }));
+    } else {
+      toast.warning("Backend required", { description: "Connect to backend to export Excel reports." });
+    }
   };
 
   const historySummary = useMemo(() => {
@@ -904,38 +1020,58 @@ export function AiRecommendationPage() {
             <button
               type="button"
               className="recommendation-primary-button"
+              data-testid="generate-btn"
+              data-backend-mode={backendMode ? "true" : "false"}
+              data-backend-loading={backendLoading ? "true" : "false"}
+              data-backend-farm-id={backendFarmId || "none"}
+              disabled={backendLoading}
               onClick={async () => {
                 if (backendMode && backendFarmId) {
                   setBackendLoading(true);
+                  setError("");
+                  const minDelay = new Promise((resolve) => setTimeout(resolve, 800));
                   try {
-                    const generated = await phase1BackendService.recommendations.generate(backendFarmId, {
-                      weatherSourceLabel: weatherState.source,
-                      weather: {
-                        ...weather,
-                        source: weatherState.source,
-                      },
+                    const [generated] = await Promise.all([
+                      phase1BackendService.recommendations.generate(backendFarmId, {
+                        weatherSourceLabel: weatherState.source,
+                        weather: {
+                          ...weather,
+                          source: weatherState.source,
+                        },
+                      }),
+                      minDelay,
+                    ]);
+
+                    if (generated) {
+                      const { latest, history, feedback } = await fetchBackendData();
+                      setBackendRun(latest);
+                      setBackendHistory(history);
+                      setBackendFeedback(feedback);
+                      toast.success("Recommendation generated", {
+                        description: "New AI recommendations have been created for this farm.",
+                      });
+                    } else {
+                      toast.info("No new recommendation", {
+                        description: "The latest farm conditions have not changed.",
+                      });
+                    }
+                  } catch (err) {
+                    toast.error("Generation failed", {
+                      description: "Unable to generate recommendations. Please try again.",
                     });
-                    setBackendRun(generated);
-                    const history = await phase1BackendService.recommendations.history(backendFarmId);
-                    const feedback = generated?.id
-                      ? await phase1BackendService.recommendations.listFeedback(generated.id)
-                      : [];
-                    setBackendHistory(history);
-                    setBackendFeedback(feedback);
-                    setActionNotice("A fresh backend recommendation cycle has been generated for this farm.");
-                  } catch {
-                    setActionNotice("Using the demo recommendation engine because backend generation is not available right now.");
                   } finally {
                     setBackendLoading(false);
                   }
                   return;
                 }
 
-                setActionNotice("A fresh recommendation cycle has been generated using current demo inputs.");
+                toast.info("Demo mode", {
+                  description: "Connect to backend to generate real recommendations.",
+                });
               }}
             >
               <Sparkles size={16} />
-              <span>Generate New Recommendation</span>
+              <span>{backendLoading ? "Generating..." : "Generate New Recommendation"}</span>
             </button>
             <button
               type="button"
@@ -955,19 +1091,23 @@ export function AiRecommendationPage() {
               <RefreshCcw size={16} />
               <span>Refresh Analysis</span>
             </button>
-            <button type="button" className="recommendation-secondary-button" onClick={exportReport}>
-              <Download size={16} />
-              <span>Export Recommendation Report</span>
+            <button type="button" className="recommendation-secondary-button" onClick={exportPdf}>
+              <FileText size={16} />
+              <span>Export PDF</span>
+            </button>
+            <button type="button" className="recommendation-secondary-button" onClick={exportExcel}>
+              <FileSpreadsheet size={16} />
+              <span>Export Excel</span>
             </button>
             <button
               type="button"
               className="recommendation-secondary-button"
               onClick={() =>
-                setActionNotice(
-                  backendMode
-                    ? `Loaded ${backendHistory.length} backend recommendation run${backendHistory.length === 1 ? "" : "s"} for this farm.`
-                    : "Recommendation history loaded from local storage demo records.",
-                )
+                toast.info("Recommendation history", {
+                  description: backendMode
+                    ? `Loaded ${backendHistory.length} recommendation run${backendHistory.length === 1 ? "" : "s"} for this farm.`
+                    : "Viewing local demo records.",
+                })
               }
             >
               <History size={16} />
@@ -976,8 +1116,6 @@ export function AiRecommendationPage() {
           </div>
         </div>
       </div>
-
-      {actionNotice ? <div className="community-inline-notice">{actionNotice}</div> : null}
 
       <div className="management-toolbar ai-center-toolbar">
         <label className="recommendation-farm-selector ai-center-farm-selector">
@@ -990,16 +1128,6 @@ export function AiRecommendationPage() {
             ))}
           </select>
         </label>
-
-        <div className="toolbar-search ai-center-search">
-          <Search size={15} />
-          <input
-            type="text"
-            placeholder="Search recommendations by crop, farmer, district, risk, priority..."
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-          />
-        </div>
       </div>
 
       <div className="management-summary-grid ai-center-summary-grid">
@@ -1085,6 +1213,12 @@ export function AiRecommendationPage() {
               ))}
             </select>
           </label>
+          {hasActiveFilters ? (
+            <button type="button" className="recommendation-secondary-button clear-filters-btn" onClick={clearFilters}>
+              <XCircle size={15} />
+              <span>Clear Filters</span>
+            </button>
+          ) : null}
         </div>
       </article>
 
@@ -1118,8 +1252,19 @@ export function AiRecommendationPage() {
             <strong>No recommendations available yet.</strong>
             <p>Generate recommendations using current weather, soil, pest, and market intelligence.</p>
           </div>
-          <button type="button" className="recommendation-primary-button" onClick={() => setActionNotice("Recommendation generation is ready once a farm is available.")}>
+          <button type="button" className="recommendation-primary-button" onClick={() => toast.info("Ready to generate", { description: "Select a farm and click Generate New Recommendation." })}>
             Generate Recommendations
+          </button>
+        </div>
+      ) : !filteredRecommendations.length ? (
+        <div className="recommendation-state-card">
+          <div>
+            <strong>No recommendations match the selected filters.</strong>
+            <p>Try adjusting your filter criteria or clear all filters to see all recommendations.</p>
+          </div>
+          <button type="button" className="recommendation-secondary-button" onClick={clearFilters}>
+            <XCircle size={15} />
+            <span>Clear Filters</span>
           </button>
         </div>
       ) : (
@@ -1167,7 +1312,7 @@ export function AiRecommendationPage() {
                         <div className="recommendation-badge-row ai-center-badges">
                           <span className="recommendation-category-badge">{categoryMeta.label}</span>
                           <span className={`recommendation-priority-label ${item.priority.toLowerCase()}`}>{item.priority}</span>
-                          <span className="recommendation-status-chip pending">{item.status}</span>
+                          <span className={`recommendation-status-chip ${item.workflowStatus === "Approved" ? "approved" : item.workflowStatus === "Rejected" ? "rejected" : item.workflowStatus === "Sent" ? "sent" : "pending"}`}>{item.workflowStatus || item.status}</span>
                           <span className="recommendation-driver-chip">{item.region}</span>
                           <span className="recommendation-driver-chip">{item.crop}</span>
                           <span className="recommendation-driver-chip">{formatShortDate(item.generatedAt)}</span>
@@ -1185,39 +1330,48 @@ export function AiRecommendationPage() {
                           </div>
 
                           <div className="recommendation-actions">
+                            {item.workflowStatus !== "Approved" && item.workflowStatus !== "Rejected" && item.workflowStatus !== "Sent" && (
+                              <>
+                                <button
+                                  type="button"
+                                  className="recommendation-primary-button"
+                                  disabled={actionLoading === `${item.id}-Approved`}
+                                  onClick={() => updateRecommendationWorkflow(item, "Approved")}
+                                >
+                                  {actionLoading === `${item.id}-Approved` ? (
+                                    <><LoaderCircle size={14} className="spin" /> Approving...</>
+                                  ) : "Approve"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="recommendation-muted-button recommendation-danger-button"
+                                  disabled={actionLoading === `${item.id}-Rejected`}
+                                  onClick={() => updateRecommendationWorkflow(item, "Rejected", { reason: REJECTION_OPTIONS[0] })}
+                                >
+                                  {actionLoading === `${item.id}-Rejected` ? (
+                                    <><LoaderCircle size={14} className="spin" /> Rejecting...</>
+                                  ) : "Reject"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="recommendation-secondary-button recommendation-send-button"
+                                  disabled={actionLoading === `${item.id}-Sent`}
+                                  onClick={() => updateRecommendationWorkflow(item, "Sent")}
+                                >
+                                  {actionLoading === `${item.id}-Sent` ? (
+                                    <><LoaderCircle size={14} className="spin" /> Sending...</>
+                                  ) : <><Send size={15} /><span>Send to Farmer</span></>}
+                                </button>
+                              </>
+                            )}
                             <button
                               type="button"
                               className="recommendation-secondary-button"
-                              onClick={() => setSelectedRecommendationId(item.id)}
-                            >
-                              View Details
-                            </button>
-                            <button
-                              type="button"
-                              className="recommendation-primary-button"
-                              onClick={() => updateRecommendationWorkflow(item, "Approved", `${item.title} approved successfully.`)}
-                            >
-                              Approve
-                            </button>
-                            <button
-                              type="button"
-                              className="recommendation-muted-button recommendation-danger-button"
-                              onClick={() => updateRecommendationWorkflow(item, "Rejected", `${item.title} rejected and flagged for review.`, { reason: REJECTION_OPTIONS[0] })}
-                            >
-                              Reject
-                            </button>
-                            <button
-                              type="button"
-                              className="recommendation-secondary-button recommendation-send-button"
-                              onClick={() => updateRecommendationWorkflow(item, "Sent", `${item.title} sent to the farmer workflow.`)}
-                            >
-                              <Send size={15} />
-                              <span>Send to Farmer</span>
-                            </button>
-                            <button
-                              type="button"
-                              className="recommendation-secondary-button"
-                              onClick={() => setActionNotice(item.comparison)}
+                              onClick={() => {
+                                toast.info("Historical comparison ready", {
+                                  description: "Historical farm records have been loaded for comparison.",
+                                });
+                              }}
                             >
                               Compare With Historical Data
                             </button>
@@ -1257,23 +1411,32 @@ export function AiRecommendationPage() {
                       <button
                         type="button"
                         className="recommendation-primary-button"
-                        onClick={() => updateRecommendationWorkflow(priorityRecommendation, "Approved", `${priorityRecommendation.title} approved immediately.`)}
+                        disabled={actionLoading === `${priorityRecommendation.id}-Approved`}
+                        onClick={() => updateRecommendationWorkflow(priorityRecommendation, "Approved")}
                       >
-                        Approve Immediately
+                        {actionLoading === `${priorityRecommendation.id}-Approved` ? (
+                          <><LoaderCircle size={14} className="spin" /> Approving...</>
+                        ) : "Approve Immediately"}
                       </button>
                       <button
                         type="button"
                         className="recommendation-secondary-button"
-                        onClick={() => updateRecommendationWorkflow(priorityRecommendation, "Sent", `${priorityRecommendation.title} forwarded to farmer notifications.`)}
+                        disabled={actionLoading === `${priorityRecommendation.id}-Sent`}
+                        onClick={() => updateRecommendationWorkflow(priorityRecommendation, "Sent")}
                       >
-                        Notify Farmer
+                        {actionLoading === `${priorityRecommendation.id}-Sent` ? (
+                          <><LoaderCircle size={14} className="spin" /> Sending...</>
+                        ) : "Notify Farmer"}
                       </button>
                       <button
                         type="button"
                         className="recommendation-secondary-button"
-                        onClick={() => updateRecommendationWorkflow(priorityRecommendation, "Viewed", `${priorityRecommendation.title} scheduled for follow-up monitoring.`)}
+                        disabled={actionLoading === `${priorityRecommendation.id}-Viewed`}
+                        onClick={() => updateRecommendationWorkflow(priorityRecommendation, "Viewed")}
                       >
-                        Schedule Follow-up
+                        {actionLoading === `${priorityRecommendation.id}-Viewed` ? (
+                          <><LoaderCircle size={14} className="spin" /> Loading...</>
+                        ) : "Schedule Follow-up"}
                       </button>
                     </div>
                   </div>
@@ -1398,30 +1561,6 @@ export function AiRecommendationPage() {
           ) : null}
 
           <div className="recommendation-scheduler-grid ai-center-bottom-grid">
-            <article className="prototype-panel recommendation-scheduler-card">
-              <div className="recommendation-scheduler-head">
-                <CalendarClock size={18} />
-                <h2>Recommendation Workflow</h2>
-              </div>
-              <div className="recommendation-scheduler-list">
-                {[
-                  "AI Generates Recommendation",
-                  "Admin Reviews",
-                  "Approve / Reject",
-                  "Send to Farmer",
-                  "Farmer Action Tracking",
-                  "Outcome Evaluation",
-                  "Analytics Update",
-                ].map((item) => (
-                  <div key={item} className="recommendation-scheduler-item">
-                    <strong>{item}</strong>
-                    <span>Tracked in frontend-only demo workflow</span>
-                    <small>LocalStorage supported</small>
-                  </div>
-                ))}
-              </div>
-            </article>
-
             <article className="prototype-panel recommendation-priority-card">
               <div className="recommendation-scheduler-head">
                 <BarChart3 size={18} />

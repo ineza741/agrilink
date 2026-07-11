@@ -68,6 +68,46 @@ async function main() {
     phone: "+250788100002",
   });
 
+  const marketOfficer = await upsertUserWithProfile({
+    email: "market@agrisupport.rw",
+    password: "Market@123",
+    role: "MarketOfficer",
+    fullName: "Jean Mugabo",
+    phone: "+250788100004",
+  });
+
+  await prisma.user.update({
+    where: { id: marketOfficer.id },
+    data: {
+      accountStatus: "APPROVED",
+      approvedAt: new Date(),
+      approvedBy: admin.id,
+    },
+  });
+
+  await prisma.marketOfficerProfile.upsert({
+    where: { userId: marketOfficer.id },
+    update: {
+      fullName: "Jean Mugabo",
+      phone: "+250788100004",
+      marketName: "Kicukiro New Modern Market",
+      district: "Kicukiro District",
+      sector: "Gatenga Sector",
+      organization: "Rwanda Agriculture Board",
+      employeeNumber: "MO-2026-001",
+    },
+    create: {
+      userId: marketOfficer.id,
+      fullName: "Jean Mugabo",
+      phone: "+250788100004",
+      marketName: "Kicukiro New Modern Market",
+      district: "Kicukiro District",
+      sector: "Gatenga Sector",
+      organization: "Rwanda Agriculture Board",
+      employeeNumber: "MO-2026-001",
+    },
+  });
+
   const farmer = await upsertUserWithProfile({
     email: "farmer@agrisupport.rw",
     password: "Farmer@123",
@@ -294,6 +334,71 @@ async function main() {
     ],
     skipDuplicates: true,
   });
+
+  const CROP_PRICES = [
+    { cropName: "Wheat", wholesalePrice: 860, retailPrice: 950, farmGatePrice: 780, marketName: "Kicukiro New Modern Market", district: "Kicukiro District", sector: "Gatenga Sector" },
+    { cropName: "Corn", wholesalePrice: 680, retailPrice: 760, farmGatePrice: 620, marketName: "Kimironko Market", district: "Gasabo District", sector: "Kimironko Sector" },
+    { cropName: "Soybeans", wholesalePrice: 930, retailPrice: 1020, farmGatePrice: 870, marketName: "Nyabugogo Market", district: "Nyarugenge District", sector: "Nyabugogo Sector" },
+    { cropName: "Rice", wholesalePrice: 1420, retailPrice: 1560, farmGatePrice: 1320, marketName: "Musanze Main Market", district: "Musanze District", sector: "Muhoza Sector" },
+    { cropName: "Barley", wholesalePrice: 720, retailPrice: 790, farmGatePrice: 660, marketName: "Huye Central Market", district: "Huye District", sector: "Ngoma Sector" },
+    { cropName: "Beans", wholesalePrice: 980, retailPrice: 1080, farmGatePrice: 910, marketName: "Zinia Market", district: "Kicukiro District", sector: "Kicukiro Sector" },
+    { cropName: "Irish Potato", wholesalePrice: 520, retailPrice: 610, farmGatePrice: 470, marketName: "Musanze Main Market", district: "Musanze District", sector: "Muhoza Sector" },
+    { cropName: "Sweet Potato", wholesalePrice: 460, retailPrice: 530, farmGatePrice: 410, marketName: "Nyamata Market", district: "Bugesera District", sector: "Nyamata Sector" },
+    { cropName: "Cassava", wholesalePrice: 430, retailPrice: 500, farmGatePrice: 390, marketName: "Ngoma Trading Point", district: "Huye District", sector: "Ngoma Sector" },
+    { cropName: "Sorghum", wholesalePrice: 610, retailPrice: 690, farmGatePrice: 560, marketName: "Rwamagana Market", district: "Rwamagana District", sector: "Kigabiro Sector" },
+    { cropName: "Banana", wholesalePrice: 380, retailPrice: 430, farmGatePrice: 340, marketName: "Rubavu Border Market", district: "Rubavu District", sector: "Gisenyi Sector" },
+    { cropName: "Plantain", wholesalePrice: 420, retailPrice: 470, farmGatePrice: 380, marketName: "Gisenyi Produce Market", district: "Rubavu District", sector: "Gisenyi Sector" },
+    { cropName: "Groundnuts", wholesalePrice: 1450, retailPrice: 1580, farmGatePrice: 1360, marketName: "Kanserege Market", district: "Kicukiro District", sector: "Kicukiro Sector" },
+    { cropName: "Peas", wholesalePrice: 890, retailPrice: 960, farmGatePrice: 820, marketName: "Kayonza Market", district: "Kayonza District", sector: "Kayonza Sector" },
+    { cropName: "Coffee", wholesalePrice: 2100, retailPrice: 2380, farmGatePrice: 1950, marketName: "Kinigi Exchange Point", district: "Musanze District", sector: "Kinigi Sector" },
+    { cropName: "Tea", wholesalePrice: 1750, retailPrice: 1940, farmGatePrice: 1620, marketName: "Huye Central Market", district: "Huye District", sector: "Ngoma Sector" },
+  ];
+
+  for (const price of CROP_PRICES) {
+    const existing = await prisma.cropPrice.findFirst({
+      where: { cropName: price.cropName, marketName: price.marketName, status: "Active" },
+    });
+
+    if (!existing) {
+      const cropPrice = await prisma.cropPrice.create({
+        data: {
+          cropName: price.cropName,
+          marketName: price.marketName,
+          district: price.district,
+          sector: price.sector,
+          unit: "kg",
+          currency: "RWF",
+          wholesalePrice: price.wholesalePrice,
+          retailPrice: price.retailPrice,
+          farmGatePrice: price.farmGatePrice,
+          effectiveDate: new Date(),
+          status: "Active",
+          source: "System Seed",
+          notes: "Initial seed data for crop prices.",
+          createdByUserId: marketOfficer.id,
+        },
+      });
+
+      await prisma.cropPriceHistory.create({
+        data: {
+          cropPriceId: cropPrice.id,
+          cropName: price.cropName,
+          marketName: price.marketName,
+          district: price.district,
+          oldWholesale: 0,
+          newWholesale: price.wholesalePrice,
+          oldRetail: 0,
+          newRetail: price.retailPrice,
+          oldFarmGate: 0,
+          newFarmGate: price.farmGatePrice,
+          effectiveDate: new Date(),
+          changedByUserId: marketOfficer.id,
+          reason: "Initial seed data",
+          status: "Published",
+        },
+      });
+    }
+  }
 }
 
 main()

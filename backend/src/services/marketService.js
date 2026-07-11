@@ -1,25 +1,12 @@
-const prisma = require("../prisma/client");
+﻿const prisma = require("../prisma/client");
 const ApiError = require("../utils/ApiError");
 const { ensureFarmAccess } = require("./farmService");
 const { createAuditLog } = require("./auditLogService");
 
-const CROP_MARKET_PROFILE = {
-  Wheat: { current: 860, volatility: 0.08, growth30: 0.05, demand: 74, export: 980, wholesale: 790 },
-  Corn: { current: 680, volatility: 0.06, growth30: 0.04, demand: 78, export: 760, wholesale: 620 },
-  Soybeans: { current: 930, volatility: 0.07, growth30: 0.06, demand: 81, export: 1020, wholesale: 870 },
-  Rice: { current: 1420, volatility: 0.05, growth30: 0.03, demand: 68, export: 1560, wholesale: 1320 },
-  Barley: { current: 720, volatility: 0.05, growth30: 0.02, demand: 60, export: 790, wholesale: 660 },
-  Beans: { current: 980, volatility: 0.09, growth30: 0.07, demand: 84, export: 1080, wholesale: 910 },
-  "Irish Potato": { current: 520, volatility: 0.11, growth30: 0.03, demand: 79, export: 610, wholesale: 470 },
-  "Sweet Potato": { current: 460, volatility: 0.07, growth30: 0.02, demand: 71, export: 530, wholesale: 410 },
-  Cassava: { current: 430, volatility: 0.06, growth30: 0.01, demand: 66, export: 500, wholesale: 390 },
-  Sorghum: { current: 610, volatility: 0.05, growth30: 0.03, demand: 64, export: 690, wholesale: 560 },
-  Banana: { current: 380, volatility: 0.1, growth30: 0.02, demand: 77, export: 430, wholesale: 340 },
-  Plantain: { current: 420, volatility: 0.09, growth30: 0.025, demand: 76, export: 470, wholesale: 380 },
-  Groundnuts: { current: 1450, volatility: 0.08, growth30: 0.05, demand: 83, export: 1580, wholesale: 1360 },
-  Peas: { current: 890, volatility: 0.07, growth30: 0.04, demand: 67, export: 960, wholesale: 820 },
-  Coffee: { current: 2100, volatility: 0.06, growth30: 0.08, demand: 88, export: 2380, wholesale: 1950 },
-  Tea: { current: 1750, volatility: 0.05, growth30: 0.05, demand: 85, export: 1940, wholesale: 1620 },
+const PRICE_TYPE_CONFIG = {
+  Wholesale: { field: "wholesalePrice", historyOldField: "oldWholesale", historyNewField: "newWholesale" },
+  Retail: { field: "retailPrice", historyOldField: "oldRetail", historyNewField: "newRetail" },
+  "Farm Gate": { field: "farmGatePrice", historyOldField: "oldFarmGate", historyNewField: "newFarmGate" },
 };
 
 const RWANDA_MARKET_DIRECTORY = [
@@ -53,37 +40,13 @@ function normalizeCropSelection(value) {
   if (value === "Potato" || value === "Potatoes") return "Irish Potato";
   if (value === "Groundnut" || value === "Peanut" || value === "Peanuts") return "Groundnuts";
   if (value === "Green Banana" || value === "Matoke") return "Banana";
-  return CROP_MARKET_PROFILE[value] ? value : "Wheat";
+  return value || "Wheat";
 }
 
-function inferFarmDistrict(farm) {
-  const searchSpace = [farm?.district, farm?.sector, farm?.province, farm?.farmName]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  const found = RWANDA_MARKET_DIRECTORY.find((market) =>
-    searchSpace.includes(market.district.toLowerCase()) || searchSpace.includes(market.name.toLowerCase())
-  );
-  return found?.district || farm?.district || "Kicukiro District";
-}
-
-function inferFarmProvince(farm) {
-  const district = inferFarmDistrict(farm);
-  const found = RWANDA_MARKET_DIRECTORY.find((market) => market.district === district);
-  return found?.province || farm?.province || "Kigali City";
-}
-
-function haversineKm(lat1, lng1, lat2, lng2) {
-  const earthRadiusKm = 6371;
-  const toRad = (value) => (value * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return earthRadiusKm * c;
+function normalizePriceType(priceType = "Wholesale") {
+  if (priceType === "Retail") return "Retail";
+  if (priceType === "Farm Gate" || priceType === "FarmGate") return "Farm Gate";
+  return "Wholesale";
 }
 
 function getDemandLabel(score) {
@@ -106,37 +69,26 @@ function getRecommendationLabel(score) {
   return "Avoid";
 }
 
-function buildForecastWindows(basePrice, growth30, volatility, demandScore) {
-  const growth7 = growth30 * 0.35 + (demandScore - 70) * 0.001;
-  const growth90 = growth30 * 2.1 - volatility * 0.15;
-  const predicted7 = Math.round(basePrice * (1 + growth7));
-  const predicted30 = Math.round(basePrice * (1 + growth30));
-  const predicted90 = Math.round(basePrice * (1 + growth90));
-  const confidence = clamp(Math.round(62 + demandScore * 0.22 - volatility * 90), 58, 95);
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const earthRadiusKm = 6371;
+  const toRad = (value) => (value * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusKm * c;
+}
 
-  return [
-    {
-      label: "7 Days",
-      currentPrice: basePrice,
-      predictedPrice: predicted7,
-      forecastChange: Number((((predicted7 - basePrice) / basePrice) * 100).toFixed(1)),
-      confidence,
-    },
-    {
-      label: "30 Days",
-      currentPrice: basePrice,
-      predictedPrice: predicted30,
-      forecastChange: Number((((predicted30 - basePrice) / basePrice) * 100).toFixed(1)),
-      confidence: clamp(confidence - 4, 52, 92),
-    },
-    {
-      label: "90 Days",
-      currentPrice: basePrice,
-      predictedPrice: predicted90,
-      forecastChange: Number((((predicted90 - basePrice) / basePrice) * 100).toFixed(1)),
-      confidence: clamp(confidence - 8, 48, 88),
-    },
-  ];
+function inferFarmDistrict(farm) {
+  const searchSpace = [farm?.district, farm?.sector, farm?.province, farm?.farmName].filter(Boolean).join(" ").toLowerCase();
+  const found = RWANDA_MARKET_DIRECTORY.find((market) => searchSpace.includes(market.district.toLowerCase()) || searchSpace.includes(market.name.toLowerCase()));
+  return found?.district || farm?.district || "Kicukiro District";
+}
+
+function inferFarmProvince(farm) {
+  const district = inferFarmDistrict(farm);
+  const found = RWANDA_MARKET_DIRECTORY.find((market) => market.district === district);
+  return found?.province || farm?.province || "Kigali City";
 }
 
 function createMapEmbedUrl(farm, markets) {
@@ -152,138 +104,217 @@ function createMapEmbedUrl(farm, markets) {
   return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${farmLat.toFixed(4)}%2C${farmLng.toFixed(4)}`;
 }
 
-function buildMarketData({ farm, crop, timeframe }) {
+function buildForecastWindows(basePrice, averageChangePct, demandScore) {
+  const growth30 = averageChangePct / 100;
+  const predicted7 = Math.round(basePrice * (1 + growth30 * 0.35 + (demandScore - 70) * 0.001));
+  const predicted30 = Math.round(basePrice * (1 + growth30));
+  const predicted90 = Math.round(basePrice * (1 + growth30 * 1.8));
+  const confidence = clamp(Math.round(62 + demandScore * 0.22 - Math.abs(averageChangePct) * 1.2), 58, 95);
+
+  return [
+    { label: "7 Days", currentPrice: basePrice, predictedPrice: predicted7, forecastChange: Number((((predicted7 - basePrice) / basePrice) * 100).toFixed(1)), confidence },
+    { label: "30 Days", currentPrice: basePrice, predictedPrice: predicted30, forecastChange: Number((((predicted30 - basePrice) / basePrice) * 100).toFixed(1)), confidence: clamp(confidence - 4, 52, 92) },
+    { label: "90 Days", currentPrice: basePrice, predictedPrice: predicted90, forecastChange: Number((((predicted90 - basePrice) / basePrice) * 100).toFixed(1)), confidence: clamp(confidence - 8, 48, 88) },
+  ];
+}
+
+async function getLatestHistoryMap(priceIds) {
+  if (!priceIds.length) return new Map();
+  const histories = await prisma.cropPriceHistory.findMany({
+    where: { cropPriceId: { in: priceIds } },
+    orderBy: [{ createdAt: "desc" }],
+  });
+
+  const map = new Map();
+  for (const history of histories) {
+    if (!map.has(history.cropPriceId)) {
+      map.set(history.cropPriceId, history);
+    }
+  }
+  return map;
+}
+
+function buildOfficialPricePayload(record, history, priceType) {
+  const normalizedPriceType = normalizePriceType(priceType);
+  const config = PRICE_TYPE_CONFIG[normalizedPriceType];
+  const currentPrice = record[config.field] != null ? Number(record[config.field]) : null;
+  const previousPrice = history?.[config.historyOldField] != null ? Number(history[config.historyOldField]) : normalizedPriceType === "Wholesale" && record.previousPrice != null ? Number(record.previousPrice) : null;
+  const percentageChange = previousPrice && currentPrice != null ? Number((((currentPrice - previousPrice) / previousPrice) * 100).toFixed(1)) : previousPrice === 0 && currentPrice != null ? 0 : null;
+
+  return {
+    crop: record.cropName,
+    market: record.marketName,
+    district: record.district,
+    priceType: normalizedPriceType,
+    currentPrice,
+    previousPrice,
+    percentageChange,
+    currency: record.currency,
+    unit: record.unit,
+    effectiveDate: record.effectiveDate,
+    updatedBy: record.updatedBy?.fullName || record.createdBy?.fullName || "Unknown",
+  };
+}
+
+async function getOfficialPriceRecords(cropName) {
+  const raw = await prisma.cropPrice.findMany({
+    where: { cropName, status: "Active" },
+    include: {
+      createdBy: { select: { id: true, fullName: true } },
+      updatedBy: { select: { id: true, fullName: true } },
+    },
+    orderBy: [{ effectiveDate: "desc" }, { updatedAt: "desc" }],
+  });
+
+  const latestByMarket = new Map();
+  for (const record of raw) {
+    const key = `${record.marketName}||${record.district}`;
+    if (!latestByMarket.has(key)) {
+      latestByMarket.set(key, record);
+    }
+  }
+
+  return [...latestByMarket.values()];
+}
+
+async function buildMarketData({ farm, crop, timeframe, priceType = "Wholesale", marketName = "", district = "" }) {
   const normalizedCrop = normalizeCropSelection(crop);
-  const profile = CROP_MARKET_PROFILE[normalizedCrop] || CROP_MARKET_PROFILE.Wheat;
-  const district = inferFarmDistrict(farm);
-  const province = inferFarmProvince(farm);
+  const normalizedPriceType = normalizePriceType(priceType);
+  const officialRecords = await getOfficialPriceRecords(normalizedCrop);
+
+  if (!officialRecords.length) {
+    throw new ApiError(404, `No official market price exists yet for ${normalizedCrop}.`);
+  }
+
+  const historyMap = await getLatestHistoryMap(officialRecords.map((record) => record.id));
+  const farmDistrict = district || inferFarmDistrict(farm);
+  const farmProvince = inferFarmProvince(farm);
   const farmLat = Number(farm?.latitude || -1.9441);
   const farmLng = Number(farm?.longitude || 30.0619);
-  const seed = Math.round(Math.abs(farmLat) * 100 + Math.abs(farmLng) * 100 + Number(farm?.farmSize || 0));
 
-  const candidateMarkets = RWANDA_MARKET_DIRECTORY.filter(
-    (market) => market.district === district || market.province === province
-  );
-
-  const markets = candidateMarkets
-    .map((market, index) => {
-      const distanceKm = haversineKm(farmLat, farmLng, market.lat, market.lng);
-      const priceVariance = ((seed + index * 9) % 45) - 18;
-      const currentPrice = profile.current + priceVariance;
-      const demandScore = clamp(profile.demand + (market.access - 75) * 0.35 - distanceKm * 1.4, 42, 97);
-      const trendChange = Number((profile.growth30 * 100 + ((seed + index * 7) % 6) - 2).toFixed(1));
-      const distanceScore = clamp(100 - distanceKm * 4.2, 18, 100);
-      const accessScore = market.access;
-      const opportunityScore = Math.round(
-        currentPrice * 0.4 * (100 / (profile.current * 1.35)) +
-        demandScore * 0.3 +
-        distanceScore * 0.2 +
-        accessScore * 0.1
-      );
+  const markets = officialRecords
+    .map((record) => {
+      const marketDirectory = RWANDA_MARKET_DIRECTORY.find((market) => market.name === record.marketName) || RWANDA_MARKET_DIRECTORY.find((market) => market.district === record.district) || null;
+      const official = buildOfficialPricePayload(record, historyMap.get(record.id), normalizedPriceType);
+      const distanceKm = marketDirectory ? haversineKm(farmLat, farmLng, marketDirectory.lat, marketDirectory.lng) : 0;
+      const demandScore = clamp(Math.round(68 + (marketDirectory?.access || 72) * 0.18 - distanceKm * 1.1 + (official.currentPrice || 0) / 150), 42, 97);
+      const trendChange = official.percentageChange ?? 0;
+      const opportunityScore = clamp(Math.round(demandScore * 0.45 + (marketDirectory?.access || 72) * 0.25 + Math.max(0, 100 - distanceKm * 3) * 0.15 + Math.min(100, (official.currentPrice || 0) / 20) * 0.15), 35, 98);
 
       return {
-        id: `${market.name}-${normalizedCrop}`,
-        name: market.name,
-        district: market.district,
-        province: market.province,
+        id: `${record.id}-${normalizedPriceType}`,
+        crop: record.cropName,
+        name: record.marketName,
+        district: record.district,
+        province: marketDirectory?.province || farmProvince,
         distanceKm: Number(distanceKm.toFixed(1)),
         distanceLabel: `${distanceKm.toFixed(1)} km`,
-        currentPrice,
-        demandScore: Math.round(demandScore),
+        currentPrice: official.currentPrice,
+        previousPrice: official.previousPrice,
+        priceType: normalizedPriceType,
+        percentageChange: official.percentageChange,
+        currentPriceLabel: official.currentPrice != null ? `RWF ${Math.round(official.currentPrice).toLocaleString()} / ${record.unit}` : "--",
+        wholesalePrice: Number(record.wholesalePrice || 0),
+        retailPrice: Number(record.retailPrice || 0),
+        farmGatePrice: record.farmGatePrice != null ? Number(record.farmGatePrice) : null,
+        demandScore,
         demandLabel: getDemandLabel(demandScore),
         trendChange,
         trendLabel: getTrendLabel(trendChange),
-        accessibilityScore: accessScore,
-        accessibilityLabel: accessScore >= 85 ? "Excellent" : accessScore >= 72 ? "Good" : "Limited",
+        accessibilityScore: marketDirectory?.access || 72,
+        accessibilityLabel: (marketDirectory?.access || 72) >= 85 ? "Excellent" : (marketDirectory?.access || 72) >= 72 ? "Good" : "Limited",
         recommendation: getRecommendationLabel(opportunityScore),
-        opportunityScore: clamp(opportunityScore, 35, 98),
-        routeNote: market.road,
-        coordinates: { lat: market.lat, lng: market.lng },
-        wholesalePrice: profile.wholesale + Math.round(priceVariance * 0.85),
-        exportPrice: profile.export + Math.round(priceVariance * 1.15),
-        updatedAt: new Date().toISOString(),
+        opportunityScore,
+        routeNote: marketDirectory?.road || "Market route information unavailable.",
+        coordinates: { lat: marketDirectory?.lat || farmLat, lng: marketDirectory?.lng || farmLng },
+        updatedAt: record.updatedAt,
+        effectiveDate: record.effectiveDate,
+        updatedBy: official.updatedBy,
       };
     })
-    .sort((a, b) => a.distanceKm - b.distanceKm)
-    .slice(0, 5)
     .sort((a, b) => b.opportunityScore - a.opportunityScore);
 
-  const basePrice = Math.round(
-    markets.reduce((sum, market) => sum + market.currentPrice, 0) / Math.max(markets.length, 1)
-  );
-  const trendLength = timeframe === "6M" ? 6 : timeframe === "90D" ? 8 : 10;
-  const trendBars = Array.from({ length: trendLength }, (_, index) => {
-    const seasonal = Math.sin((index + seed / 8) * 0.7) * 7;
-    const drift = profile.growth30 * 100 * (index / trendLength) * 1.1;
-    return Math.round(30 + seasonal + drift + (profile.demand - 60) * 0.22);
-  });
+  const selectedMarket = markets.find((item) => marketName && item.name === marketName)
+    || markets.find((item) => item.district === farmDistrict)
+    || markets[0];
 
-  const forecasts = buildForecastWindows(basePrice, profile.growth30, profile.volatility, profile.demand);
-  const bestMarket = markets[0] || null;
-  const aiDecision =
-    forecasts[0].forecastChange >= 4
-      ? "Wait 7 Days"
-      : profile.export > basePrice * 1.22 && bestMarket?.province !== "Kigali City"
-        ? "Export Opportunity"
-        : bestMarket?.opportunityScore >= 82
-          ? "Sell Now"
-          : "Wait 14 Days";
-
-  const aiReason =
-    aiDecision === "Wait 7 Days"
-      ? `Demand forecast is increasing and prices are expected to rise by ${forecasts[0].forecastChange}%.`
-      : aiDecision === "Export Opportunity"
-        ? "Export and wholesale spreads are strong enough to justify a premium selling channel."
-        : aiDecision === "Sell Now"
-          ? `${bestMarket?.name || "Top market"} currently offers the strongest score with good access and price.`
-          : "Current signals are stable, but a later window may improve margin if transport is planned well.";
-
-  const logisticsTips = [
-    `Nearest district markets for ${district} are ranked by opportunity and route distance from ${farm.farmName}.`,
-    "Prioritize markets with good accessibility during rainy periods to reduce spoilage and delay.",
-    "Bulk loads above 8 tons should compare wholesale and export channels before dispatch.",
-  ];
-
-  const platforms = [
-    {
-      title: "Local Market Platforms",
-      description: "Use district-level buyer coordination and cooperative trading boards.",
-      actionLabel: "Open Platform",
-      href: `https://www.google.com/search?q=${encodeURIComponent(`${district} crop market platform Rwanda`)}`,
-    },
-    {
-      title: "Wholesale Platforms",
-      description: "Review larger buyer networks and transport-backed aggregation channels.",
-      actionLabel: "Visit Market Website",
-      href: `https://www.google.com/search?q=${encodeURIComponent(`${normalizedCrop} wholesale buyers Rwanda`)}`,
-    },
-    {
-      title: "Export Platforms",
-      description: "Benchmark export buyers and cross-border opportunity channels.",
-      actionLabel: "Open Platform",
-      href: `https://www.google.com/search?q=${encodeURIComponent(`${normalizedCrop} export buyers Rwanda`)}`,
-    },
-  ];
+  const averageChangePct = markets.length
+    ? markets.reduce((sum, item) => sum + Number(item.percentageChange || 0), 0) / markets.length
+    : 0;
+  const forecasts = buildForecastWindows(selectedMarket.currentPrice, averageChangePct, selectedMarket.demandScore);
+  const aiDecision = forecasts[0].forecastChange >= 4
+    ? "Wait 7 Days"
+    : selectedMarket.opportunityScore >= 82
+      ? "Sell Now"
+      : markets[0]?.currentPrice > selectedMarket.currentPrice
+        ? `Route to ${markets[0].name}`
+        : "Hold for Monitoring";
+  const aiReason = aiDecision === "Wait 7 Days"
+    ? `Official ${normalizedPriceType.toLowerCase()} prices are trending upward with a ${forecasts[0].forecastChange}% 7-day outlook.`
+    : aiDecision === "Sell Now"
+      ? `${selectedMarket.name} currently offers a strong official price with good access and demand.`
+      : aiDecision.startsWith("Route to")
+        ? `${markets[0].name} currently leads the ranking using official price and access signals.`
+        : "Official prices are stable. Continue monitoring before selling.";
 
   return {
     crop: normalizedCrop,
-    district,
-    province,
-    trendBars,
+    district: farmDistrict,
+    province: farmProvince,
+    priceType: normalizedPriceType,
+    selectedMarket: selectedMarket.name,
+    officialPrice: {
+      crop: normalizedCrop,
+      market: selectedMarket.name,
+      district: selectedMarket.district,
+      priceType: normalizedPriceType,
+      currentPrice: selectedMarket.currentPrice,
+      previousPrice: selectedMarket.previousPrice,
+      percentageChange: selectedMarket.percentageChange,
+      currency: "RWF",
+      unit: officialRecords[0]?.unit || "kg",
+      effectiveDate: selectedMarket.effectiveDate,
+      updatedBy: selectedMarket.updatedBy,
+    },
+    trendBars: Array.from({ length: timeframe === "6M" ? 6 : timeframe === "90D" ? 8 : 10 }, (_, index) => {
+      const baseline = 35 + index * 3;
+      return clamp(Math.round(baseline + averageChangePct + (index % 3) * 4), 18, 92);
+    }),
     forecasts,
     markets,
-    bestMarket,
+    bestMarket: markets[0] || selectedMarket,
     aiDecision,
     aiReason,
-    aiConfidence: clamp(Math.round((bestMarket?.opportunityScore || 68) * 0.88), 58, 95),
-    logisticsTips,
-    platforms,
-    currentPrice: basePrice,
-    demandForecast: clamp(
-      Math.round(markets.reduce((sum, market) => sum + market.demandScore, 0) / Math.max(markets.length, 1)),
-      40,
-      96
-    ),
+    aiConfidence: clamp(Math.round((markets[0]?.opportunityScore || 68) * 0.88), 58, 95),
+    logisticsTips: [
+      `Official ${normalizedPriceType.toLowerCase()} prices are ranked for markets near ${farm.farmName}.`,
+      "Transport planning should prefer markets with strong access and confirmed official pricing.",
+      "Forecasts are estimated from official price history and should not be confused with the current official price.",
+    ],
+    platforms: [
+      {
+        title: "Local Market Platforms",
+        description: "Use district-level buyer coordination and cooperative trading boards.",
+        actionLabel: "Open Platform",
+        href: `https://www.google.com/search?q=${encodeURIComponent(`${farmDistrict} crop market platform Rwanda`)}`,
+      },
+      {
+        title: "Wholesale Platforms",
+        description: "Review larger buyer networks and transport-backed aggregation channels.",
+        actionLabel: "Visit Market Website",
+        href: `https://www.google.com/search?q=${encodeURIComponent(`${normalizedCrop} wholesale buyers Rwanda`)}`,
+      },
+      {
+        title: "Export Platforms",
+        description: "Benchmark export buyers and cross-border opportunity channels.",
+        actionLabel: "Open Platform",
+        href: `https://www.google.com/search?q=${encodeURIComponent(`${normalizedCrop} export buyers Rwanda`)}`,
+      },
+    ],
+    currentPrice: selectedMarket.currentPrice,
+    previousPrice: selectedMarket.previousPrice,
+    percentageChange: selectedMarket.percentageChange,
+    demandForecast: selectedMarket.demandScore,
     mapUrl: createMapEmbedUrl(farm, markets),
   };
 }
@@ -298,10 +329,13 @@ function mapMarketAnalysisRecord(record) {
     district: record.district,
     province: record.province,
     currentPrice: Number(record.currentPrice || 0),
+    previousPrice: record.previousPrice != null ? Number(record.previousPrice) : null,
+    percentageChange: record.percentageChange != null ? Number(record.percentageChange) : null,
+    priceType: record.priceType || "Wholesale",
+    selectedMarket: record.selectedMarket || "",
+    officialPrice: record.officialPrice || null,
     demandForecast: Number(record.demandForecast || 0),
-    bestMarket: record.bestMarketName
-      ? (Array.isArray(record.markets) ? record.markets.find((item) => item.name === record.bestMarketName) : null)
-      : null,
+    bestMarket: record.bestMarketName ? (Array.isArray(record.markets) ? record.markets.find((item) => item.name === record.bestMarketName) : null) : null,
     aiDecision: record.aiDecision,
     aiReason: record.aiReason,
     aiConfidence: Number(record.aiConfidence || 0),
@@ -333,10 +367,13 @@ function mapMarketAlertRecord(record) {
 
 async function analyzeMarket(user, farmId, payload) {
   const farm = await ensureFarmAccess(user, farmId);
-  const analysis = buildMarketData({
+  const analysis = await buildMarketData({
     farm,
     crop: payload.crop,
     timeframe: payload.timeframe || "30D",
+    priceType: payload.priceType || "Wholesale",
+    marketName: payload.marketName || "",
+    district: payload.district || "",
   });
 
   const created = await prisma.marketAnalysis.create({
@@ -370,23 +407,31 @@ async function analyzeMarket(user, farmId, payload) {
       farmName: farm.farmName,
       crop: analysis.crop,
       timeframe: payload.timeframe || "30D",
+      priceType: analysis.priceType,
+      selectedMarket: analysis.selectedMarket,
     },
   });
 
   return mapMarketAnalysisRecord(created);
 }
 
-async function getLatestMarketAnalysis(user, farmId, { crop, timeframe } = {}) {
-  await ensureFarmAccess(user, farmId);
+async function getLatestMarketAnalysis(user, farmId, params = {}) {
+  const farm = await ensureFarmAccess(user, farmId);
+
+  if (params.crop) {
+    return buildMarketData({
+      farm,
+      crop: params.crop,
+      timeframe: params.timeframe || "30D",
+      priceType: params.priceType || "Wholesale",
+      marketName: params.marketName || "",
+      district: params.district || "",
+    });
+  }
+
   const record = await prisma.marketAnalysis.findFirst({
-    where: {
-      farmId,
-      ...(crop ? { cropName: normalizeCropSelection(crop) } : {}),
-      ...(timeframe ? { timeframe } : {}),
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
+    where: { farmId },
+    orderBy: { createdAt: "desc" },
   });
 
   return mapMarketAnalysisRecord(record);
@@ -394,10 +439,7 @@ async function getLatestMarketAnalysis(user, farmId, { crop, timeframe } = {}) {
 
 async function listMarketAlerts(user, farmId) {
   await ensureFarmAccess(user, farmId);
-  const alerts = await prisma.marketAlert.findMany({
-    where: { farmId },
-    orderBy: [{ createdAt: "desc" }],
-  });
+  const alerts = await prisma.marketAlert.findMany({ where: { farmId }, orderBy: [{ createdAt: "desc" }] });
   return alerts.map(mapMarketAlertRecord);
 }
 
@@ -419,11 +461,7 @@ async function createMarketAlert(user, farmId, payload) {
     action: "MARKET_ALERT_CREATED",
     entityType: "MarketAlert",
     entityId: alert.id,
-    details: {
-      farmName: farm.farmName,
-      crop: alert.cropName,
-      targetPrice: alert.targetPrice,
-    },
+    details: { farmName: farm.farmName, crop: alert.cropName, targetPrice: alert.targetPrice },
   });
 
   return mapMarketAlertRecord(alert);
@@ -432,17 +470,7 @@ async function createMarketAlert(user, farmId, payload) {
 async function deleteMarketAlert(user, alertId) {
   const alert = await prisma.marketAlert.findUnique({
     where: { id: alertId },
-    include: {
-      farm: {
-        include: {
-          farmerProfile: {
-            include: {
-              user: true,
-            },
-          },
-        },
-      },
-    },
+    include: { farm: { include: { farmerProfile: { include: { user: true } } } } },
   });
 
   if (!alert) {
@@ -451,24 +479,18 @@ async function deleteMarketAlert(user, alertId) {
 
   const isPrivileged = user.role === "Admin" || user.role === "ExtensionOfficer";
   const isOwner = alert.farm?.farmerProfile?.userId === user.id;
-
   if (!isPrivileged && !isOwner) {
     throw new ApiError(403, "You do not have permission to delete this market alert.");
   }
 
-  await prisma.marketAlert.delete({
-    where: { id: alertId },
-  });
+  await prisma.marketAlert.delete({ where: { id: alertId } });
 
   await createAuditLog({
     actorUserId: user.id,
     action: "MARKET_ALERT_DELETED",
     entityType: "MarketAlert",
     entityId: alertId,
-    details: {
-      crop: alert.cropName,
-      targetPrice: alert.targetPrice,
-    },
+    details: { crop: alert.cropName, targetPrice: alert.targetPrice },
   });
 
   return { deleted: true, id: alertId };

@@ -779,259 +779,613 @@
 }
 .pests-side-card { padding: 20px; }
 
-/* ===== IRRIGATION PAGE ===== */
-.irrigation-page-layout {
-  display: flex;
-  flex-direction: column;
-  gap: 32px;
+/* ===== IRRIGATION PAGE — Simplified / Professional ===== */
+
+.irr-empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-muted);
+  font-size: 15px;
 }
-.irrigation-toolbar {
+
+/* ---- Toast ---- */
+.irr-toast {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 2000;
   display: flex;
   align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  animation: irrToastIn 0.3s ease;
+  color: #fff;
+}
+.irr-toast-success {
+  background: var(--dark-green);
+}
+.irr-toast-error {
+  background: var(--danger);
+}
+@keyframes irrToastIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---- Loading / Empty / Spinner ---- */
+.irr-loading {
+  padding: 32px 16px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.irr-empty-data {
+  padding: 32px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+.irr-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* ---- Top Bar: Active Farm + Info ---- */
+.irr-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
   padding: 16px 20px;
   background: var(--card);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
 }
-.irrigation-toolbar-field {
+.irr-top-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.irr-top-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.irr-farm-selector {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.irrigation-toolbar-field span { font-size: 13px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
-.irrigation-toolbar-field select,
-.irrigation-toolbar-field input {
-  padding: 8px 12px;
+.irr-farm-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.irr-farm-selector select {
+  padding: 8px 32px 8px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   font-family: var(--font);
   font-size: 14px;
   font-weight: 500;
-  color: #111827;
-  opacity: 1;
+  color: var(--text-main);
   background: var(--card);
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  min-width: 220px;
+  cursor: pointer;
+}
+.irr-farm-selector select:focus {
+  outline: none;
+  border-color: var(--primary-green);
+  box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.1);
+}
+.irr-farm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 20px;
+  background: var(--light-green);
+  color: var(--primary-green);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.irr-farm-chip svg {
+  flex-shrink: 0;
 }
 
-.irrigation-main-grid {
-  display: grid;
-  grid-template-columns: 1fr 320px;
-  gap: 24px;
-  align-items: start;
+/* ---- Section Title / Head ---- */
+.irr-section-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-@media (max-width: 900px) {
-  .irrigation-main-grid { grid-template-columns: 1fr; }
-}
-.irrigation-content { display: flex; flex-direction: column; gap: 24px; }
-
-/* Calendar */
-.irrigation-calendar-card { overflow: hidden; }
-.irrigation-calendar-head {
+.irr-section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+/* ---- Main Row Grid (Status | Moisture | Weather) ---- */
+.irr-main-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 20px;
+}
+@media (max-width: 1100px) {
+  .irr-main-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 700px) {
+  .irr-main-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- Second Row (Water | Schedule) ---- */
+.irr-second-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+@media (max-width: 700px) {
+  .irr-second-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- Action Row ---- */
+.irr-action-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+/* ===== Card Styles ===== */
+
+.irr-status-card,
+.irr-moisture-card,
+.irr-weather-card,
+.irr-water-card,
+.irr-schedule-card,
+.irr-history-card {
   padding: 20px 24px;
-  border-bottom: 1px solid var(--border);
 }
-.irrigation-calendar-head h2 {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text-main);
+
+/* ---- Current Irrigation Status ---- */
+.irr-status-header {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
 }
-.irrigation-calendar-nav {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.irrigation-calendar-nav button {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--card);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-  transition: all 0.15s;
-}
-.irrigation-calendar-nav button:hover { border-color: var(--primary-green); color: var(--primary-green); }
-.irrigation-calendar-nav strong { font-size: 15px; color: var(--text-main); min-width: 120px; text-align: center; }
-.irrigation-calendar-body { padding: 20px 24px; }
-.irrigation-weekdays {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
-  margin-bottom: 8px;
-}
-.irrigation-weekdays span {
-  text-align: center;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-  padding: 4px;
-}
-.irrigation-days-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
-}
-.irrigation-day-btn {
-  aspect-ratio: 1;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: var(--card);
-  font-family: var(--font);
+.irr-status-badge-large {
+  padding: 6px 16px;
+  border-radius: 20px;
   font-size: 13px;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  color: var(--text-main);
-  transition: all 0.1s;
-  position: relative;
-}
-.irrigation-day-btn:hover { border-color: var(--primary-green); background: var(--light-green); }
-.irrigation-day-btn.muted { color: #ccc; }
-.irrigation-day-btn.active { border-color: var(--primary-green); background: var(--light-green); }
-.irrigation-day-btn.scheduled { background: var(--light-green); }
-.irrigation-day-btn .dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  position: absolute;
-  bottom: 4px;
-}
-.irrigation-day-btn .dot.pending { background: var(--warning); }
-.irrigation-day-btn .dot.completed { background: var(--primary-green); }
-.irrigation-day-btn .dot.missed { background: var(--danger); }
-.irrigation-calendar-legend {
-  display: flex;
-  gap: 16px;
-  padding: 12px 24px;
-  border-top: 1px solid var(--border);
-  font-size: 12px;
-  color: var(--text-muted);
-}
-.irrigation-calendar-legend span { display: flex; align-items: center; gap: 6px; }
-.irrigation-calendar-legend .legend-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-/* Water card */
-.irrigation-water-card {
-  background: linear-gradient(135deg, var(--dark-green), #1a5c2a);
-  color: #fff;
-  border-radius: var(--radius-lg);
-  padding: 24px;
-}
-.irrigation-water-card span { font-size: 13px; opacity: 0.85; display: block; }
-.irrigation-water-card strong {
-  font-size: 28px;
   font-weight: 700;
-  display: block;
-  margin: 8px 0;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
-.irrigation-water-card strong small { font-size: 14px; font-weight: 400; opacity: 0.8; }
-.irrigation-water-card p { font-size: 13px; opacity: 0.8; line-height: 1.5; }
-
-/* Fertilizer */
-.irrigation-fertilizer-card { padding: 24px; }
-.irrigation-form-stack {
+.irr-status-details {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
-.irrigation-form-stack label {
+.irr-status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 480px) {
+  .irr-status-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.irr-status-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
-.irrigation-form-stack label span { font-size: 12px; font-weight: 600; color: var(--text-muted); }
-.irrigation-form-stack input,
-.irrigation-form-stack select {
+.irr-field-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.irr-status-field strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+.irr-status-explanation {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 0;
+  padding: 12px 16px;
+  background: var(--background);
+  border-radius: 10px;
+}
+.irr-status-notice {
+  font-size: 12px;
+  color: #E65100;
+  margin: 0;
+  padding: 10px 14px;
+  background: #FFF8E1;
+  border-radius: 8px;
+  line-height: 1.5;
+}
+.irr-status-updated {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ---- Soil Moisture ---- */
+.irr-moisture-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.irr-moisture-value-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.irr-moisture-circle {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 3px solid var(--primary-green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.irr-moisture-circle strong {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.irr-moisture-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.irr-moisture-meta span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.irr-moisture-bar-track {
+  height: 8px;
+  background: var(--background);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.irr-moisture-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+  min-width: 4px;
+}
+.irr-moisture-source-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.irr-moisture-source-row strong {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+/* ---- Weather ---- */
+.irr-weather-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.irr-weather-temp-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.irr-weather-temp-row strong {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.irr-weather-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.irr-weather-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.irr-weather-metric {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.irr-weather-metric strong {
+  font-weight: 600;
+  color: var(--text-main);
+}
+.irr-weather-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary-green);
+  text-decoration: none;
+  margin-top: 4px;
+  transition: opacity 0.15s;
+}
+.irr-weather-link:hover {
+  opacity: 0.7;
+}
+
+/* ---- Recommended Water Amount ---- */
+.irr-water-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+.irr-water-hero {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.irr-water-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--dark-green);
+  line-height: 1.1;
+}
+.irr-water-unit {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.irr-water-equiv {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+.irr-water-equiv strong {
+  color: var(--text-main);
+  font-weight: 600;
+}
+.irr-water-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
+  padding: 10px 14px;
+  background: var(--background);
+  border-radius: 8px;
+}
+
+/* ---- Next Irrigation Schedule ---- */
+.irr-schedule-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+.irr-schedule-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--background);
+  font-size: 13px;
+}
+.irr-schedule-row.highlight {
+  background: var(--light-green);
+  border: 1px solid var(--primary-green);
+}
+.irr-schedule-label {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.irr-schedule-row strong {
+  font-weight: 600;
+  color: var(--text-main);
+}
+.irr-schedule-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* ---- History ---- */
+.irr-history-table {
+  display: flex;
+  flex-direction: column;
+  margin-top: 12px;
+}
+.irr-history-head {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--background);
+  border-radius: 8px 8px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.irr-history-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+  gap: 8px;
   padding: 12px 14px;
-  border: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  align-items: center;
+  transition: background 0.1s;
+}
+.irr-history-row:last-child {
+  border-bottom: none;
+}
+.irr-history-row:hover {
+  background: var(--light-green);
+}
+.irr-history-row strong {
+  font-weight: 600;
+}
+
+/* ---- Modals ---- */
+.irr-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.2s ease;
+}
+.irr-modal {
+  background: var(--card);
+  border-radius: var(--radius-xl);
+  width: min(100%, 500px);
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  animation: slideUp 0.25s ease;
+}
+.irr-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.irr-modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 0;
+}
+.irr-modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.irr-modal-close:hover {
+  background: var(--background);
+  color: var(--text-main);
+}
+.irr-modal-body {
+  padding: 20px 24px;
+}
+
+/* ---- Form Fields ---- */
+.irr-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.irr-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.irr-form-field span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.irr-form-field input,
+.irr-form-field select,
+.irr-form-field textarea {
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
   border-radius: 10px;
   font-family: var(--font);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 500;
   color: #111827;
   opacity: 1;
   background: var(--card);
+  transition: border-color 0.15s;
+  outline: none;
 }
-.irrigation-nutrient-list { margin-top: 16px; }
-.irrigation-nutrient-row { margin-bottom: 14px; }
-.irrigation-nutrient-head {
+.irr-form-field input:focus,
+.irr-form-field select:focus,
+.irr-form-field textarea:focus {
+  border-color: var(--primary-green);
+  box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.1);
+}
+.irr-form-field textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+.irr-form-field select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 30px;
+  cursor: pointer;
+}
+.irr-form-actions {
   display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-  margin-bottom: 4px;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 8px;
 }
-.irrigation-nutrient-track {
-  height: 6px;
-  background: var(--border);
-  border-radius: 3px;
-  overflow: hidden;
-}
-.irrigation-nutrient-fill {
-  height: 100%;
-  background: var(--primary-green);
-  border-radius: 3px;
-}
-.irrigation-nutrient-row small { font-size: 11px; color: var(--text-muted); display: block; margin-top: 4px; }
-
-/* Moisture */
-.irrigation-moisture-card { padding: 24px; }
-.irrigation-moisture-controls { margin-bottom: 16px; }
-.irrigation-moisture-controls label { display: flex; flex-direction: column; gap: 8px; }
-.irrigation-moisture-controls label span { font-size: 13px; font-weight: 600; color: var(--text-muted); }
-.irrigation-moisture-controls input[type="range"] { width: 100%; accent-color: var(--primary-green); }
-
-/* Side column */
-.irrigation-side {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-.irrigation-cost-card { padding: 20px; }
-.irrigation-cost-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 14px;
-}
-.irrigation-cost-row span { color: var(--text-muted); }
-.irrigation-cost-row strong { color: var(--text-main); }
-.irrigation-total-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 14px 0;
-  font-size: 16px;
-  font-weight: 700;
-}
-.irrigation-total-row span { color: var(--text-main); }
-.irrigation-total-row strong { color: var(--dark-green); }
-.irrigation-upcoming-card { padding: 20px; }
-.irrigation-upcoming-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border);
-}
-.irrigation-upcoming-row:last-child { border-bottom: none; }
 
 /* ===== ANALYTICS PAGE ===== */
 .analytics-page-layout {
@@ -5124,4 +5478,368 @@
   .st-sync-grid { grid-template-columns: 1fr; }
   .st-header { flex-direction: column; }
   .st-sync-info-grid { grid-template-columns: 1fr; }
+}
+
+.market-intelligence-page {
+  gap: 24px;
+}
+
+.mk-hero-card {
+  overflow: hidden;
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbf6 100%);
+}
+
+.mk-hero-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.8fr);
+  gap: 24px;
+  padding: 28px 28px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mk-hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mk-hero-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary-green);
+}
+
+.mk-hero-copy h2 {
+  margin: 0;
+  font-size: 31px;
+  line-height: 1.2;
+  color: var(--dark-green);
+}
+
+.mk-hero-copy p {
+  margin: 0;
+  max-width: 780px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+.mk-hero-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.mk-hero-stat {
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(46, 125, 50, 0.12);
+  background: linear-gradient(180deg, rgba(232, 245, 233, 0.85), rgba(255, 255, 255, 0.98));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mk-hero-stat span {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mk-hero-stat strong {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--dark-green);
+}
+
+.mk-filter-bar-hero {
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 18px 28px 24px;
+}
+
+.mk-notice.loading {
+  background: #eef8ef;
+  border-color: #cfe7d1;
+  color: var(--dark-green);
+}
+
+.mk-notice-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.mk-kpi-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.mk-kpi-card {
+  min-height: 112px;
+}
+
+.mk-card-head-split {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.mk-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.mk-card-title-row h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--dark-green);
+}
+
+.mk-price-overview {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.95fr) minmax(0, 1.25fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.mk-price-spotlight {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  padding: 22px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, #0f4c24, #2e7d32);
+  color: #fff;
+}
+
+.mk-price-spotlight-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.78;
+}
+
+.mk-price-spotlight-value {
+  font-size: 38px;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.mk-price-spotlight-unit {
+  font-size: 14px;
+  opacity: 0.88;
+}
+
+.mk-price-change-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.mk-price-update-meta {
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.mk-price-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.mk-price-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: #fbfdfb;
+}
+
+.mk-price-detail-item span {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mk-price-detail-item strong {
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--text-main);
+}
+
+.mk-ranking-summary {
+  margin-bottom: 10px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: var(--background);
+  border: 1px solid var(--border);
+}
+
+.mk-ranking-summary p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.mk-ranking-head-compact,
+.mk-ranking-row-compact {
+  grid-template-columns: 42px minmax(0, 2.4fr) minmax(120px, 1fr) minmax(105px, 0.8fr) minmax(80px, 0.7fr) 68px;
+  gap: 10px;
+}
+
+.mk-ranking-row.selected {
+  background: #f3fbf3;
+  box-shadow: inset 0 0 0 1px rgba(46, 125, 50, 0.2);
+}
+
+.mk-r-market-info-wrap {
+  min-width: 0;
+}
+
+.mk-r-market-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.mk-r-market-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.mk-selected-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(46, 125, 50, 0.12);
+  color: var(--primary-green);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.mk-r-col-demand.neutral {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.mk-r-col-trend.flat {
+  color: var(--text-muted);
+}
+
+.mk-summary-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mk-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.mk-summary-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.mk-summary-row span {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.mk-summary-row strong {
+  font-size: 14px;
+  color: var(--dark-green);
+  text-align: right;
+}
+
+.mk-alert-create-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.mk-alert-input {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: var(--font);
+  font-size: 14px;
+  color: var(--text-main);
+  background: var(--card);
+  outline: none;
+}
+
+.mk-alert-input:focus {
+  border-color: var(--primary-green);
+}
+
+@media (max-width: 1200px) {
+  .mk-hero-top {
+    grid-template-columns: 1fr;
+  }
+
+  .mk-hero-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .mk-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mk-price-overview {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .mk-hero-top,
+  .mk-filter-bar-hero {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .mk-hero-copy h2 {
+    font-size: 24px;
+  }
+
+  .mk-hero-stats,
+  .mk-price-detail-grid,
+  .mk-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mk-alert-create-row {
+    grid-template-columns: 1fr;
+  }
+
+  .mk-ranking-head-compact,
+  .mk-ranking-row-compact {
+    grid-template-columns: 32px 1fr;
+  }
 }

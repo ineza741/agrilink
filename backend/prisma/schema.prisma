@@ -15,9 +15,18 @@ model User {
   passwordHash                  String
   role                          String                        @default("Farmer")
   isActive                      Boolean                       @default(true)
+  accountStatus                 String                        @default("APPROVED")
+  approvedAt                    DateTime?
+  approvedBy                    String?
+  rejectionReason               String?
   createdAt                     DateTime                      @default(now())
   updatedAt                     DateTime                      @updatedAt
   farmerProfile                 FarmerProfile?
+  marketOfficerProfile          MarketOfficerProfile?
+  cropPricesCreated             CropPrice[]                   @relation("CropPriceCreator")
+  cropPricesUpdated             CropPrice[]                   @relation("CropPriceUpdater")
+  cropPriceHistories            CropPriceHistory[]
+  systemNotifications           SystemNotification[]
   auditLogs                     AuditLog[]
   notificationPreferences       NotificationPreference?
   notificationAlerts            NotificationAlert[]
@@ -92,6 +101,8 @@ model Farm {
   weatherSnapshots          WeatherSnapshot[]
   weatherArchiveCaches      WeatherArchiveCache[]
   communityFieldReports     CommunityFieldReport[]
+  irrigationRecords         IrrigationRecord[]
+  soilMoistures             SoilMoisture[]
 
   @@map("farms")
 }
@@ -201,6 +212,7 @@ model SoilLabReport {
   soilTestId  String   @unique
   fileName    String
   fileType    String?
+  filePath    String?
   storageMode String   @default("demo-local")
   uploadedAt  DateTime @default(now())
   soilTest    SoilTest @relation(fields: [soilTestId], references: [id], onDelete: Cascade)
@@ -321,6 +333,38 @@ model FarmReminder {
 
   @@index([farmId, dateKey])
   @@map("farm_reminders")
+}
+
+model IrrigationRecord {
+  id                String   @id @default(uuid())
+  farmId            String
+  irrigationDate    DateTime
+  waterAmount       Float
+  irrigationMethod  String
+  durationMinutes   Int?
+  completionStatus  String   @default("Completed")
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  farm              Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([farmId, irrigationDate])
+  @@map("irrigation_records")
+}
+
+model SoilMoisture {
+  id              String   @id @default(uuid())
+  farmId          String
+  moisture        Float
+  measuredAt      DateTime
+  source          String   @default("Manual Entry")
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  farm            Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([farmId, measuredAt])
+  @@map("soil_moistures")
 }
 
 model WeatherSnapshot {
@@ -814,4 +858,94 @@ model ContentSandboxRun {
   @@index([createdAt])
   @@index([savedAsRule, createdAt])
   @@map("content_sandbox_runs")
+}
+
+model MarketOfficerProfile {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  fullName           String
+  phone              String
+  marketName         String
+  district           String
+  sector             String
+  organization       String?
+  employeeNumber     String?
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("market_officer_profiles")
+}
+
+model CropPrice {
+  id               String   @id @default(uuid())
+  cropName         String
+  cropVariety      String?
+  marketName       String
+  district         String
+  sector           String?
+  unit             String   @default("kg")
+  currency         String   @default("RWF")
+  wholesalePrice   Float
+  retailPrice      Float
+  farmGatePrice    Float?
+  previousPrice    Float?
+  effectiveDate    DateTime
+  status           String   @default("Active")
+  source           String   @default("Market Officer")
+  notes            String?
+  createdByUserId  String
+  updatedByUserId  String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  createdBy        User     @relation("CropPriceCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  updatedBy        User?    @relation("CropPriceUpdater", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  histories        CropPriceHistory[]
+
+  @@index([cropName, marketName, status])
+  @@index([district, cropName])
+  @@index([effectiveDate])
+  @@map("crop_prices")
+}
+
+model CropPriceHistory {
+  id              String   @id @default(uuid())
+  cropPriceId     String
+  cropName        String
+  marketName      String
+  district        String
+  oldWholesale    Float
+  newWholesale    Float
+  oldRetail       Float
+  newRetail       Float
+  oldFarmGate     Float?
+  newFarmGate     Float?
+  effectiveDate   DateTime
+  changedByUserId String
+  reason          String
+  status          String   @default("Published")
+  createdAt       DateTime @default(now())
+  changedBy       User     @relation(fields: [changedByUserId], references: [id], onDelete: Cascade)
+  cropPrice       CropPrice @relation(fields: [cropPriceId], references: [id], onDelete: Cascade)
+
+  @@index([cropPriceId, createdAt])
+  @@index([cropName, createdAt])
+  @@map("crop_price_histories")
+}
+
+model SystemNotification {
+  id          String   @id @default(uuid())
+  userId      String
+  title       String
+  body        String
+  category    String
+  severity    String   @default("info")
+  read        Boolean  @default(false)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("system_notifications")
 }

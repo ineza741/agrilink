@@ -9,6 +9,9 @@ const farmIdParamsSchema = z.object({
 const marketAnalyzeBodySchema = z.object({
   crop: z.string().min(2),
   timeframe: z.enum(timeframes).optional(),
+  priceType: z.enum(["Wholesale", "Retail", "Farm Gate"]).optional(),
+  marketName: z.string().min(2).optional(),
+  district: z.string().min(2).optional(),
 });
 
 const marketAnalyzeSchema = z.object({
@@ -23,6 +26,9 @@ const marketLatestSchema = z.object({
   query: z.object({
     crop: z.string().min(2).optional(),
     timeframe: z.enum(timeframes).optional(),
+    priceType: z.enum(["Wholesale", "Retail", "Farm Gate"]).optional(),
+    marketName: z.string().min(2).optional(),
+    district: z.string().min(2).optional(),
   }).optional(),
 });
 

@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useFarmerData } from "../../context/FarmerDataContext";
 import { apiClient } from "../../services/api";
+import { phase1BackendService } from "../../services/phase1Backend";
 import { downloadJsonFile } from "../../utils/actions";
 
 const MARKET_STORAGE_KEY = "agri-feed-market-module-v1";
@@ -138,15 +139,35 @@ function buildSoilSignals(farm) {
   };
 }
 
-function buildMarketSignals(farm) {
+function buildMarketSignals(farm, officialPrices = []) {
   const crop = (farm.primaryCrop || "").toLowerCase();
-  const base = crop.includes("bean")
-    ? { price: 980, demand: 82, trend: "Strong upward", opportunity: "Beans demand is rising in nearby markets." }
-    : crop.includes("corn") || crop.includes("maize")
-      ? { price: 680, demand: 78, trend: "Stable", opportunity: "Maize remains liquid with moderate buyer competition." }
-      : crop.includes("almond")
-        ? { price: 2200, demand: 74, trend: "Premium", opportunity: "Premium crop, but timing is important for margin." }
-        : { price: 860, demand: 70, trend: "Steady", opportunity: "Steady demand with no major downside signal." };
+
+  const backendFallbacks = {};
+  if (Array.isArray(officialPrices)) {
+    for (const entry of officialPrices) {
+      if (entry.cropName) {
+        backendFallbacks[entry.cropName.toLowerCase()] = {
+          price: entry.pricePerKg || entry.wholesalePrice || entry.retailPrice || 0,
+          demand: entry.marketDemand || 70,
+          trend: entry.marketTrend || "Steady",
+          opportunity: entry.marketNotes || `${entry.cropName} is available in the local market.`,
+        };
+      }
+    }
+  }
+
+  const match = backendFallbacks[crop]
+    || (crop.includes("bean") ? backendFallbacks["bean"] : null)
+    || (crop.includes("maize") || crop.includes("corn") ? backendFallbacks["maize"] : null);
+
+  const base = match
+    || (crop.includes("bean")
+      ? { price: 980, demand: 82, trend: "Strong upward", opportunity: "Beans demand is rising in nearby markets." }
+      : crop.includes("corn") || crop.includes("maize")
+        ? { price: 680, demand: 78, trend: "Stable", opportunity: "Maize remains liquid with moderate buyer competition." }
+        : crop.includes("almond")
+          ? { price: 2200, demand: 74, trend: "Premium", opportunity: "Premium crop, but timing is important for margin." }
+          : { price: 860, demand: 70, trend: "Steady", opportunity: "Steady demand with no major downside signal." });
 
   return {
     topCropPrice: formatRwf(base.price),
@@ -411,7 +432,15 @@ function buildRecentActivity({ pestState, feedbackState, marketState, notificati
 export function FarmerDashboardPage() {
   const navigate = useNavigate();
   const { currentFarms, currentProfile, getProfileCompleteness } = useFarmerData();
-  const farms = currentFarms.length ? currentFarms : [];
+  const farmsDataKey = JSON.stringify((currentFarms || []).map((farm) => ({
+    id: farm.id,
+    name: farm.name,
+    primaryCrop: farm.primaryCrop,
+    region: farm.region,
+    lat: farm?.location?.lat ?? null,
+    lng: farm?.location?.lng ?? null,
+  })));
+  const farms = useMemo(() => (currentFarms.length ? currentFarms : []), [farmsDataKey]);
   const [selectedFarmId, setSelectedFarmId] = useState(currentFarms[0]?.id || "");
   const [dashboardState, setDashboardState] = useState({
     loading: true,
@@ -436,12 +465,24 @@ export function FarmerDashboardPage() {
     () => farms.find((farm) => farm.id === selectedFarmId) || farms?.[0] || null,
     [farms, selectedFarmId]
   );
+  const selectedFarmEffectKey = selectedFarm
+    ? JSON.stringify({
+        id: selectedFarm.id,
+        name: selectedFarm.name,
+        primaryCrop: selectedFarm.primaryCrop,
+        region: selectedFarm.region,
+        lat: selectedFarm?.location?.lat ?? null,
+        lng: selectedFarm?.location?.lng ?? null,
+      })
+    : "";
+
+  const SAFETY_TIMEOUT_MS = 5000;
 
   useEffect(() => {
     let cancelled = false;
     const safetyTimeout = setTimeout(() => {
       if (!cancelled) setDashboardState(prev => prev.loading ? { ...prev, loading: false, error: "Data load timed out. Showing demo data." } : prev);
-    }, 15000);
+    }, SAFETY_TIMEOUT_MS);
 
     async function loadDashboard() {
       if (!selectedFarm) {
@@ -459,13 +500,38 @@ export function FarmerDashboardPage() {
       setDashboardState((current) => ({ ...current, loading: true, error: "" }));
 
       try {
-        const weather = await apiClient.weather.forecast(selectedFarm?.location?.lat, selectedFarm?.location?.lng);
+        let weather;
+        try {
+          if (selectedFarm?.location?.lat && selectedFarm?.location?.lng) {
+            weather = await apiClient.weather.forecast(selectedFarm?.location?.lat, selectedFarm?.location?.lng);
+          } else {
+            weather = null;
+          }
+        } catch {
+          if (import.meta.env.DEV) {
+            console.log("[FarmerDashboard] Weather fetch failed, using demo data");
+          }
+          weather = null;
+        }
+
+        if (cancelled) return;
+
+        let officialPrices = [];
+        try {
+          const priceResult = await phase1BackendService.cropPrices.official();
+          if (Array.isArray(priceResult)) officialPrices = priceResult;
+          else if (priceResult?.prices && Array.isArray(priceResult.prices)) officialPrices = priceResult.prices;
+        } catch {
+          if (import.meta.env.DEV) console.log("[FarmerDashboard] Official prices fetch failed, using fallbacks");
+        }
+
+        if (cancelled) return;
         const soilSignals = buildSoilSignals(selectedFarm);
         const pestState = loadStoredState(PEST_STORAGE_KEY);
         const feedbackState = loadStoredState(FEEDBACK_STORAGE_KEY);
         const marketState = loadStoredState(MARKET_STORAGE_KEY);
         const notificationState = loadStoredState(NOTIFICATION_STORAGE_KEY);
-        const marketSignals = buildMarketSignals(selectedFarm);
+        const marketSignals = buildMarketSignals(selectedFarm, officialPrices);
         const weatherAlerts = buildWeatherAlerts(weather);
         const pestSignals = buildPestSignals(selectedFarm, pestState);
 
@@ -498,7 +564,7 @@ export function FarmerDashboardPage() {
         const allAlerts = [...weatherAlerts, ...soilAlerts, ...pestAlerts];
 
         const recommendationTopRecord = Object.values(feedbackState?.[selectedFarm?.id]?.decisions || {}).at(-1);
-        const totalRain = (Array.isArray(weather.daily?.rain_sum) ? weather.daily.rain_sum : []).reduce((sum, value) => sum + Number(value || 0), 0);
+        const totalRain = (Array.isArray(weather?.daily?.rain_sum) ? weather.daily.rain_sum : []).reduce((sum, value) => sum + Number(value || 0), 0);
         const topActionType =
           soilSignals.nitrogenStatus === "Low"
             ? "Fertilize"
@@ -526,7 +592,7 @@ export function FarmerDashboardPage() {
               Math.round(
                 soilSignals.score * 0.35 +
                   marketSignals.marketDemand * 0.22 +
-                  (100 - average(weather.daily?.precipitation_probability_max || [40])) * 0.18 +
+                  (100 - average(weather?.daily?.precipitation_probability_max || [40])) * 0.18 +
                   (recommendationTopRecord?.feedbackStatus === "accepted" ? 8 : 0)
               ),
               58,
@@ -613,17 +679,26 @@ export function FarmerDashboardPage() {
         }
       } catch {
         if (!cancelled) {
+          const fallbackSoilSignals = buildSoilSignals(selectedFarm);
+          const fallbackMarketSignals = buildMarketSignals(selectedFarm);
+          const fallbackSummaryCards = buildSummaryCards({
+            farms, farm: selectedFarm, weather: null,
+            soilSignals: fallbackSoilSignals,
+            alerts: [],
+            recommendationState: null,
+            marketSignals: fallbackMarketSignals,
+          });
           setDashboardState({
             loading: false,
-            error: "Unable to load dashboard intelligence. Please check internet connection or farm coordinates.",
+            error: "Live data unavailable. Showing local demo data.",
             weather: null,
-            soilSignals: null,
-            marketSignals: null,
-            summaryCards: [],
+            soilSignals: fallbackSoilSignals,
+            marketSignals: fallbackMarketSignals,
+            summaryCards: fallbackSummaryCards,
             activityFeed: [],
             tasks: [],
             recommendationState: null,
-            fieldHealth: "Unknown",
+            fieldHealth: fallbackSoilSignals.score >= 58 ? "Watch" : "Needs attention",
           });
         }
       }
@@ -634,7 +709,7 @@ export function FarmerDashboardPage() {
       cancelled = true;
       clearTimeout(safetyTimeout);
     };
-  }, [farms, selectedFarm, currentProfile?.email]);
+  }, [farms, selectedFarmEffectKey, currentProfile?.email, selectedFarmId]);
 
   const mapEmbedUrl = selectedFarm
     ? `https://www.openstreetmap.org/export/embed.html?bbox=${(Number(selectedFarm?.location?.lng ?? 0) - 0.02).toFixed(4)}%2C${(Number(selectedFarm?.location?.lat ?? 0) - 0.02).toFixed(4)}%2C${(Number(selectedFarm?.location?.lng ?? 0) + 0.02).toFixed(4)}%2C${(Number(selectedFarm?.location?.lat ?? 0) + 0.02).toFixed(4)}&layer=mapnik&marker=${Number(selectedFarm?.location?.lat ?? 0).toFixed(4)}%2C${Number(selectedFarm?.location?.lng ?? 0).toFixed(4)}`
@@ -701,11 +776,11 @@ export function FarmerDashboardPage() {
       {dashboardState.loading ? (
         <div className="prototype-weather-status">Loading integrated farm intelligence...</div>
       ) : null}
-      {dashboardState.error ? (
+      {!dashboardState.loading && dashboardState.error ? (
         <div className="prototype-weather-status error">{dashboardState.error}</div>
       ) : null}
 
-      {!dashboardState.loading && !dashboardState.error ? (
+      {!dashboardState.loading ? (
         <>
           <div className="command-summary-grid">
             {dashboardState.summaryCards.map((card) => {

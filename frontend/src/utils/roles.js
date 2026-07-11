@@ -6,6 +6,13 @@ export function isAdminRole(role = "") {
   return ["admin", "extensionofficer"].includes(normalizeAppRole(role));
 }
 
+export function isMarketOfficerRole(role = "") {
+  return normalizeAppRole(role) === "marketofficer";
+}
+
 export function getAdminRoleLabel(role = "") {
-  return normalizeAppRole(role) === "extensionofficer" ? "Extension Officer" : "Administrator";
+  const normalized = normalizeAppRole(role);
+  if (normalized === "extensionofficer") return "Extension Officer";
+  if (normalized === "marketofficer") return "Market Officer";
+  return "Administrator";
 }

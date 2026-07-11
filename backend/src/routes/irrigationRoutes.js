@@ -11,6 +11,11 @@ const {
   irrigationReminderListSchema,
   irrigationReminderUpdateSchema,
   irrigationReminderDeleteSchema,
+  irrigationRecordCreateSchema,
+  irrigationRecordHistorySchema,
+  irrigationRecordUpdateSchema,
+  soilMoistureCreateSchema,
+  soilMoistureLatestSchema,
 } = require("../validations/phase3IrrigationSchemas");
 
 const router = express.Router();
@@ -52,6 +57,40 @@ router.delete(
   "/reminders/:id",
   validate(irrigationReminderDeleteSchema),
   irrigationController.deleteFarmReminder,
+);
+
+// --- Irrigation Records ---
+
+router.get(
+  "/farms/:farmId/records",
+  validate(irrigationRecordHistorySchema),
+  irrigationController.listIrrigationRecords,
+);
+
+router.post(
+  "/farms/:farmId/records",
+  validate(irrigationRecordCreateSchema),
+  irrigationController.createIrrigationRecord,
+);
+
+router.patch(
+  "/records/:recordId",
+  validate(irrigationRecordUpdateSchema),
+  irrigationController.updateIrrigationRecord,
+);
+
+// --- Soil Moisture ---
+
+router.get(
+  "/farms/:farmId/moisture",
+  validate(soilMoistureLatestSchema),
+  irrigationController.getLatestSoilMoisture,
+);
+
+router.post(
+  "/farms/:farmId/moisture",
+  validate(soilMoistureCreateSchema),
+  irrigationController.createSoilMoisture,
 );
 
 module.exports = router;

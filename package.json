@@ -1,0 +1,14 @@
+{
+  "name": "rodrigue-monorepo-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start:backend": "npm --prefix backend run start",
+    "start:frontend": "npm --prefix frontend run dev",
+    "start:all": "concurrently \"npm run start:backend\" \"npm run start:frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0",
+    "playwright": "^1.61.1"
+  }
+}

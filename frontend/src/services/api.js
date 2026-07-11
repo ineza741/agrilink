@@ -2,6 +2,8 @@ const FORECAST_BASE_URL = "https://api.open-meteo.com/v1/forecast";
 const ARCHIVE_BASE_URL = "https://archive-api.open-meteo.com/v1/archive";
 const SOILGRIDS_BASE_URL = "https://rest.isric.org/soilgrids/v2.0/properties/query";
 
+const GLOBAL_API_TIMEOUT_MS = 5000;
+
 function buildUrl(baseUrl, params) {
   const url = new URL(baseUrl);
   Object.entries(params).forEach(([key, value]) => {
@@ -18,9 +20,13 @@ function buildUrl(baseUrl, params) {
 }
 
 async function requestJson(url, options = {}) {
-  const { timeoutMs = 8000 } = options;
+  const { timeoutMs = GLOBAL_API_TIMEOUT_MS } = options;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  if (import.meta.env.DEV) {
+    console.log(`[API] URL: ${url}`);
+  }
 
   let response;
   try {
@@ -31,8 +37,15 @@ async function requestJson(url, options = {}) {
       signal: controller.signal,
     });
   } catch (error) {
+    clearTimeout(timeoutId);
     if (error?.name === "AbortError") {
+      if (import.meta.env.DEV) {
+        console.log(`[API] TIMEOUT: ${url}`);
+      }
       throw new Error(`Request timed out after ${timeoutMs}ms`);
+    }
+    if (import.meta.env.DEV) {
+      console.log(`[API] ERROR: ${url} - ${error?.message}`);
     }
     throw error;
   } finally {
@@ -40,7 +53,14 @@ async function requestJson(url, options = {}) {
   }
 
   if (!response.ok) {
+    if (import.meta.env.DEV) {
+      console.log(`[API] FAILED with status ${response.status}: ${url}`);
+    }
     throw new Error(`Request failed with status ${response.status}`);
+  }
+
+  if (import.meta.env.DEV) {
+    console.log(`[API] SUCCESS: ${url}`);
   }
 
   return response.json();

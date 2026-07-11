@@ -7,6 +7,22 @@ const ARCHIVE_BASE_URL = "https://archive-api.open-meteo.com/v1/archive";
 const CHART_WIDTH = 1000;
 const CHART_HEIGHT = 220;
 
+// In-memory cache to avoid hitting Open-Meteo rate limits
+// Key: `${lat}:${lng}:${range}`, Value: { data, expiry }
+const weatherCache = new Map();
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+function getCachedWeather(key) {
+  const entry = weatherCache.get(key);
+  if (entry && Date.now() < entry.expiry) return entry.data;
+  weatherCache.delete(key);
+  return null;
+}
+
+function setCachedWeather(key, data) {
+  weatherCache.set(key, { data, expiry: Date.now() + CACHE_TTL_MS });
+}
+
 const WEATHER_CODE_MAP = {
   0: "Clear sky",
   1: "Mainly clear",
@@ -42,33 +58,50 @@ function buildUrl(baseUrl, params) {
 }
 
 async function requestJson(url, options = {}) {
-  const { timeoutMs = 8000 } = options;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const { timeoutMs = 8000, maxRetries = 2 } = options;
+  let lastError;
 
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-      },
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Request failed with status ${response.status}`);
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0) {
+      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 4000);
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
 
-    return response.json();
-  } catch (error) {
-    if (error?.name === "AbortError") {
-      throw new Error(`Request timed out after ${timeoutMs}ms`);
-    }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+        signal: controller.signal,
+      });
+
+      if (response.status === 429) {
+        lastError = new Error(`Rate limited by weather API (429)`);
+        continue;
+      }
+
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        lastError = new Error(`Request timed out after ${timeoutMs}ms`);
+        continue;
+      }
+
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
+
+  throw lastError;
 }
 
 function buildOpenMeteoForecastUrl(latitude, longitude) {
@@ -429,7 +462,58 @@ async function getFarmWeatherDashboard(user, farmId, query = {}) {
   const forecastUrl = buildOpenMeteoForecastUrl(latitude, longitude);
   const historicalUrl = buildOpenMeteoArchiveUrl(latitude, longitude, startDate, endDate);
 
-  const forecast = await requestJson(forecastUrl, { timeoutMs: 7000 });
+  // Check cache first to avoid rate limits
+  const cacheKey = `${latitude}:${longitude}:${range}`;
+  const cached = getCachedWeather(cacheKey);
+  if (cached) {
+    console.log(`Weather cache hit for ${cacheKey}`);
+    return cached;
+  }
+  console.log(`Weather cache miss for ${cacheKey}, fetching from Open-Meteo`);
+
+  let forecast;
+  try {
+    forecast = await requestJson(forecastUrl, { timeoutMs: 7000 });
+  } catch (error) {
+    console.warn("Weather forecast fetch failed:", error.message);
+    // Fallback: return the most recent saved snapshot for this farm
+    const lastSnapshot = await prisma.weatherSnapshot.findFirst({
+      where: { farmId },
+      orderBy: { fetchedAt: "desc" },
+    });
+    if (lastSnapshot) {
+      console.log(`Falling back to cached snapshot ${lastSnapshot.id} from ${lastSnapshot.fetchedAt}`);
+      const fallbackResult = {
+        sourceMode: "backend",
+        sourceLabel: lastSnapshot.sourceLabel || "Cached Weather Data",
+        farm: {
+          id: farm.id,
+          name: farm.farmName,
+          district: farm.district,
+          sector: farm.sector,
+          province: farm.province,
+          coordinates: { latitude, longitude },
+        },
+        current: lastSnapshot.currentPayload,
+        daily: lastSnapshot.dailyPayload,
+        forecastDays: lastSnapshot.forecastDays,
+        alerts: lastSnapshot.alerts,
+        plantingGuidance: lastSnapshot.plantingGuidance,
+        historicalSeries: [],
+        chartSeries: { points: [], tempValues: [], rainValues: [], areaPath: "", tempPath: "", rainPath: "", labels: [] },
+        metrics: lastSnapshot.metrics,
+        forecastUrl,
+        historicalUrl,
+        selectedRange: range,
+        warning: "Showing cached data. Live weather is temporarily unavailable.",
+        lastUpdated: formatTimestamp(lastSnapshot.fetchedAt),
+        snapshotId: lastSnapshot.id,
+      };
+      setCachedWeather(cacheKey, fallbackResult);
+      return fallbackResult;
+    }
+    throw new ApiError(503, "Weather data is temporarily unavailable. Please try again later.");
+  }
   const forecastDays = toForecastDays(forecast.daily);
   const alerts = buildAlerts(forecastDays);
   const plantingGuidance = buildPlantingGuidance(forecastDays);
@@ -528,7 +612,7 @@ async function getFarmWeatherDashboard(user, farmId, query = {}) {
     },
   });
 
-  return {
+  const result = {
     sourceMode: "backend",
     sourceLabel: "Live Weather Data",
     farm: {
@@ -563,6 +647,9 @@ async function getFarmWeatherDashboard(user, farmId, query = {}) {
     lastUpdated: formatTimestamp(forecast.generationtime_ms ? new Date() : forecast.current?.time || new Date()),
     snapshotId: snapshot.id,
   };
+
+  setCachedWeather(cacheKey, result);
+  return result;
 }
 
 async function listFarmWeatherHistory(user, farmId, query = {}) {

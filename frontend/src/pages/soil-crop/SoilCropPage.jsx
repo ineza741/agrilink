@@ -9,7 +9,6 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import ImageWithFallback from "../../components/common/ImageWithFallback";
 import { useFarmerData } from "../../context/FarmerDataContext";
-import { apiClient } from "../../services/api";
 import { isBackendSessionActive, phase1BackendService } from "../../services/phase1Backend";
 import { downloadJsonFile, downloadTextFile } from "../../utils/actions";
 import { PageShell } from "../../components/common/PageShell";
@@ -162,55 +161,6 @@ function parseSoilGridsValue(payload, propertyName) {
   return values.mean ?? values.median ?? values["Q0.5"] ?? null;
 }
 
-function parseSoilGridsEstimate(payload) {
-  const ph = normalisePh(parseSoilGridsValue(payload, "phh2o"));
-  const soc = parseSoilGridsValue(payload, "soc");
-  const nitrogenRaw = parseSoilGridsValue(payload, "nitrogen");
-  const clay = Number(parseSoilGridsValue(payload, "clay") || 28);
-  const sand = Number(parseSoilGridsValue(payload, "sand") || 36);
-  const silt = Number(parseSoilGridsValue(payload, "silt") || 36);
-  const cec = Number(parseSoilGridsValue(payload, "cec") || 12);
-
-  const organicMatter = convertSoilOrganicMatter(soc);
-  const nitrogen = convertNitrogenEstimate(nitrogenRaw, organicMatter);
-  const phosphorus = clamp(Math.round(14 + cec * 0.65 + organicMatter * 1.4), 12, 28);
-  const potassium = clamp(Math.round(12 + clay * 0.12 + cec * 0.75), 14, 34);
-  const texture = inferTextureFromFractions({ clay, sand, silt });
-
-  return {
-    ph: Number(ph.toFixed(1)),
-    nitrogen,
-    phosphorus,
-    potassium,
-    organicMatter,
-    texture,
-    meta: {
-      clay,
-      sand,
-      silt,
-      cec,
-    },
-  };
-}
-
-function deriveSeasonFromWeather(weatherContext) {
-  if (!weatherContext) return "Warm Season";
-  if (weatherContext.weeklyRain >= 22 || weatherContext.maxRainProbability >= 55) return "Rainy Season";
-  if (weatherContext.averageMaxTemp >= 25.5) return "Warm Season";
-  if (weatherContext.averageMinTemp <= 15.5) return "Cool Season";
-  return "Dry Season";
-}
-
-function deriveCropStage(selectedFarm, seasonLabel) {
-  if (selectedFarm?.primaryCrop) {
-    if (seasonLabel === "Rainy Season") return "vegetative growth stage";
-    if (seasonLabel === "Dry Season") return "water-stress management stage";
-    if (seasonLabel === "Cool Season") return "maturity and disease-watch stage";
-  }
-
-  return "field monitoring stage";
-}
-
 function getSeasonCompatibilityBonus(crop, seasonLabel) {
   if (crop.season === seasonLabel) return 14;
   if (seasonLabel === "Rainy Season" && crop.season === "Warm Season") return 8;
@@ -235,43 +185,6 @@ function getWeatherFitScore(crop, climate) {
   if (climate.et0 >= 5.8 && crop.name.includes("Potato")) score -= 6;
 
   return clamp(Math.round(score), 4, 24);
-}
-
-function buildClimateContext(forecast, selectedFarm) {
-  const current = forecast?.current || {};
-  const daily = forecast?.daily || {};
-  const maxTemps = daily.temperature_2m_max || [];
-  const minTemps = daily.temperature_2m_min || [];
-  const rainSums = daily.precipitation_sum || [];
-  const rainProbabilities = daily.precipitation_probability_max || [];
-  const et0Values = daily.et0_fao_evapotranspiration || [];
-
-  const weeklyRain = Number(rainSums.reduce((sum, value) => sum + (value || 0), 0).toFixed(1));
-  const averageMaxTemp = Number(average(maxTemps.length ? maxTemps : [current.temperature_2m || 24]).toFixed(1));
-  const averageMinTemp = Number(average(minTemps.length ? minTemps : [current.temperature_2m || 16]).toFixed(1));
-  const averageEt0 = Number(average(et0Values.length ? et0Values : [current.et0_fao_evapotranspiration || 3.4]).toFixed(1));
-  const seasonLabel = deriveSeasonFromWeather({
-    weeklyRain,
-    maxRainProbability: Math.max(...(rainProbabilities.length ? rainProbabilities : [0])),
-    averageMaxTemp,
-    averageMinTemp,
-  });
-
-  return {
-    currentTemp: current.temperature_2m || averageMaxTemp,
-    humidity: current.relative_humidity_2m || 58,
-    pressure: current.pressure_msl || 1014,
-    wind: current.wind_speed_10m || 9,
-    soilMoisture: current.soil_moisture_0_to_1cm || 0,
-    et0: current.et0_fao_evapotranspiration || averageEt0,
-    averageEt0,
-    averageMaxTemp,
-    averageMinTemp,
-    weeklyRain,
-    maxRainProbability: Math.max(...(rainProbabilities.length ? rainProbabilities : [0])),
-    seasonLabel,
-    cropStage: deriveCropStage(selectedFarm, seasonLabel),
-  };
 }
 
 function createSoilImprovementInsights(values, form, healthScore) {
@@ -496,9 +409,6 @@ function formatSoilDate(value) {
 const SOIL_SOURCE_OPTIONS = [
   { value: "manual", label: "Manual Entry", icon: "TestTubeDiagonal" },
   { value: "upload", label: "Upload Lab Report", icon: "Upload" },
-  { value: "history", label: "Saved Farm Soil History", icon: "FileClock" },
-  { value: "district", label: "Local District Estimate", icon: "MapPinned" },
-  { value: "online", label: "Online Soil Estimate", icon: "Cloud" },
 ];
 
 function getSoilSourceLabel(sourceType) {
@@ -507,8 +417,6 @@ function getSoilSourceLabel(sourceType) {
   switch (sourceType) {
     case "uploaded":
       return "Uploaded Lab Data";
-    case "estimated":
-      return "Online Soil Estimate";
     case "backend":
       return "Backend Soil Test";
     default:
@@ -806,25 +714,6 @@ function calculateSoilAnalysis(form, selectedFarm, climateContext, soilSourceMod
   };
 }
 
-const DISTRICT_SOIL_ESTIMATES = {
-  default: { ph: 6.2, nitrogen: 30, phosphorus: 18, potassium: 15, organicMatter: 2.5, texture: "Loamy", moisture: 30, cec: 10 },
-  "Northern Province": { ph: 5.8, nitrogen: 35, phosphorus: 20, potassium: 18, organicMatter: 3.0, texture: "Clay Loam", moisture: 35, cec: 14 },
-  "Southern Province": { ph: 6.0, nitrogen: 28, phosphorus: 16, potassium: 14, organicMatter: 2.2, texture: "Sandy Loam", moisture: 28, cec: 8 },
-  "Eastern Province": { ph: 6.5, nitrogen: 25, phosphorus: 15, potassium: 12, organicMatter: 1.8, texture: "Sandy Loam", moisture: 25, cec: 7 },
-  "Western Province": { ph: 5.5, nitrogen: 32, phosphorus: 22, potassium: 20, organicMatter: 3.5, texture: "Loamy", moisture: 40, cec: 15 },
-  "Kigali City": { ph: 6.3, nitrogen: 33, phosphorus: 19, potassium: 16, organicMatter: 2.8, texture: "Loamy", moisture: 32, cec: 11 },
-  Kigali: { ph: 6.3, nitrogen: 33, phosphorus: 19, potassium: 16, organicMatter: 2.8, texture: "Loamy", moisture: 32, cec: 11 },
-};
-
-function getDistrictEstimate(region) {
-  if (!region) return DISTRICT_SOIL_ESTIMATES.default;
-  const lower = region.toLowerCase();
-  for (const [key, data] of Object.entries(DISTRICT_SOIL_ESTIMATES)) {
-    if (lower.includes(key.toLowerCase())) return data;
-  }
-  return DISTRICT_SOIL_ESTIMATES.default;
-}
-
 export function SoilCropPage() {
   const { currentFarms } = useFarmerData();
   const fallbackFarm = useMemo(() => createDefaultFarm(), []);
@@ -839,9 +728,11 @@ export function SoilCropPage() {
   });
   const [labFileName, setLabFileName] = useState("");
   const [labFileData, setLabFileData] = useState(null);
-  const [soilEstimate, setSoilEstimate] = useState(null);
-  const [weatherContext, setWeatherContext] = useState(null);
-  const [sourceStatus, setSourceStatus] = useState("Using manually provided or local soil information. Online soil estimation is optional.");
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploadScanning, setUploadScanning] = useState(false);
+  const [uploadResult, setUploadResult] = useState(null);
+  const [uploadError, setUploadError] = useState("");
+  const [sourceStatus, setSourceStatus] = useState("Using manually provided or uploaded soil data.");
   const [soilSource, setSoilSource] = useState("manual");
   const [sourceMode, setSourceMode] = useState("manual");
   const [formDirty, setFormDirty] = useState(false);
@@ -862,6 +753,9 @@ export function SoilCropPage() {
   });
   const [submittedForm, setSubmittedForm] = useState(form);
   const [selectedRecommendationName, setSelectedRecommendationName] = useState("");
+  const [weatherData, setWeatherData] = useState(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherError, setWeatherError] = useState(false);
 
   useEffect(() => {
     if (!farms.some((farm) => farm.id === selectedFarmId)) {
@@ -880,6 +774,7 @@ export function SoilCropPage() {
 
   useEffect(() => {
     let active = true;
+    let safetyTimeoutId;
 
     async function loadBackendSoilState() {
       if (!backendMode || !selectedFarm?.id || selectedFarm.id === "soil-default-farm") {
@@ -891,14 +786,25 @@ export function SoilCropPage() {
         return;
       }
 
+      safetyTimeoutId = setTimeout(() => {
+        if (active) {
+          setBackendSoilHistory([]);
+          setBackendLatestSoilTest(null);
+          setBackendSoilMode("local");
+        }
+      }, 5000);
+
       try {
-        const [historyRows, suitabilityPayload] = await Promise.all([
+        const [historyResult, suitabilityResult] = await Promise.allSettled([
           phase1BackendService.soil.listByFarm(selectedFarm.id),
           phase1BackendService.soil.getSuitabilityByFarm(selectedFarm.id),
         ]);
+        clearTimeout(safetyTimeoutId);
 
         if (!active) return;
 
+        const historyRows = historyResult.status === "fulfilled" ? historyResult.value : [];
+        const suitabilityPayload = suitabilityResult.status === "fulfilled" ? suitabilityResult.value : null;
         const historyRowsSafe = Array.isArray(historyRows) ? historyRows : [];
         const latestSoilTest = suitabilityPayload?.latestSoilTest || historyRowsSafe?.[0] || null;
         setBackendSoilHistory(historyRowsSafe);
@@ -918,6 +824,7 @@ export function SoilCropPage() {
         }
       } catch {
         if (!active) return;
+        clearTimeout(safetyTimeoutId);
         setBackendSoilHistory([]);
         setBackendLatestSoilTest(null);
         setBackendSoilMode("local");
@@ -928,153 +835,65 @@ export function SoilCropPage() {
 
     return () => {
       active = false;
+      clearTimeout(safetyTimeoutId);
     };
   }, [backendMode, form, formDirty, labFileName, selectedFarm?.id, submittedForm]);
 
   useEffect(() => {
-    if (soilSource === "history" && backendLatestSoilTest) {
-      const hydratedForm = mapSoilRecordToForm(backendLatestSoilTest);
-      if (hydratedForm && !areSoilFormsEqual(form, hydratedForm)) {
-        setForm(hydratedForm);
-        setSubmittedForm(hydratedForm);
-      }
-      setSourceMode("manual");
-      setSourceStatus("Using saved farm soil history data.");
-      return;
-    }
+    const src = labFileName ? "uploaded" : "manual";
+    setSourceMode(src);
+    setSourceStatus(
+      labFileName
+        ? "Using uploaded lab data."
+        : "Using manually provided soil test data."
+    );
+  }, [backendSoilMode, formDirty, labFileName]);
 
-    if (soilSource === "district") {
-      const districtEstimate = getDistrictEstimate(selectedFarm?.region || "");
-      if (districtEstimate && !formDirty) {
-        const estimatedForm = {
-          ph: String(districtEstimate.ph),
-          nitrogen: String(districtEstimate.nitrogen),
-          phosphorus: String(districtEstimate.phosphorus),
-          potassium: String(districtEstimate.potassium),
-          organicMatter: String(districtEstimate.organicMatter),
-          texture: districtEstimate.texture,
-          moisture: String(districtEstimate.moisture ?? form.moisture),
-          cec: String(districtEstimate.cec ?? form.cec),
-        };
-        if (!areSoilFormsEqual(form, estimatedForm)) setForm(estimatedForm);
-        if (!areSoilFormsEqual(submittedForm, estimatedForm)) setSubmittedForm(estimatedForm);
-      }
-      setSourceMode("manual");
-      setSourceStatus("Using local district estimate for soil parameters.");
-      return;
-    }
-
-    if (soilSource !== "online") {
-      setSourceMode(labFileName ? "uploaded" : "manual");
-      setSourceStatus(
-        labFileName
-          ? "Using uploaded lab data."
-          : "Using manually provided or local soil information. Online soil estimation is optional."
-      );
-      return;
-    }
-
+  useEffect(() => {
     let active = true;
+    let safetyTimeoutId;
 
-    async function loadEnvironmentalInputs() {
-      const lat = selectedFarm?.location?.lat;
-      const lng = selectedFarm?.location?.lng;
-
-      if (!lat || !lng) {
-        if (active) {
-          setSourceStatus("Manual or uploaded soil data can be used. Online soil estimation requires farm coordinates and is currently unavailable.");
-        }
+    async function loadWeather() {
+      const farm = farms.find((f) => f.id === selectedFarmId);
+      if (!farm?.id || !backendMode) {
+        if (active) setWeatherData(null);
         return;
       }
 
+      setWeatherLoading(true);
+      setWeatherError(false);
+
+      safetyTimeoutId = setTimeout(() => {
+        if (active) {
+          setWeatherData(null);
+          setWeatherError(true);
+          setWeatherLoading(false);
+        }
+      }, 5000);
+
       try {
-        setExternalWarning("");
-        const [soilResult, weatherResult] = await Promise.allSettled([
-          apiClient.soil.estimate(lat, lng),
-          apiClient.weather.forecast(lat, lng),
-        ]);
-
+        const data = await phase1BackendService.weather.dashboard(farm.id);
         if (!active) return;
-
-        const soilLoaded = soilResult.status === "fulfilled";
-        const weatherLoaded = weatherResult.status === "fulfilled";
-
-        const estimate = soilLoaded ? parseSoilGridsEstimate(soilResult.value) : null;
-        const climate = weatherLoaded ? buildClimateContext(weatherResult.value, selectedFarm) : null;
-
-        setSoilEstimate(estimate);
-        setWeatherContext(climate);
-
-        if (!formDirty && estimate && backendSoilMode !== "backend") {
-          const estimatedForm = {
-            ph: String(estimate.ph),
-            nitrogen: String(estimate.nitrogen),
-            phosphorus: String(estimate.phosphorus),
-            potassium: String(estimate.potassium),
-            organicMatter: String(estimate.organicMatter),
-            texture: estimate.texture,
-            moisture: String(estimate.moisture ?? form.moisture),
-            cec: String(estimate.cec ?? form.cec),
-          };
-
-          if (!areSoilFormsEqual(form, estimatedForm)) setForm(estimatedForm);
-          if (!areSoilFormsEqual(submittedForm, estimatedForm)) setSubmittedForm(estimatedForm);
-          setSourceMode("estimated");
-        }
-
-        if (soilLoaded && weatherLoaded) {
-          setSourceStatus("Using online soil estimation with live weather context.");
-        } else if (soilLoaded) {
-          setSourceStatus("Using online soil estimation. Live weather context is temporarily unavailable.");
-        } else if (weatherLoaded) {
-          setSourceStatus("Manual or uploaded soil data can be used. Online soil estimation is optional and currently unavailable.");
-        } else {
-          setSourceStatus("Manual or uploaded soil data can be used. Online soil estimation is optional and currently unavailable.");
-        }
+        clearTimeout(safetyTimeoutId);
+        setWeatherData(data);
       } catch {
         if (!active) return;
-        setSourceStatus("Manual or uploaded soil data can be used. Online soil estimation is optional and currently unavailable.");
+        clearTimeout(safetyTimeoutId);
+        setWeatherData(null);
+        setWeatherError(true);
+      } finally {
+        if (active) setWeatherLoading(false);
       }
     }
 
-    loadEnvironmentalInputs();
+    loadWeather();
 
-    return () => {
-      active = false;
-    };
-  }, [
-    soilSource,
-    backendLatestSoilTest?.id,
-    backendSoilMode,
-    form,
-    formDirty,
-    labFileName,
-    selectedFarm?.id,
-    selectedFarmCoordinates,
-    selectedFarmName,
-    selectedFarmPrimaryCrop,
-    submittedForm,
-  ]);
-
-  useEffect(() => {
-    if (labFileName) {
-      setSourceMode("uploaded");
-      setSourceStatus("Using uploaded lab data. Estimated location data is only supporting the map and context.");
-    } else if (sourceMode === "uploaded") {
-      setSourceMode(formDirty ? "manual" : backendSoilMode === "backend" ? "manual" : soilEstimate ? "estimated" : "manual");
-      setSourceStatus(
-        backendSoilMode === "backend" && !formDirty
-          ? "Using backend soil test data with live weather context."
-          : soilEstimate && !formDirty
-          ? "Using estimated soil data from location (SoilGrids fallback) with live weather context."
-          : "Using manual soil test data."
-      );
-    }
-  }, [backendSoilMode, formDirty, labFileName, soilEstimate, sourceMode]);
+    return () => { active = false; clearTimeout(safetyTimeoutId); };
+  }, [selectedFarmId, farms, backendMode]);
 
   const analysis = useMemo(
-    () => calculateSoilAnalysis(submittedForm, selectedFarm, weatherContext, sourceMode),
-    [selectedFarm, submittedForm, weatherContext, sourceMode]
+    () => calculateSoilAnalysis(submittedForm, selectedFarm, null, sourceMode),
+    [selectedFarm, submittedForm, sourceMode]
   );
 
   const effectiveSuitableCrops = useMemo(() => {
@@ -1186,7 +1005,7 @@ export function SoilCropPage() {
     setSubmittedForm(hydratedForm);
     setFormDirty(false);
     setLabFileName(record?.labReport?.fileName || "");
-    setSoilSource(record?.labReport?.fileName ? "upload" : "history");
+    setSoilSource(record?.labReport?.fileName ? "upload" : "manual");
     setSourceMode(record?.sourceType || "manual");
     setSourceStatus(
       record?.sourceType === "uploaded"
@@ -1205,14 +1024,12 @@ export function SoilCropPage() {
   };
 
   const handleAnalyze = async () => {
-    const src = labFileName ? "uploaded" : soilSource === "online" ? "estimated" : "manual";
+    const src = labFileName ? "uploaded" : "manual";
     setSourceMode(src);
     setSourceStatus(
       labFileName
         ? "Using uploaded lab data."
-        : soilSource === "online"
-        ? "Using online soil estimation."
-        : "Using manually provided or local soil information."
+        : "Using manually provided soil test data."
     );
     setSubmittedForm(form);
 
@@ -1280,12 +1097,6 @@ export function SoilCropPage() {
         }
       />
 
-      {soilSource !== "online" && !sourceStatus.includes("Online") && !sourceStatus.includes("estimated") ? (
-        <div className="sc-warning" style={{ background: "#f0f9f0", borderLeft: "3px solid var(--primary-green)", color: "var(--text-main)" }}>
-          <span>Manual or uploaded soil data can be used. Online soil estimation is optional and currently unavailable.</span>
-        </div>
-      ) : null}
-
       {/* Toolbar */}
       <div className="sc-toolbar">
         <div className="sc-toolbar-left">
@@ -1299,43 +1110,195 @@ export function SoilCropPage() {
           </div>
           <div className="sc-toolbar-field">
             <span className="sc-toolbar-label">Soil Source</span>
-            <select value={soilSource} onChange={(e) => { const v = e.target.value; setSoilSource(v); if (v === "upload") { setFormDirty(false); } else if (v !== "online") { setFormDirty(false); } }}>
+            <select value={soilSource} onChange={(e) => { const v = e.target.value; setSoilSource(v); setFormDirty(false); if (v !== "upload") { setUploadFile(null); setUploadResult(null); setUploadError(""); setLabFileName(""); setLabFileData(null); } }}>
               {SOIL_SOURCE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
           </div>
-          {soilSource === "upload" ? (
-            <div className="sc-toolbar-field">
-              <span className="sc-toolbar-label">Lab Report</span>
-              <div className="sc-upload-inline">
-                <Upload size={14} />
-                <input type="file" accept=".pdf,.csv,.xlsx,.jpg,.jpeg,.png,.txt" onChange={(e) => { const file = e.target.files?.[0]; if (file) { setLabFileName(file.name); setLabFileData({ name: file.name, date: new Date().toISOString(), status: "awaiting" }); setSoilSource("upload"); } }} />
-                <span>{labFileName ? labFileName + (labFileData?.status === "confirmed" ? " (Confirmed)" : " (Awaiting confirmation)") : "Upload lab result"}</span>
-              </div>
-              {labFileName && labFileData?.status === "awaiting" ? (
-                <button type="button" className="sc-confirm-btn" onClick={() => setLabFileData((prev) => prev ? { ...prev, status: "confirmed" } : null)} style={{ marginLeft: 8, padding: "2px 8px", fontSize: 11, background: "var(--primary-green)", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>
-                  Confirm Values
-                </button>
-              ) : null}
-            </div>
-          ) : null}
         </div>
         <div className="sc-toolbar-right">
-          <StatusBadge variant={soilSource === "online" ? "info" : soilSource === "upload" && labFileData?.status === "confirmed" ? "success" : "warning"}>
+          <StatusBadge variant={soilSource === "upload" && uploadResult?.extractedValues ? "success" : "warning"}>
             {getSoilSourceLabel(soilSource)}
           </StatusBadge>
         </div>
       </div>
 
-      {labFileData && soilSource === "upload" ? (
-        <div className="sc-lab-upload-status" style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 16px", background: "#f5faf5", borderRadius: 8, marginBottom: 12, fontSize: 13 }}>
-          <span style={{ fontWeight: 600 }}>{labFileData.name}</span>
-          <span style={{ color: "var(--text-muted)" }}>Uploaded {new Date(labFileData.date).toLocaleDateString()}</span>
-          <StatusBadge variant={labFileData.status === "confirmed" ? "success" : "warning"}>
-            {labFileData.status === "confirmed" ? "Confirmed" : "Awaiting manual confirmation"}
-          </StatusBadge>
+      {soilSource === "upload" ? (
+        <div className="sc-upload-section" style={{ background: "#f9faf9", border: "1px dashed var(--border)", borderRadius: 10, padding: 20, marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+            <label className="sc-upload-box" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 18px", background: "#fff", border: "1px solid var(--border)", borderRadius: 8, cursor: "pointer", fontSize: 14 }}>
+              <Upload size={18} />
+              <span>{uploadFile ? uploadFile.name : "Choose a lab report file"}</span>
+              <input type="file" accept=".pdf,.docx,.jpg,.jpeg,.png" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) { setUploadFile(f); setLabFileName(f.name); setUploadResult(null); setUploadError(""); } }} />
+            </label>
+            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Accepted: PDF, DOCX, JPG, JPEG, PNG (max 10MB)</span>
+          </div>
+
+          {uploadFile && !uploadResult && (
+            <div style={{ marginTop: 14 }}>
+              <button
+                type="button"
+                className="sc-scan-btn"
+                onClick={async () => {
+                  setUploadScanning(true);
+                  setUploadError("");
+                  setUploadResult(null);
+                  try {
+                    const result = await phase1BackendService.soil.uploadAndExtract(uploadFile, selectedFarm?.id);
+                    if (result?.extractedValues) {
+                      setUploadResult(result);
+                      const ev = result.extractedValues;
+                      setForm((prev) => ({
+                        ...prev,
+                        ph: ev.ph?.value != null ? String(ev.ph.value) : prev.ph,
+                        nitrogen: ev.nitrogen?.value != null ? String(ev.nitrogen.value) : prev.nitrogen,
+                        phosphorus: ev.phosphorus?.value != null ? String(ev.phosphorus.value) : prev.phosphorus,
+                        potassium: ev.potassium?.value != null ? String(ev.potassium.value) : prev.potassium,
+                        organicMatter: ev.organicMatter?.value != null ? String(ev.organicMatter.value) : prev.organicMatter,
+                        moisture: ev.moisture?.value != null ? String(ev.moisture.value) : prev.moisture,
+                        cec: ev.cec?.value != null ? String(ev.cec.value) : prev.cec,
+                        texture: ev.texture?.value || prev.texture,
+                      }));
+                      setLabFileData({ name: uploadFile.name, date: new Date().toISOString(), status: "awaiting" });
+                    } else {
+                      setUploadResult(null);
+                      setUploadError("We could not read this report automatically. Please enter values manually.");
+                    }
+                  } catch (err) {
+                    setUploadError(err.message || "Upload failed. Please try again.");
+                  } finally {
+                    setUploadScanning(false);
+                  }
+                }}
+                style={{ padding: "8px 20px", background: "var(--primary-green)", color: "#fff", border: "none", borderRadius: 6, fontSize: 14, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8 }}
+                disabled={uploadScanning}
+              >
+                {uploadScanning ? <><RefreshCw size={14} style={{ animation: "spin 1s linear infinite" }} /> Scanning lab report...</> : <><Upload size={14} /> Scan Lab Report</>}
+              </button>
+            </div>
+          )}
         </div>
+      ) : null}
+
+      {uploadError ? (
+        <div style={{ padding: "10px 16px", background: "#fff4f0", borderLeft: "3px solid #e74c3c", borderRadius: 6, marginBottom: 12, fontSize: 13, color: "#c0392b" }}>
+          <AlertTriangle size={14} style={{ marginRight: 6, verticalAlign: "middle" }} />
+          {uploadError}
+        </div>
+      ) : null}
+
+      {uploadResult?.extractedValues ? (
+        <AppCard style={{ marginBottom: 16 }}>
+          <div className="sc-card-head">
+            <FlaskConical size={16} />
+            <h3>Extracted Lab Report Values</h3>
+            <StatusBadge variant="success">Soil report scanned successfully.</StatusBadge>
+          </div>
+          <table className="sc-extraction-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid var(--border)", background: "#f5faf5" }}>
+                <th style={{ padding: "10px 12px", textAlign: "left" }}>Field</th>
+                <th style={{ padding: "10px 12px", textAlign: "left" }}>Extracted Value</th>
+                <th style={{ padding: "10px 12px", textAlign: "left" }}>Confidence</th>
+                <th style={{ padding: "10px 12px", textAlign: "left" }}>Editable</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { key: "ph", label: "pH Level", unit: "" },
+                { key: "nitrogen", label: "Nitrogen (N)", unit: "ppm" },
+                { key: "phosphorus", label: "Phosphorus (P)", unit: "ppm" },
+                { key: "potassium", label: "Potassium (K)", unit: "ppm" },
+                { key: "organicMatter", label: "Organic Matter", unit: "%" },
+                { key: "moisture", label: "Soil Moisture", unit: "%" },
+                { key: "cec", label: "CEC", unit: "meq/100g" },
+                { key: "texture", label: "Texture", unit: "" },
+              ].map(({ key, label, unit }) => {
+                const extracted = uploadResult.extractedValues[key];
+                const hasValue = extracted?.value != null && extracted.value !== "";
+                return (
+                  <tr key={key} style={{ borderBottom: "1px solid var(--border)" }}>
+                    <td style={{ padding: "8px 12px", fontWeight: 500 }}>{label}</td>
+                    <td style={{ padding: "8px 12px" }}>
+                      {hasValue ? (
+                        key === "texture" ? (
+                          <select
+                            value={form.texture}
+                            onChange={(e) => setForm((c) => ({ ...c, texture: e.target.value }))}
+                            style={{ padding: "4px 8px", border: "1px solid var(--border)", borderRadius: 4, fontSize: 13 }}
+                          >
+                            {textureOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                        ) : (
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={form[key]}
+                            onChange={(e) => setForm((c) => ({ ...c, [key]: e.target.value }))}
+                            style={{ width: 100, padding: "4px 8px", border: "1px solid var(--border)", borderRadius: 4, fontSize: 13 }}
+                          />
+                        )
+                      ) : (
+                        <span style={{ color: "var(--text-muted)" }}>Not found</span>
+                      )}
+                      {unit && hasValue ? <span style={{ marginLeft: 4, color: "var(--text-muted)" }}>{unit}</span> : null}
+                    </td>
+                    <td style={{ padding: "8px 12px" }}>
+                      {hasValue ? (
+                        <StatusBadge variant={extracted.confidence >= 80 ? "success" : extracted.confidence >= 50 ? "warning" : "info"}>
+                          {extracted.confidence}%
+                        </StatusBadge>
+                      ) : <span style={{ color: "var(--text-muted)" }}>—</span>}
+                    </td>
+                    <td style={{ padding: "8px 12px" }}>
+                      {hasValue ? <span style={{ color: "var(--primary-green)", fontSize: 12 }}>Editable</span> : <span style={{ color: "var(--text-muted)", fontSize: 12 }}>—</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div style={{ display: "flex", gap: 12, padding: "12px 16px", borderTop: "1px solid var(--border)", justifyContent: "flex-end", alignItems: "center" }}>
+            {uploadResult.extractedValues.labName?.value ? (
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                Lab: {uploadResult.extractedValues.labName.value}
+              </span>
+            ) : null}
+            {uploadResult.extractedValues.testDate?.value ? (
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                Date: {uploadResult.extractedValues.testDate.value}
+              </span>
+            ) : null}
+            <button
+              type="button"
+              className="sc-save-report-btn"
+              onClick={async () => {
+                setSubmittedForm(form);
+                setSourceMode("uploaded");
+                setSourceStatus("Using uploaded lab data.");
+                setLabFileData((prev) => prev ? { ...prev, status: "confirmed" } : null);
+                if (backendMode && selectedFarm?.id && selectedFarm.id !== "soil-default-farm") {
+                  try {
+                    const payload = buildBackendSoilPayload(form, selectedFarm, uploadFile.name);
+                    const savedRecord = await phase1BackendService.soil.create(payload);
+                    const analyzed = await phase1BackendService.soil.analyze(savedRecord.id);
+                    const historyRows = await phase1BackendService.soil.listByFarm(selectedFarm.id);
+                    setBackendSoilHistory(historyRows);
+                    setBackendLatestSoilTest(analyzed.soilTest || savedRecord);
+                    setBackendSoilMode("backend");
+                    setSourceStatus("Using uploaded lab data with backend soil persistence.");
+                  } catch {
+                    setBackendSoilMode("local");
+                  }
+                }
+              }}
+              style={{ padding: "8px 24px", background: "var(--primary-green)", color: "#fff", border: "none", borderRadius: 6, fontSize: 14, cursor: "pointer", fontWeight: 600 }}
+            >
+              <Check size={14} /> Save Soil Report
+            </button>
+          </div>
+        </AppCard>
       ) : null}
 
       {/* KPI Row */}
@@ -1403,8 +1366,8 @@ export function SoilCropPage() {
             <div className="sc-kpi-icon-wrap blue"><Thermometer size={22} /></div>
             <div className="sc-kpi-info">
               <span className="sc-kpi-label">Soil Moisture</span>
-              <strong className="sc-kpi-value">{analysis.climateContext?.soilMoisture != null ? (analysis.climateContext.soilMoisture * 100).toFixed(0) : "—"}<small>%</small></strong>
-              <span className="sc-kpi-sub">{analysis.climateContext ? `${analysis.climateContext.seasonLabel}` : "No data"}</span>
+              <strong className="sc-kpi-value">{form.moisture ? `${form.moisture}` : "Not provided"}<small>{form.moisture ? "%" : ""}</small></strong>
+              <span className="sc-kpi-sub">{form.moisture ? "Manual entry" : "Enter moisture in the form below"}</span>
             </div>
           </div>
         </AppCard>
@@ -1595,7 +1558,7 @@ export function SoilCropPage() {
               { label: "Potassium (K)", value: analysis.values?.potassium || 0, unit: "ppm", rec: 22, trend: (analysis.values?.potassium || 0) >= 20 ? "up" : "down", icon: BarChart3, color: "#E65100" },
               { label: "CEC", value: analysis.values?.meta?.cec || 12, unit: "meq/100g", rec: 15, trend: "stable", icon: Layers, color: "#7B1FA2" },
               { label: "Organic Matter", value: analysis.values?.organicMatter || 0, unit: "%", rec: 3, trend: (analysis.values?.organicMatter || 0) >= 2.5 ? "up" : "down", icon: Droplets, color: "#4CAF50" },
-              { label: "Moisture", value: analysis.climateContext?.soilMoisture != null ? (analysis.climateContext.soilMoisture * 100).toFixed(0) : "—", unit: "%", rec: 35, trend: "stable", icon: Thermometer, color: "#0288D1" },
+              { label: "Moisture", value: form.moisture ? form.moisture : "Not provided", unit: form.moisture ? "%" : "", rec: 35, trend: "stable", icon: Thermometer, color: "#0288D1" },
               { label: "Texture", value: form.texture || "Loamy", rec: "Loamy", trend: "stable", icon: GripVertical, color: "#6D4C41" },
             ].map((n) => {
               const pct = typeof n.value === "number" && typeof n.rec === "number" ? Math.min(Math.round((n.value / n.rec) * 100), 100) : 50;
@@ -1652,14 +1615,22 @@ export function SoilCropPage() {
         <aside className="sc-sidebar">
           <AppCard className="sc-sidebar-card">
             <div className="sc-sidebar-head"><CloudSun size={14} /> Weather</div>
-            <div className="sc-sidebar-weather">
-              <div className="sc-weather-temp">{analysis.climateContext?.currentTemp ?? "—"}°C</div>
-              <div className="sc-weather-details">
-                <span><Droplets size={12} /> {analysis.climateContext?.humidity ?? "—"}%</span>
-                <span><Wind size={12} /> {analysis.climateContext?.wind ?? "—"} km/h</span>
-                <span><Cloud size={12} /> {analysis.climateContext?.weeklyRain ?? "—"}mm rain</span>
+            {weatherLoading ? (
+              <div className="sc-sidebar-weather" style={{ padding: "16px 0", textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>Loading weather data...</div>
+            ) : weatherData?.current ? (
+              <div className="sc-sidebar-weather">
+                <div className="sc-weather-temp">{weatherData.current.temperature_2m ?? "—"}°C</div>
+                <div className="sc-weather-details">
+                  <span><Droplets size={12} /> {weatherData.current.relative_humidity_2m ?? "—"}%</span>
+                  <span><Wind size={12} /> {weatherData.current.wind_speed_10m ?? "—"} km/h</span>
+                  <span><Cloud size={12} /> {weatherData.current.precipitation ?? "—"}mm rain</span>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="sc-sidebar-weather" style={{ padding: "16px 0", textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
+                Weather data unavailable for this farm
+              </div>
+            )}
           </AppCard>
 
           <AppCard className="sc-sidebar-card">

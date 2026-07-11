@@ -25,12 +25,12 @@ const irrigationCalculationBodySchema = z.object({
   cropStage: z.string().min(2).optional(),
   irrigationType: z.string().optional(),
   weather: weatherSnapshotSchema,
-  soilProfile: soilProfileSchema,
+  soilProfile: soilProfileSchema.optional(),
   soilMoisture: z.coerce.number().min(0).max(100),
   sensorMode: z.enum(sensorModes).optional(),
-  targetYield: z.coerce.number().min(0).max(1000),
-  fertilizerType: z.string().min(2),
-  budget: z.coerce.number().min(0).max(1000000000),
+  targetYield: z.coerce.number().min(0).max(1000).optional(),
+  fertilizerType: z.string().min(2).optional(),
+  budget: z.coerce.number().min(0).max(1000000000).optional(),
   weatherLabel: z.string().optional(),
   soilLabel: z.string().optional(),
   notice: z.string().optional().nullable(),
@@ -100,6 +100,77 @@ const irrigationReminderDeleteSchema = z.object({
   query: z.object({}).optional(),
 });
 
+// --- Irrigation Record Schemas ---
+
+const irrigationRecordCreateBodySchema = z.object({
+  irrigationDate: z.string().refine((value) => !Number.isNaN(new Date(value).getTime()), {
+    message: "Invalid irrigation date.",
+  }),
+  waterAmount: z.coerce.number().min(0.1),
+  irrigationMethod: z.string().min(2),
+  durationMinutes: z.coerce.number().int().min(1).optional(),
+  completionStatus: z.enum(["Completed", "Scheduled", "Missed", "Cancelled"]).optional(),
+  notes: z.string().optional().nullable(),
+});
+
+const irrigationRecordCreateSchema = z.object({
+  body: irrigationRecordCreateBodySchema,
+  params: farmIdParamsSchema,
+  query: z.object({}).optional(),
+});
+
+const irrigationRecordHistorySchema = z.object({
+  body: z.object({}).optional(),
+  params: farmIdParamsSchema,
+  query: z.object({
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+  }).optional(),
+});
+
+const irrigationRecordUpdateSchema = z.object({
+  body: z.object({
+    irrigationDate: z.string().optional(),
+    waterAmount: z.coerce.number().min(0.1).optional(),
+    irrigationMethod: z.string().min(2).optional(),
+    durationMinutes: z.coerce.number().int().min(1).optional(),
+    completionStatus: z.enum(["Completed", "Scheduled", "Missed", "Cancelled"]).optional(),
+    notes: z.string().optional().nullable(),
+  }).refine((value) => Object.keys(value).length > 0, {
+    message: "At least one field must be provided.",
+  }),
+  params: z.object({
+    recordId: z.string().uuid(),
+  }),
+  query: z.object({}).optional(),
+});
+
+// --- Soil Moisture Schemas ---
+
+const soilMoistureCreateBodySchema = z.object({
+  moisture: z.coerce.number().min(0).max(100),
+  measuredAt: z.string().refine((value) => !Number.isNaN(new Date(value).getTime()), {
+    message: "Invalid measurement date.",
+  }),
+  source: z.enum(["Manual Entry", "IoT Sensor", "Uploaded Soil/Lab Record", "Saved Field Measurement"]).optional(),
+  notes: z.string().optional().nullable(),
+});
+
+const soilMoistureCreateSchema = z.object({
+  body: soilMoistureCreateBodySchema,
+  params: farmIdParamsSchema,
+  query: z.object({}).optional(),
+});
+
+const soilMoistureLatestSchema = z.object({
+  body: z.object({}).optional(),
+  params: farmIdParamsSchema,
+  query: z.object({}).optional(),
+});
+
+const irrigationRecordIdParamsSchema = z.object({
+  id: z.string().uuid(),
+});
+
 module.exports = {
   irrigationCalculationSchema,
   irrigationLatestSchema,
@@ -107,4 +178,9 @@ module.exports = {
   irrigationReminderListSchema,
   irrigationReminderUpdateSchema,
   irrigationReminderDeleteSchema,
+  irrigationRecordCreateSchema,
+  irrigationRecordHistorySchema,
+  irrigationRecordUpdateSchema,
+  soilMoistureCreateSchema,
+  soilMoistureLatestSchema,
 };

@@ -38,7 +38,6 @@ import { ActionButton } from "../../components/common/ActionButton";
 import { StatusBadge } from "../../components/common/StatusBadge";
 import { MetricCard } from "../../components/common/MetricCard";
 
-const DEMO_MODE = true;
 const RWANDA_REGIONS = [
   "Gatenga Sector, Kicukiro District",
   "Nyamata Sector, Bugesera District",
@@ -537,7 +536,7 @@ function AdminFarmsView() {
       { label: "Total Farms", value: totalFarms, tone: "blue", icon: Tractor },
       { label: "Top Region", value: topRegion, tone: "green", icon: Map },
     ];
-  }, [adminDashboardSummary, adminRecords, data.farms.length]);
+  }, [adminDashboardSummary, adminRecords, data?.farms?.length]);
 
   const registryInsight = useMemo(() => {
     const verificationRate =

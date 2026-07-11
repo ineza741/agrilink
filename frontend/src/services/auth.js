@@ -207,7 +207,7 @@ export const authService = {
         ...backendUser,
         password,
       });
-    } catch {
+    } catch (error) {
       const users = readUsers();
       const user = users.find(
         (item) =>
@@ -216,7 +216,7 @@ export const authService = {
       );
 
       if (!user) {
-        throw new Error("Invalid email or password.");
+        throw new Error(error?.message || "Invalid email or password.");
       }
 
       clearBackendSession();
@@ -226,6 +226,14 @@ export const authService = {
   },
 
   async register(payload) {
+    if (payload.role === "MarketOfficer") {
+      const result = await phase1BackendService.auth.registerMarketOfficer(payload);
+      if (result?.pendingApproval) {
+        return { pendingApproval: true, message: result.message };
+      }
+      return result;
+    }
+
     try {
       const backendUser = await phase1BackendService.auth.register(payload);
       return persistCurrentUser({

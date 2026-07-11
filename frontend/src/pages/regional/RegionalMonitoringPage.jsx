@@ -24,7 +24,6 @@ import { apiClient } from "../../services/api";
 import { isBackendSessionActive, phase1BackendService } from "../../services/phase1Backend";
 import { downloadCsvFile, downloadJsonFile, downloadTextFile } from "../../utils/actions";
 
-const DEMO_MODE = true;
 const STORAGE_KEY = "agri-feed-regional-intelligence-v2";
 
 const DISTRICT_META = [
@@ -489,12 +488,13 @@ function buildWeatherAlerts(weather, district, sector) {
 }
 
 function SourceBadges() {
+  const hasBackend = isBackendSessionActive();
   return (
     <div className="regional-source-row">
       <span className="regional-source-badge live">Live Weather Data</span>
-      <span className="regional-source-badge demo">Demo Market Data</span>
-      <span className="regional-source-badge local">Local Soil Data</span>
-      <span className="regional-source-badge demo">Demo Pest Data</span>
+      <span className={`regional-source-badge ${hasBackend ? "live" : "demo"}`}>{hasBackend ? "Market Data" : "Demo Market Data"}</span>
+      <span className="regional-source-badge local">Soil Data</span>
+      <span className={`regional-source-badge ${hasBackend ? "live" : "demo"}`}>{hasBackend ? "Pest Data" : "Demo Pest Data"}</span>
     </div>
   );
 }
@@ -519,6 +519,7 @@ function FarmerRegionalAlerts({ state, setState }) {
 
   useEffect(() => {
     let cancelled = false;
+    let safetyTimeoutId;
 
     async function loadWeather() {
       if (!selectedFarm?.location?.lat || !selectedFarm?.location?.lng) {
@@ -527,17 +528,29 @@ function FarmerRegionalAlerts({ state, setState }) {
       }
 
       setWeatherState({ loading: true, data: null });
+
+      safetyTimeoutId = setTimeout(() => {
+        if (!cancelled) setWeatherState({ loading: false, data: null });
+      }, 5000);
+
       try {
         const data = await apiClient.weather.forecast(selectedFarm.location.lat, selectedFarm.location.lng);
-        if (!cancelled) setWeatherState({ loading: false, data });
+        if (!cancelled) {
+          clearTimeout(safetyTimeoutId);
+          setWeatherState({ loading: false, data });
+        }
       } catch {
-        if (!cancelled) setWeatherState({ loading: false, data: null });
+        if (!cancelled) {
+          clearTimeout(safetyTimeoutId);
+          setWeatherState({ loading: false, data: null });
+        }
       }
     }
 
     loadWeather();
     return () => {
       cancelled = true;
+      clearTimeout(safetyTimeoutId);
     };
   }, [selectedFarm]);
 
@@ -749,7 +762,7 @@ function FarmerRegionalAlerts({ state, setState }) {
         <article className="prototype-panel regional-market-panel">
           <div className="panel-toolbar">
             <h2>Nearby Market Trends</h2>
-            <span className="regional-inline-tag">Demo Market Data</span>
+            <span className={`regional-inline-tag ${isBackendSessionActive() ? "live" : "demo"}`}>{isBackendSessionActive() ? "Market Data" : "Demo Market Data"}</span>
           </div>
           <div className="signup-table management-table">
             <div className="signup-row signup-head regional-head regional-table-five">

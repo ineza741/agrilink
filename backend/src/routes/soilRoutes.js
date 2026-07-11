@@ -9,11 +9,14 @@ const {
   soilTestIdSchema,
   farmSoilTestSchema,
 } = require("../validations/phase2SoilSchemas");
+const { uploadMiddleware, handleMulterError, uploadAndExtract, saveExtractedSoilTest } = require("../controllers/soilUploadController");
 
 const router = express.Router();
 
 router.use(authenticate);
 
+router.post("/soil-tests/upload", authorize("Farmer", "Admin", "ExtensionOfficer"), uploadMiddleware, uploadAndExtract);
+router.post("/soil-tests/upload/save", authorize("Farmer", "Admin", "ExtensionOfficer"), saveExtractedSoilTest);
 router.post("/soil-tests", authorize("Farmer", "Admin", "ExtensionOfficer"), validate(soilTestCreateSchema), soilController.createSoilTest);
 router.get("/soil-tests/farm/:farmId", authorize("Farmer", "Admin", "ExtensionOfficer"), validate(farmSoilTestSchema), soilController.listSoilTestsByFarm);
 router.put("/soil-tests/:id", authorize("Farmer", "Admin", "ExtensionOfficer"), validate(soilTestUpdateSchema), soilController.updateSoilTest);

@@ -574,8 +574,8 @@ export function PestsPage() {
 
     loadWeather();
     const timeout = setTimeout(() => {
-      if (active) setWeatherState(prev => ({ ...prev, loading: false }));
-    }, 10000);
+      if (active) setWeatherState(prev => ({ ...prev, loading: false, error: "Live weather timed out. Using demo data for pest forecasting." }));
+    }, 5000);
     return () => {
       active = false;
       clearTimeout(timeout);
@@ -603,6 +603,7 @@ export function PestsPage() {
 
   useEffect(() => {
     let active = true;
+    let safetyTimeoutId;
 
     if (!backendMode || !backendFarmId) {
       setBackendDiagnosis(null);
@@ -624,21 +625,33 @@ export function PestsPage() {
         source: "Backend Pest Data",
       });
 
+      safetyTimeoutId = setTimeout(() => {
+        if (active) {
+          setPestState({
+            loading: false,
+            notice: "Backend pest data timed out. Showing demo pest intelligence.",
+            source: "Demo Pest Data",
+          });
+        }
+      }, 5000);
+
       try {
-        const [latest, history, library] = await Promise.all([
+        const [latestResult, historyResult, libraryResult] = await Promise.allSettled([
           phase1BackendService.pests.latest(backendFarmId),
           phase1BackendService.pests.history(backendFarmId),
           phase1BackendService.pests.library({ crop: selectedCrop }),
         ]);
 
         if (!active) return;
+        clearTimeout(safetyTimeoutId);
 
-        setBackendDiagnosis(latest || null);
-        setBackendHistoryLog(history || []);
-        setBackendLibrary(library || []);
+        setBackendDiagnosis(latestResult.status === "fulfilled" ? latestResult.value || null : null);
+        setBackendHistoryLog(historyResult.status === "fulfilled" ? historyResult.value || [] : []);
+        setBackendLibrary(libraryResult.status === "fulfilled" ? libraryResult.value || [] : []);
 
-        if (latest?.id) {
-          const actions = await phase1BackendService.pests.listActions(latest.id);
+        const latestDiagnosis = latestResult.status === "fulfilled" ? latestResult.value : null;
+        if (latestDiagnosis?.id) {
+          const actions = await phase1BackendService.pests.listActions(latestDiagnosis.id);
           if (!active) return;
           setBackendActionLog(actions || []);
         } else {
@@ -647,13 +660,14 @@ export function PestsPage() {
 
         setPestState({
           loading: false,
-          notice: latest
+          notice: latestDiagnosis
             ? "Using backend pest diagnosis history with demo fallback preserved."
             : "No backend pest diagnosis exists yet for this farm. Demo intelligence remains available.",
-          source: latest ? "Backend Pest Data" : "Demo Pest Data",
+          source: latestDiagnosis ? "Backend Pest Data" : "Demo Pest Data",
         });
       } catch (error) {
         if (!active) return;
+        clearTimeout(safetyTimeoutId);
         console.warn("Pest backend load failed. Falling back to demo pest intelligence.", error);
         setBackendDiagnosis(null);
         setBackendHistoryLog([]);
@@ -671,6 +685,7 @@ export function PestsPage() {
 
     return () => {
       active = false;
+      clearTimeout(safetyTimeoutId);
     };
   }, [backendFarmId, backendMode, selectedCrop]);
 

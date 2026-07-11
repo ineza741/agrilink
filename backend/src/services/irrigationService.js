@@ -227,19 +227,31 @@ function buildSoilProfileFromSources(payloadSoil, latestSoilTest, farm) {
       phosphorus: Number(latestSoilTest.phosphorus),
       potassium: Number(latestSoilTest.potassium),
       organicMatter: Number(latestSoilTest.organicMatter),
-      texture: latestSoilTest.texture || payloadSoil.texture || farm.soilType || farm.landType || "Loamy",
+      texture: latestSoilTest.texture || (payloadSoil ? payloadSoil.texture : null) || farm.soilType || farm.landType || "Loamy",
       source: "Using uploaded lab data",
     };
   }
 
+  if (payloadSoil) {
+    return {
+      ph: Number(payloadSoil.ph),
+      nitrogen: Number(payloadSoil.nitrogen),
+      phosphorus: Number(payloadSoil.phosphorus),
+      potassium: Number(payloadSoil.potassium),
+      organicMatter: Number(payloadSoil.organicMatter),
+      texture: payloadSoil.texture || farm.soilType || farm.landType || "Loamy",
+      source: payloadSoil.source || "Using estimated soil data from location",
+    };
+  }
+
   return {
-    ph: Number(payloadSoil.ph),
-    nitrogen: Number(payloadSoil.nitrogen),
-    phosphorus: Number(payloadSoil.phosphorus),
-    potassium: Number(payloadSoil.potassium),
-    organicMatter: Number(payloadSoil.organicMatter),
-    texture: payloadSoil.texture || farm.soilType || farm.landType || "Loamy",
-    source: payloadSoil.source || "Using estimated soil data from location",
+    ph: 6.5,
+    nitrogen: 35,
+    phosphorus: 20,
+    potassium: 18,
+    organicMatter: 2.5,
+    texture: farm.soilType || farm.landType || "Loamy",
+    source: "Default farm soil estimate",
   };
 }
 
@@ -575,7 +587,7 @@ async function calculateIrrigationAdvisory(user, farmId, payload) {
       weatherSourceLabel: advisorySnapshot.weatherLabel,
       soilSourceLabel: soilProfile.source || advisorySnapshot.soilLabel,
       targetYield: Number(payload.targetYield || 0),
-      fertilizerType: payload.fertilizerType,
+      fertilizerType: payload.fertilizerType || "Precision NPK",
       availableBudget: Number(payload.budget || 0),
       soilMoisture: Number(payload.soilMoisture || 0),
       sensorMode: payload.sensorMode || "manual",
@@ -764,6 +776,159 @@ async function deleteFarmReminder(user, reminderId) {
   return { deleted: true, id: reminderId };
 }
 
+// --- Irrigation Records ---
+
+function mapIrrigationRecord(record) {
+  if (!record) return null;
+  return {
+    id: record.id,
+    farmId: record.farmId,
+    irrigationDate: record.irrigationDate,
+    waterAmount: Number(record.waterAmount),
+    irrigationMethod: record.irrigationMethod,
+    durationMinutes: record.durationMinutes,
+    completionStatus: record.completionStatus,
+    notes: record.notes,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  };
+}
+
+async function createIrrigationRecord(user, farmId, payload) {
+  const farm = await getFarmForAccess(user, farmId);
+
+  const record = await prisma.irrigationRecord.create({
+    data: {
+      farmId,
+      irrigationDate: new Date(payload.irrigationDate),
+      waterAmount: Number(payload.waterAmount),
+      irrigationMethod: payload.irrigationMethod,
+      durationMinutes: payload.durationMinutes || null,
+      completionStatus: payload.completionStatus || "Completed",
+      notes: payload.notes || null,
+    },
+  });
+
+  await createAuditLog({
+    actorUserId: user.id,
+    action: "IRRIGATION_RECORD_CREATED",
+    entityType: "IrrigationRecord",
+    entityId: record.id,
+    details: {
+      farmName: farm.farmName,
+      waterAmount: payload.waterAmount,
+      irrigationDate: payload.irrigationDate,
+    },
+  });
+
+  return mapIrrigationRecord(record);
+}
+
+async function listIrrigationRecords(user, farmId, query = {}) {
+  await getFarmForAccess(user, farmId);
+
+  const limit = Number(query.limit || 20);
+
+  const records = await prisma.irrigationRecord.findMany({
+    where: { farmId },
+    orderBy: { irrigationDate: "desc" },
+    take: limit,
+  });
+
+  return records.map(mapIrrigationRecord);
+}
+
+async function updateIrrigationRecord(user, recordId, payload) {
+  const record = await prisma.irrigationRecord.findUnique({
+    where: { id: recordId },
+    include: {
+      farm: {
+        include: buildFarmInclude(),
+      },
+    },
+  });
+
+  if (!record) {
+    throw new ApiError(404, "Irrigation record not found.");
+  }
+
+  const isPrivileged = user.role === "Admin" || user.role === "ExtensionOfficer";
+  const isOwner = record.farm?.farmerProfile?.userId === user.id;
+
+  if (!isPrivileged && !isOwner) {
+    throw new ApiError(403, "You do not have permission to update this record.");
+  }
+
+  const updated = await prisma.irrigationRecord.update({
+    where: { id: recordId },
+    data: {
+      ...(payload.irrigationDate ? { irrigationDate: new Date(payload.irrigationDate) } : {}),
+      ...(payload.waterAmount !== undefined ? { waterAmount: Number(payload.waterAmount) } : {}),
+      ...(payload.irrigationMethod ? { irrigationMethod: payload.irrigationMethod } : {}),
+      ...(payload.durationMinutes !== undefined ? { durationMinutes: payload.durationMinutes } : {}),
+      ...(payload.completionStatus ? { completionStatus: payload.completionStatus } : {}),
+      ...(payload.notes !== undefined ? { notes: payload.notes || null } : {}),
+    },
+  });
+
+  return mapIrrigationRecord(updated);
+}
+
+// --- Soil Moisture ---
+
+function mapSoilMoisture(record) {
+  if (!record) return null;
+  return {
+    id: record.id,
+    farmId: record.farmId,
+    moisture: Number(record.moisture),
+    measuredAt: record.measuredAt,
+    source: record.source,
+    notes: record.notes,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  };
+}
+
+async function createSoilMoisture(user, farmId, payload) {
+  const farm = await getFarmForAccess(user, farmId);
+
+  const record = await prisma.soilMoisture.create({
+    data: {
+      farmId,
+      moisture: Number(payload.moisture),
+      measuredAt: new Date(payload.measuredAt),
+      source: payload.source || "Manual Entry",
+      notes: payload.notes || null,
+    },
+  });
+
+  await createAuditLog({
+    actorUserId: user.id,
+    action: "SOIL_MOISTURE_CREATED",
+    entityType: "SoilMoisture",
+    entityId: record.id,
+    details: {
+      farmName: farm.farmName,
+      moisture: payload.moisture,
+      source: payload.source,
+    },
+  });
+
+  return mapSoilMoisture(record);
+}
+
+async function getLatestSoilMoisture(user, farmId) {
+  await getFarmForAccess(user, farmId);
+
+  const record = await prisma.soilMoisture.findFirst({
+    where: { farmId },
+    orderBy: { measuredAt: "desc" },
+  });
+
+  return mapSoilMoisture(record);
+}
+
 module.exports = {
   calculateIrrigationAdvisory,
   getLatestIrrigationAdvisory,
@@ -771,4 +936,9 @@ module.exports = {
   createFarmReminder,
   updateFarmReminder,
   deleteFarmReminder,
+  createIrrigationRecord,
+  listIrrigationRecords,
+  updateIrrigationRecord,
+  createSoilMoisture,
+  getLatestSoilMoisture,
 };

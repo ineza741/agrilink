@@ -58,6 +58,77 @@ const deleteFarmReminder = asyncHandler(async (req, res) => {
   });
 });
 
+// --- Irrigation Records ---
+
+const createIrrigationRecord = asyncHandler(async (req, res) => {
+  const record = await irrigationService.createIrrigationRecord(
+    req.user,
+    req.validated.params.farmId,
+    req.validated.body,
+  );
+
+  res.status(201).json({
+    success: true,
+    message: "Irrigation record created successfully.",
+    data: record,
+  });
+});
+
+const listIrrigationRecords = asyncHandler(async (req, res) => {
+  const records = await irrigationService.listIrrigationRecords(
+    req.user,
+    req.validated.params.farmId,
+    req.validated.query,
+  );
+
+  res.json({
+    success: true,
+    data: records,
+  });
+});
+
+const updateIrrigationRecord = asyncHandler(async (req, res) => {
+  const record = await irrigationService.updateIrrigationRecord(
+    req.user,
+    req.validated.params.recordId,
+    req.validated.body,
+  );
+
+  res.json({
+    success: true,
+    message: "Irrigation record updated successfully.",
+    data: record,
+  });
+});
+
+// --- Soil Moisture ---
+
+const createSoilMoisture = asyncHandler(async (req, res) => {
+  const record = await irrigationService.createSoilMoisture(
+    req.user,
+    req.validated.params.farmId,
+    req.validated.body,
+  );
+
+  res.status(201).json({
+    success: true,
+    message: "Soil moisture recorded successfully.",
+    data: record,
+  });
+});
+
+const getLatestSoilMoisture = asyncHandler(async (req, res) => {
+  const record = await irrigationService.getLatestSoilMoisture(
+    req.user,
+    req.validated.params.farmId,
+  );
+
+  res.json({
+    success: true,
+    data: record,
+  });
+});
+
 module.exports = {
   calculateIrrigationAdvisory,
   getLatestIrrigationAdvisory,
@@ -65,4 +136,9 @@ module.exports = {
   createFarmReminder,
   updateFarmReminder,
   deleteFarmReminder,
+  createIrrigationRecord,
+  listIrrigationRecords,
+  updateIrrigationRecord,
+  createSoilMoisture,
+  getLatestSoilMoisture,
 };

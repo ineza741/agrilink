@@ -65,10 +65,34 @@ const addRecommendationFeedback = asyncHandler(async (req, res) => {
   });
 });
 
+const exportRecommendationPdf = asyncHandler(async (req, res) => {
+  const buffer = await recommendationService.exportRecommendationPdf(
+    req.user,
+    req.params.farmId,
+  );
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", 'attachment; filename="recommendation-report.pdf"');
+  res.send(buffer);
+});
+
+const exportRecommendationExcel = asyncHandler(async (req, res) => {
+  const buffer = await recommendationService.exportRecommendationExcel(
+    req.user,
+    req.params.farmId,
+  );
+
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", 'attachment; filename="recommendation-report.xlsx"');
+  res.send(buffer);
+});
+
 module.exports = {
   generateRecommendationRun,
   getLatestRecommendationRun,
   listRecommendationRunHistory,
   listRecommendationFeedback,
   addRecommendationFeedback,
+  exportRecommendationPdf,
+  exportRecommendationExcel,
 };

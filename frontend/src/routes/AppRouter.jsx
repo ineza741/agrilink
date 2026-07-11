@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+﻿import { Navigate, Route, Routes } from "react-router-dom";
 import { ProtectedRoute } from "../components/common/ProtectedRoute";
 import { useAuth } from "../context/AuthContext";
 import { AdminPage } from "../pages/admin/AdminPage";
@@ -9,6 +9,8 @@ import { RegisterPage } from "../pages/auth/RegisterPage";
 import { CommunityPage } from "../pages/community/CommunityPage";
 import { DashboardPage } from "../pages/dashboard/DashboardPage";
 import { FarmerDashboardPage } from "../pages/dashboard/FarmerDashboardPage";
+import { MarketOfficerDashboardPage } from "../pages/dashboard/MarketOfficerDashboardPage";
+import { MarketOfficerProfilePage } from "../pages/market-officer/MarketOfficerProfilePage";
 import { ProfilePage } from "../pages/farmers/ProfilePage";
 import { AddFarmPage } from "../pages/farms/AddFarmPage";
 import { FarmsPage } from "../pages/farms/FarmsPage";
@@ -16,6 +18,8 @@ import { IrrigationPage } from "../pages/irrigation/IrrigationPage";
 import { AuthLayout } from "../layouts/AuthLayout";
 import { DashboardLayout } from "../layouts/DashboardLayout";
 import { MarketPage } from "../pages/market/MarketPage";
+import { CropPricesPage } from "../pages/market/CropPricesPage";
+import { MarketOfficerApplicationsPage } from "../pages/admin/MarketOfficerApplicationsPage";
 import { NotificationsPage } from "../pages/notifications/NotificationsPage";
 import { PestsPage } from "../pages/pests/PestsPage";
 import { RegionalMonitoringPage } from "../pages/regional/RegionalMonitoringPage";
@@ -23,7 +27,7 @@ import { RecommendationsPage } from "../pages/recommendations/RecommendationsPag
 import { SettingsPage } from "../pages/settings/SettingsPage";
 import { SoilCropPage } from "../pages/soil-crop/SoilCropPage";
 import { WeatherPage } from "../pages/weather/WeatherPage";
-import { isAdminRole } from "../utils/roles";
+import { isAdminRole, isMarketOfficerRole } from "../utils/roles";
 
 function ProtectedLayout() {
   return (
@@ -35,7 +39,9 @@ function ProtectedLayout() {
 
 function RoleDashboardPage() {
   const { user } = useAuth();
-  return isAdminRole(user?.role) ? <DashboardPage /> : <FarmerDashboardPage />;
+  if (isAdminRole(user?.role)) return <DashboardPage />;
+  if (isMarketOfficerRole(user?.role)) return <Navigate to="/market-officer/dashboard" replace />;
+  return <FarmerDashboardPage />;
 }
 
 export function AppRouter() {
@@ -54,16 +60,78 @@ export function AppRouter() {
         <Route path="/weather" element={<WeatherPage />} />
         <Route path="/soil-crop" element={<SoilCropPage />} />
         <Route path="/ai-recommendation" element={<AiRecommendationPage />} />
-        <Route path="/recommendations" element={<RecommendationsPage />} />
+        <Route
+          path="/recommendations"
+          element={
+            <ProtectedRoute allowedRoles={["Admin", "ExtensionOfficer"]}>
+              <RecommendationsPage />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/market-intelligence" element={<MarketPage />} />
+        <Route
+          path="/crop-prices"
+          element={
+            <ProtectedRoute allowedRoles={["MarketOfficer", "Admin", "ExtensionOfficer"]}>
+              <CropPricesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/market-officer-applications"
+          element={
+            <ProtectedRoute allowedRoles={["Admin", "ExtensionOfficer"]}>
+              <MarketOfficerApplicationsPage />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/community" element={<CommunityPage />} />
         <Route path="/pests-diseases" element={<PestsPage />} />
         <Route path="/irrigation-fertilizer" element={<IrrigationPage />} />
-        <Route path="/regional-monitoring" element={<RegionalMonitoringPage />} />
+        <Route
+          path="/regional-monitoring"
+          element={
+            <ProtectedRoute allowedRoles={["Admin", "ExtensionOfficer"]}>
+              <RegionalMonitoringPage />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/admin" element={<AdminPage />} />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute allowedRoles={["Admin", "ExtensionOfficer"]}>
+              <AdminPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/market-officer/dashboard"
+          element={
+            <ProtectedRoute allowedRoles={["MarketOfficer"]}>
+              <MarketOfficerDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/market-officer/prices"
+          element={
+            <ProtectedRoute allowedRoles={["MarketOfficer"]}>
+              <CropPricesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/market-officer/profile"
+          element={
+            <ProtectedRoute allowedRoles={["MarketOfficer"]}>
+              <MarketOfficerProfilePage />
+            </ProtectedRoute>
+          }
+        />
       </Route>
 
       <Route path="*" element={<Navigate to="/login" replace />} />

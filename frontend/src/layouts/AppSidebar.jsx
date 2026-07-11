@@ -4,9 +4,10 @@ import {
   adminNavigationSections,
   brandConfig,
   farmerNavigationSections,
+  marketOfficerNavigationSections,
 } from "../data/navigation";
 import { useAuth } from "../context/AuthContext";
-import { getAdminRoleLabel, isAdminRole } from "../utils/roles";
+import { getAdminRoleLabel, isAdminRole, isMarketOfficerRole } from "../utils/roles";
 
 function initialsFromName(name = "User") {
   return name
@@ -21,7 +22,8 @@ export function AppSidebar({ isOpen = false, onClose = () => {} }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const isAdmin = isAdminRole(user?.role);
-  const sections = isAdmin ? adminNavigationSections : farmerNavigationSections;
+  const isMO = isMarketOfficerRole(user?.role);
+  const sections = isAdmin ? adminNavigationSections : isMO ? marketOfficerNavigationSections : farmerNavigationSections;
   const initials = initialsFromName(user?.name);
 
   return (
@@ -90,7 +92,7 @@ export function AppSidebar({ isOpen = false, onClose = () => {} }) {
             <span>{getAdminRoleLabel(user?.role || brandConfig.adminFooterRole)}</span>
           </div>
         </div>
-      ) : (
+      ) : !isMO ? (
         <button
           type="button"
           className="farmer-support-button"
@@ -102,7 +104,7 @@ export function AppSidebar({ isOpen = false, onClose = () => {} }) {
           <Headphones size={15} />
           <span>{brandConfig.supportLabel}</span>
         </button>
-      )}
+      ) : null}
     </aside>
   );
 }

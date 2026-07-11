@@ -99,7 +99,6 @@ const recentModifications = [
   { title: "Fertilizer Logic: NPK Ratios Adjusted", meta: "System Auto-Update · Yesterday" },
 ];
 
-const DEMO_MODE = true;
 const CONTENT_WORKFLOW = ["Draft", "Pending Review", "Approved", "Published", "Archived"];
 const CONTENT_LANGUAGE_OPTIONS = ["English", "Kinyarwanda", "French"];
 
@@ -2149,7 +2148,7 @@ function AdminContentManagementViewV2() {
   const exportDocumentation = () => {
     downloadTextFile(
       "content-management-documentation.txt",
-      `AgriSupport Content Management\n\nDEMO_MODE: ${DEMO_MODE}\nCurrent tab: ${activeTab}\nLanguage: ${contentLanguage}\nTrigger parameter: ${triggerParameter}\nSeverity: ${severity}`
+      `AgriSupport Content Management\n\nDEMO_MODE: ${!backendAdminMode}\nCurrent tab: ${activeTab}\nLanguage: ${contentLanguage}\nTrigger parameter: ${triggerParameter}\nSeverity: ${severity}`
     );
   };
 

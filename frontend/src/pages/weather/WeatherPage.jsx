@@ -26,6 +26,41 @@ import { PageHeader } from "../../components/common/PageHeader";
 import { AppCard } from "../../components/common/AppCard";
 import { StatusBadge } from "../../components/common/StatusBadge";
 
+function buildFallbackForecast() {
+  const today = new Date();
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(today);
+    date.setDate(date.getDate() + i);
+    days.push({
+      date: date.toISOString().slice(0, 10),
+      code: i === 0 ? 1 : i < 3 ? 2 : 3,
+      description: i === 0 ? "Mainly clear" : i < 3 ? "Partly cloudy" : "Overcast",
+      maxTemp: 24 + Math.round(Math.random() * 4),
+      minTemp: 16 + Math.round(Math.random() * 3),
+      precipitationProbability: Math.round(Math.random() * 40),
+      rainSum: Math.round(Math.random() * 5 * 10) / 10,
+      precipitationSum: Math.round(Math.random() * 8 * 10) / 10,
+      humidityMax: 60 + Math.round(Math.random() * 20),
+      windMax: 10 + Math.round(Math.random() * 12),
+    });
+  }
+  return {
+    current: { temperature_2m: 24, relative_humidity_2m: 65, wind_speed_10m: 12 },
+    daily: {
+      time: days.map(d => d.date),
+      weather_code: days.map(d => d.code),
+      temperature_2m_max: days.map(d => d.maxTemp),
+      temperature_2m_min: days.map(d => d.minTemp),
+      precipitation_probability_max: days.map(d => d.precipitationProbability),
+      rain_sum: days.map(d => d.rainSum),
+      precipitation_sum: days.map(d => d.precipitationSum),
+      relative_humidity_2m_max: days.map(d => d.humidityMax),
+      wind_speed_10m_max: days.map(d => d.windMax),
+    },
+  };
+}
+
 const WEATHER_CODE_MAP = {
   0: "Clear sky",
   1: "Mainly clear",
@@ -415,7 +450,10 @@ export function WeatherPage() {
 
   useEffect(() => {
     if (!selectedFarm?.location?.lat || !selectedFarm?.location?.lng) {
-      setError("Unable to fetch weather data. Please check internet connection or coordinates.");
+      const fallback = buildFallbackForecast();
+      setForecastData(fallback);
+      setHistoricalData([]);
+      setWarning("Live data unavailable. Showing local demo data.");
       setLoading(false);
       return;
     }
@@ -481,9 +519,14 @@ export function WeatherPage() {
       const [forecastResult, archiveResult] = results;
 
       if (forecastResult.status !== "fulfilled") {
-        setError("Unable to fetch weather data. Please check internet connection or coordinates.");
-        setForecastData(null);
+        if (import.meta.env.DEV) {
+          console.log("[WeatherPage] Open-Meteo API failed, using fallback demo data");
+        }
+        const fallback = buildFallbackForecast();
+        setForecastData(fallback);
         setHistoricalData([]);
+        setWarning("Live data unavailable. Showing local demo data.");
+        setLastUpdated(formatTimestamp(new Date()));
         return;
       }
 
@@ -506,16 +549,21 @@ export function WeatherPage() {
     const safetyTimeout = setTimeout(() => {
       if (!cancelled) {
         setLoading(false);
-        setError("Weather data timed out. Showing demo data.");
+        const fallback = buildFallbackForecast();
+        setForecastData(fallback);
+        setHistoricalData([]);
+        setWarning("Live data unavailable. Showing local demo data.");
+        setLastUpdated(formatTimestamp(new Date()));
       }
-    }, 15000);
+    }, 5000);
 
     loadWeather()
       .catch(() => {
         if (!cancelled) {
-          setError("Unable to fetch weather data. Please check internet connection or coordinates.");
-          setForecastData(null);
+          const fallback = buildFallbackForecast();
+          setForecastData(fallback);
           setHistoricalData([]);
+          setWarning("Live data unavailable. Showing local demo data.");
         }
       })
       .finally(() => {
@@ -623,7 +671,7 @@ export function WeatherPage() {
       {!loading && error ? <div style={{ padding: "12px 16px", background: "#FFEBEE", borderRadius: "10px", color: "var(--danger)", fontWeight: 500 }}>{error}</div> : null}
       {!loading && !error && warning ? <div style={{ padding: "12px 16px", background: "#FFF8E1", borderRadius: "10px", color: "#E65100", fontWeight: 500 }}>{warning}</div> : null}
 
-      {!loading && !error && todayForecast ? (
+      {!loading && todayForecast ? (
         <>
           <div className="weather-page-hero">
             <div className="weather-hero-main">

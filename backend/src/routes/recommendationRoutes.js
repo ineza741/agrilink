@@ -47,4 +47,14 @@ router.post(
   recommendationController.addRecommendationFeedback,
 );
 
+router.get(
+  "/farms/:farmId/export/pdf",
+  recommendationController.exportRecommendationPdf,
+);
+
+router.get(
+  "/farms/:farmId/export/excel",
+  recommendationController.exportRecommendationExcel,
+);
+
 module.exports = router;

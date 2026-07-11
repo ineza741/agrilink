@@ -1,7 +1,8 @@
-import { CircleHelp, Cpu, Database, Lock, Mail, Map, Sprout, Tractor, ArrowRight, Eye, TrendingUp, CloudSun, Leaf, ShieldCheck } from "lucide-react";
+import { CircleHelp, Cpu, Database, Lock, Mail, Map, Sprout, Tractor, ArrowRight, Eye, TrendingUp, CloudSun, Leaf, ShieldCheck, BarChart3 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
+import { isMarketOfficerRole } from "../../utils/roles";
 
 const initialForm = {
   email: "",
@@ -24,6 +25,7 @@ export function LoginPage() {
     () => ({
       farmer: { email: "farmer@agrisupport.rw", password: "Farmer@123" },
       admin: { email: "admin@agrisupport.rw", password: "Admin@123" },
+      marketOfficer: { email: "market@agrisupport.rw", password: "Market@123" },
     }),
     []
   );
@@ -62,6 +64,10 @@ export function LoginPage() {
 
       if (form.role === "farmer" && user.role !== "farmer") {
         throw new Error("Use the farmer demo account for this role.");
+      }
+
+      if (form.role === "marketOfficer" && !isMarketOfficerRole(user.role)) {
+        throw new Error("Use the market officer demo account for this role.");
       }
 
       navigate(from, { replace: true });
@@ -135,6 +141,13 @@ export function LoginPage() {
                 >
                   Admin / Extension Officer
                 </button>
+                <button
+                  type="button"
+                  className={form.role === "marketOfficer" ? "role-option active" : "role-option"}
+                  onClick={() => handleRoleChange("marketOfficer")}
+                >
+                  Market Officer
+                </button>
               </div>
             </div>
 
@@ -194,7 +207,9 @@ export function LoginPage() {
           </form>
 
           <p className="register-note">
-            New to the research platform? <Link to="/register">Register (Farmer Only)</Link>
+            New to the research platform? <Link to="/register">Register (Farmer)</Link>
+            {" | "}
+            <Link to="/register?role=market-officer">Register (Market Officer)</Link>
           </p>
 
           <div className="info-note">

@@ -1,8 +1,16 @@
-import {
-  ArrowDownRight, ArrowUpRight, Award, BarChart3, Bell, Bot, CheckCircle2, ChevronRight,
-  Clock, DollarSign, ExternalLink, Eye, Gauge, Globe, Info, MapPinned, Maximize2,
-  Navigation, PackageCheck, Route, ShipWheel, ShoppingCart, Star, Store, Target,
-  TrendingDown, TrendingUp, Truck, Users, Warehouse,
+﻿import {
+  ArrowDownRight,
+  ArrowUpRight,
+  BarChart3,
+  Bell,
+  Bot,
+  Clock,
+  DollarSign,
+  ExternalLink,
+  Globe,
+  MapPinned,
+  Navigation,
+  Store,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useFarmerData } from "../../context/FarmerDataContext";
@@ -12,11 +20,11 @@ import { PageHeader } from "../../components/common/PageHeader";
 import { AppCard } from "../../components/common/AppCard";
 import { ActionButton } from "../../components/common/ActionButton";
 import { StatusBadge } from "../../components/common/StatusBadge";
-import { MetricCard } from "../../components/common/MetricCard";
 
-const MARKET_STORAGE_KEY = "agri-feed-market-module-v2";
-
-const cropFilters = [
+const MARKET_STORAGE_KEY = "agri-feed-market-module-v3";
+const PRICE_TYPE_OPTIONS = ["Wholesale", "Retail", "Farm Gate"];
+const TIMEFRAME_OPTIONS = ["30D", "90D", "6M"];
+const CROP_OPTIONS = [
   "Wheat",
   "Corn",
   "Soybeans",
@@ -35,46 +43,6 @@ const cropFilters = [
   "Tea",
 ];
 
-const CROP_MARKET_PROFILE = {
-  Wheat: { current: 860, volatility: 0.08, growth30: 0.05, demand: 74, export: 980, wholesale: 790 },
-  Corn: { current: 680, volatility: 0.06, growth30: 0.04, demand: 78, export: 760, wholesale: 620 },
-  Soybeans: { current: 930, volatility: 0.07, growth30: 0.06, demand: 81, export: 1020, wholesale: 870 },
-  Rice: { current: 1420, volatility: 0.05, growth30: 0.03, demand: 68, export: 1560, wholesale: 1320 },
-  Barley: { current: 720, volatility: 0.05, growth30: 0.02, demand: 60, export: 790, wholesale: 660 },
-  Beans: { current: 980, volatility: 0.09, growth30: 0.07, demand: 84, export: 1080, wholesale: 910 },
-  "Irish Potato": { current: 520, volatility: 0.11, growth30: 0.03, demand: 79, export: 610, wholesale: 470 },
-  "Sweet Potato": { current: 460, volatility: 0.07, growth30: 0.02, demand: 71, export: 530, wholesale: 410 },
-  Cassava: { current: 430, volatility: 0.06, growth30: 0.01, demand: 66, export: 500, wholesale: 390 },
-  Sorghum: { current: 610, volatility: 0.05, growth30: 0.03, demand: 64, export: 690, wholesale: 560 },
-  Banana: { current: 380, volatility: 0.1, growth30: 0.02, demand: 77, export: 430, wholesale: 340 },
-  Plantain: { current: 420, volatility: 0.09, growth30: 0.025, demand: 76, export: 470, wholesale: 380 },
-  Groundnuts: { current: 1450, volatility: 0.08, growth30: 0.05, demand: 83, export: 1580, wholesale: 1360 },
-  Peas: { current: 890, volatility: 0.07, growth30: 0.04, demand: 67, export: 960, wholesale: 820 },
-  Coffee: { current: 2100, volatility: 0.06, growth30: 0.08, demand: 88, export: 2380, wholesale: 1950 },
-  Tea: { current: 1750, volatility: 0.05, growth30: 0.05, demand: 85, export: 1940, wholesale: 1620 },
-};
-
-const RWANDA_MARKET_DIRECTORY = [
-  { name: "Nyamata Market", district: "Bugesera", province: "Eastern", lat: -2.1405, lng: 30.1022, access: 88, road: "Paved highway access" },
-  { name: "Gako Market", district: "Bugesera", province: "Eastern", lat: -2.1754, lng: 30.1035, access: 76, road: "Good feeder-road access" },
-  { name: "Ruhuha Market", district: "Bugesera", province: "Eastern", lat: -2.2392, lng: 30.1936, access: 69, road: "Seasonal feeder access" },
-  { name: "Zinia Market", district: "Kicukiro", province: "Kigali City", lat: -1.9838, lng: 30.1014, access: 82, road: "Urban collector road" },
-  { name: "Kanserege Market", district: "Kicukiro", province: "Kigali City", lat: -1.9927, lng: 30.1086, access: 78, road: "Mixed traffic route" },
-  { name: "Kicukiro New Modern Market", district: "Kicukiro", province: "Kigali City", lat: -1.9704, lng: 30.1059, access: 91, road: "Modern wholesale entry" },
-  { name: "Nyabugogo Market", district: "Nyarugenge", province: "Kigali City", lat: -1.9446, lng: 30.0619, access: 89, road: "Major truck route" },
-  { name: "Kimironko Market", district: "Gasabo", province: "Kigali City", lat: -1.944, lng: 30.1131, access: 87, road: "High-volume urban market" },
-  { name: "Musanze Main Market", district: "Musanze", province: "Northern", lat: -1.4996, lng: 29.6344, access: 84, road: "Regional collector point" },
-  { name: "Kinigi Exchange Point", district: "Musanze", province: "Northern", lat: -1.4328, lng: 29.5874, access: 67, road: "Mountain access road" },
-  { name: "Huye Central Market", district: "Huye", province: "Southern", lat: -2.5967, lng: 29.7394, access: 83, road: "Reliable district road" },
-  { name: "Ngoma Trading Point", district: "Huye", province: "Southern", lat: -2.6125, lng: 29.7488, access: 72, road: "Good but slower loading access" },
-  { name: "Rubavu Border Market", district: "Rubavu", province: "Western", lat: -1.679, lng: 29.2589, access: 86, road: "Border trade route" },
-  { name: "Gisenyi Produce Market", district: "Rubavu", province: "Western", lat: -1.7026, lng: 29.2579, access: 80, road: "Urban + border route" },
-  { name: "Rwamagana Market", district: "Rwamagana", province: "Eastern", lat: -1.9499, lng: 30.4347, access: 79, road: "District aggregation route" },
-  { name: "Kigabiro Trading Hub", district: "Rwamagana", province: "Eastern", lat: -1.9524, lng: 30.4416, access: 74, road: "Cooperative buyer route" },
-  { name: "Kayonza Market", district: "Kayonza", province: "Eastern", lat: -1.8772, lng: 30.6451, access: 81, road: "Processor route access" },
-  { name: "Mukarange Collection Point", district: "Kayonza", province: "Eastern", lat: -1.8779, lng: 30.6507, access: 71, road: "Feeder-road aggregation point" },
-];
-
 function loadStoredState() {
   try {
     return JSON.parse(localStorage.getItem(MARKET_STORAGE_KEY) || "{}");
@@ -90,16 +58,34 @@ function saveStoredState(state) {
 function createDefaultFarm() {
   return {
     id: "market-default-farm",
+    farmName: "Primary Market Plot",
     name: "Primary Market Plot",
-    region: "Northern Highlands",
-    sizeHectares: 10,
-    primaryCrop: "Wheat",
-    location: { lat: -1.94, lng: 29.87, label: "Northern Highlands" },
+    district: "Kicukiro District",
+    province: "Kigali City",
+    primaryCrop: "Beans",
+    latitude: -1.9838,
+    longitude: 30.1014,
   };
 }
 
 function formatRwf(value) {
-  return `RWF ${Math.round(Number(value) || 0).toLocaleString()}`;
+  if (value == null || Number.isNaN(Number(value))) return "--";
+  return `RWF ${Math.round(Number(value)).toLocaleString()}`;
+}
+
+function formatDate(value) {
+  if (!value) return "--";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "--";
+  return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function getTrendLabel(change) {
+  if (change == null) return "No history";
+  if (change >= 7) return "Rising Fast";
+  if (change >= 2) return "Rising";
+  if (change <= -6) return "Falling";
+  return "Stable";
 }
 
 function normalizeCropSelection(value) {
@@ -108,846 +94,640 @@ function normalizeCropSelection(value) {
   if (value === "Potato" || value === "Potatoes") return "Irish Potato";
   if (value === "Groundnut" || value === "Peanut" || value === "Peanuts") return "Groundnuts";
   if (value === "Green Banana" || value === "Matoke") return "Banana";
-  return cropFilters.includes(value) ? value : "Wheat";
+  return CROP_OPTIONS.includes(value) ? value : "Beans";
 }
 
-function inferFarmDistrict(farm) {
-  const searchSpace = [farm?.region, farm?.location?.label, farm?.name]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  const found = RWANDA_MARKET_DIRECTORY.find((market) =>
-    searchSpace.includes(market.district.toLowerCase())
-  );
-  return found?.district || "Nyarugenge";
+function dedupeLatestPrices(records) {
+  const latest = new Map();
+  for (const record of records) {
+    const key = `${record.marketName}||${record.district}`;
+    if (!latest.has(key)) {
+      latest.set(key, record);
+    }
+  }
+  return [...latest.values()];
 }
 
-function inferFarmProvince(farm) {
-  const district = inferFarmDistrict(farm);
-  const found = RWANDA_MARKET_DIRECTORY.find((market) => market.district === district);
-  return found?.province || "Kigali City";
+function getPriceField(priceType) {
+  if (priceType === "Retail") return "retailPrice";
+  if (priceType === "Farm Gate") return "farmGatePrice";
+  return "wholesalePrice";
 }
 
-function haversineKm(lat1, lng1, lat2, lng2) {
-  const earthRadiusKm = 6371;
-  const toRad = (value) => (value * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return earthRadiusKm * c;
+function buildFallbackRanking(records, priceType) {
+  const priceField = getPriceField(priceType);
+  return records
+    .filter((record) => record[priceField] != null)
+    .map((record) => ({
+      id: `${record.id}-${priceType}`,
+      name: record.marketName,
+      district: record.district,
+      currentPrice: Number(record[priceField]),
+      currentPriceLabel: `${formatRwf(record[priceField])} / ${record.unit || "kg"}`,
+      demandLabel: "Official price",
+      trendLabel: getTrendLabel(record.previousPrice != null && Number(record.previousPrice) > 0 ? (((Number(record[priceField]) - Number(record.previousPrice)) / Number(record.previousPrice)) * 100) : null),
+      accessibilityLabel: "Backend record",
+      opportunityScore: Math.round(Math.min(100, Number(record[priceField]) / 20 + 45)),
+      recommendation: "Official Price",
+      updatedAt: record.updatedAt,
+      coordinates: { lat: Number(record.latitude || -1.9838), lng: Number(record.longitude || 30.1014) },
+    }))
+    .sort((a, b) => b.currentPrice - a.currentPrice);
 }
 
-function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), max);
+function getDemandTone(label) {
+  const normalized = (label || "").toLowerCase();
+  if (normalized.includes("high")) return "high";
+  if (normalized.includes("medium") || normalized.includes("moderate") || normalized.includes("mid")) return "mid";
+  if (normalized.includes("low")) return "low";
+  return "neutral";
 }
 
-function getDemandLabel(score) {
-  if (score >= 82) return "High";
-  if (score >= 68) return "Medium";
-  return "Low";
+function getTrendTone(label) {
+  const normalized = (label || "").toLowerCase();
+  if (normalized.includes("fall") || normalized.includes("down")) return "down";
+  if (normalized.includes("rise") || normalized.includes("up")) return "up";
+  return "flat";
 }
 
-function getTrendLabel(changePct) {
-  if (changePct >= 7) return "Rising Fast";
-  if (changePct >= 2) return "Rising";
-  if (changePct <= -6) return "Falling";
-  return "Stable";
+function formatChange(change) {
+  if (change == null || Number.isNaN(Number(change))) return "--";
+  const numeric = Number(change);
+  return `${numeric >= 0 ? "+" : ""}${numeric}%`;
 }
 
-function getRecommendationLabel(score) {
-  if (score >= 82) return "Best Choice";
-  if (score >= 70) return "Good Option";
-  if (score >= 55) return "Moderate";
-  return "Avoid";
-}
-
-function createMapEmbedUrl(selectedFarm, markets) {
-  const farmLat = selectedFarm?.location?.lat ?? -1.9441;
-  const farmLng = selectedFarm?.location?.lng ?? 30.0619;
-  const lats = [farmLat, ...markets.map((market) => market.coordinates.lat)];
-  const lngs = [farmLng, ...markets.map((market) => market.coordinates.lng)];
-  const minLat = Math.min(...lats) - 0.03;
-  const maxLat = Math.max(...lats) + 0.03;
-  const minLng = Math.min(...lngs) - 0.03;
-  const maxLng = Math.max(...lngs) + 0.03;
-  const bbox = [minLng, minLat, maxLng, maxLat].map((value) => value.toFixed(4)).join("%2C");
-  return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${farmLat.toFixed(4)}%2C${farmLng.toFixed(4)}`;
-}
-
-function buildForecastWindows(basePrice, growth30, volatility, demandScore) {
-  const growth7 = growth30 * 0.35 + (demandScore - 70) * 0.001;
-  const growth90 = growth30 * 2.1 - volatility * 0.15;
-  const predicted7 = Math.round(basePrice * (1 + growth7));
-  const predicted30 = Math.round(basePrice * (1 + growth30));
-  const predicted90 = Math.round(basePrice * (1 + growth90));
-  const confidence = clamp(Math.round(62 + demandScore * 0.22 - volatility * 90), 58, 95);
-
-  return [
-    {
-      label: "7 Days",
-      currentPrice: basePrice,
-      predictedPrice: predicted7,
-      forecastChange: Number((((predicted7 - basePrice) / basePrice) * 100).toFixed(1)),
-      confidence,
-    },
-    {
-      label: "30 Days",
-      currentPrice: basePrice,
-      predictedPrice: predicted30,
-      forecastChange: Number((((predicted30 - basePrice) / basePrice) * 100).toFixed(1)),
-      confidence: clamp(confidence - 4, 52, 92),
-    },
-    {
-      label: "90 Days",
-      currentPrice: basePrice,
-      predictedPrice: predicted90,
-      forecastChange: Number((((predicted90 - basePrice) / basePrice) * 100).toFixed(1)),
-      confidence: clamp(confidence - 8, 48, 88),
-    },
-  ];
-}
-
-function buildMarketData({ farm, crop, timeframe }) {
-  const profile = CROP_MARKET_PROFILE[crop] || CROP_MARKET_PROFILE.Wheat;
-  const district = inferFarmDistrict(farm);
-  const province = inferFarmProvince(farm);
-  const farmLat = Number(farm?.location?.lat || -1.9441);
-  const farmLng = Number(farm?.location?.lng || 30.0619);
-  const seed = Math.round(Math.abs(farmLat) * 100 + Math.abs(farmLng) * 100 + Number(farm?.sizeHectares || 0));
-
-  const candidateMarkets = RWANDA_MARKET_DIRECTORY.filter(
-    (market) => market.district === district || market.province === province
-  );
-
-  const markets = candidateMarkets
-    .map((market, index) => {
-      const distanceKm = haversineKm(farmLat, farmLng, market.lat, market.lng);
-      const priceVariance = ((seed + index * 9) % 45) - 18;
-      const currentPrice = profile.current + priceVariance;
-      const demandScore = clamp(profile.demand + (market.access - 75) * 0.35 - distanceKm * 1.4, 42, 97);
-      const trendChange = Number((profile.growth30 * 100 + ((seed + index * 7) % 6) - 2).toFixed(1));
-      const distanceScore = clamp(100 - distanceKm * 4.2, 18, 100);
-      const accessScore = market.access;
-      const opportunityScore = Math.round(
-        currentPrice * 0.4 * (100 / (profile.current * 1.35)) +
-        demandScore * 0.3 +
-        distanceScore * 0.2 +
-        accessScore * 0.1
-      );
-
-      return {
-        id: `${market.name}-${crop}`,
-        name: market.name,
-        district: market.district,
-        province: market.province,
-        distanceKm,
-        distanceLabel: `${distanceKm.toFixed(1)} km`,
-        currentPrice,
-        currentPriceLabel: `${formatRwf(currentPrice)} / kg`,
-        wholesalePriceLabel: `${formatRwf(profile.wholesale + Math.round(priceVariance * 0.85))} / kg`,
-        exportPriceLabel: `${formatRwf(profile.export + Math.round(priceVariance * 1.15))} / kg`,
-        demandScore,
-        demandLabel: getDemandLabel(demandScore),
-        trendChange,
-        trendLabel: getTrendLabel(trendChange),
-        accessibilityScore: accessScore,
-        accessibilityLabel: accessScore >= 85 ? "Excellent" : accessScore >= 72 ? "Good" : "Limited",
-        recommendation: getRecommendationLabel(opportunityScore),
-        opportunityScore: clamp(opportunityScore, 35, 98),
-        routeNote: market.road,
-        coordinates: { lat: market.lat, lng: market.lng },
-        updatedAt: "2026-06-18",
-      };
-    })
-    .sort((a, b) => a.distanceKm - b.distanceKm)
-    .slice(0, 5)
-    .sort((a, b) => b.opportunityScore - a.opportunityScore);
-
-  const basePrice = Math.round(
-    markets.reduce((sum, market) => sum + market.currentPrice, 0) / Math.max(markets.length, 1)
-  );
-  const trendLength = timeframe === "6M" ? 6 : timeframe === "90D" ? 8 : 10;
-  const trendBars = Array.from({ length: trendLength }, (_, index) => {
-    const seasonal = Math.sin((index + seed / 8) * 0.7) * 7;
-    const drift = profile.growth30 * 100 * (index / trendLength) * 1.1;
-    return Math.round(30 + seasonal + drift + (profile.demand - 60) * 0.22);
-  });
-
-  const forecasts = buildForecastWindows(basePrice, profile.growth30, profile.volatility, profile.demand);
-  const bestMarket = markets?.[0];
-  const aiDecision =
-    (forecasts?.[0]?.forecastChange ?? 0) >= 4
-      ? "Wait 7 Days"
-      : profile.export > basePrice * 1.22 && bestMarket?.province !== "Kigali City"
-        ? "Export Opportunity"
-        : bestMarket?.opportunityScore >= 82
-          ? "Sell Now"
-          : "Wait 14 Days";
-
-  const aiReason =
-    aiDecision === "Wait 7 Days"
-      ? `Demand forecast is increasing and prices are expected to rise by ${forecasts?.[0]?.forecastChange ?? 0}%.`
-      : aiDecision === "Export Opportunity"
-        ? "Export and wholesale spreads are strong enough to justify a premium selling channel."
-        : aiDecision === "Sell Now"
-          ? `${bestMarket?.name || "Top market"} currently offers the strongest score with good access and price.`
-          : "Current signals are stable, but a later window may improve margin if transport is planned well.";
-
-  const logisticsTips = [
-    `Nearest district markets for ${district} are ranked by opportunity and route distance from ${farm.name}.`,
-    "Prioritize markets with good accessibility during rainy periods to reduce spoilage and delay.",
-    "Bulk loads above 8 tons should compare wholesale and export channels before dispatch.",
-  ];
-
-  const platforms = [
-    {
-      title: "Local Market Platforms",
-      description: "Use district-level buyer coordination and cooperative trading boards.",
-      actionLabel: "Open Platform",
-      href: `https://www.google.com/search?q=${encodeURIComponent(`${district} crop market platform Rwanda`)}`,
-    },
-    {
-      title: "Wholesale Platforms",
-      description: "Review larger buyer networks and transport-backed aggregation channels.",
-      actionLabel: "Visit Market Website",
-      href: `https://www.google.com/search?q=${encodeURIComponent(`${crop} wholesale buyers Rwanda`)}`,
-    },
-    {
-      title: "Export Platforms",
-      description: "Benchmark export buyers and cross-border opportunity channels.",
-      actionLabel: "Open Platform",
-      href: `https://www.google.com/search?q=${encodeURIComponent(`${crop} export buyers Rwanda`)}`,
-    },
-  ];
-
-  return {
-    district,
-    province,
-    trendBars,
-    forecasts,
-    markets,
-    bestMarket,
-    aiDecision,
-    aiReason,
-    aiConfidence: clamp(Math.round((bestMarket?.opportunityScore || 68) * 0.88), 58, 95),
-    logisticsTips,
-    platforms,
-    currentPrice: basePrice,
-    demandForecast: clamp(Math.round(markets.reduce((sum, market) => sum + market.demandScore, 0) / Math.max(markets.length, 1)), 40, 96),
-    mapUrl: createMapEmbedUrl(farm, markets),
-  };
+function formatPriceLabel(row, fallbackUnit = "kg") {
+  if (!row) return "--";
+  if (row.currentPriceLabel) return row.currentPriceLabel;
+  return `${formatRwf(row.currentPrice)} / ${row.unit || fallbackUnit}`;
 }
 
 export function MarketPage() {
   const { currentFarms } = useFarmerData();
-  const farms = currentFarms?.length ? currentFarms : [createDefaultFarm()];
   const stored = useMemo(() => loadStoredState(), []);
-  const [selectedFarmId, setSelectedFarmId] = useState(farms?.[0]?.id || "market-default-farm");
-  const [selectedCrop, setSelectedCrop] = useState(
-    normalizeCropSelection(stored.selectedCrop || farms?.[0]?.primaryCrop || "Wheat")
-  );
+  const farms = currentFarms?.length ? currentFarms : [createDefaultFarm()];
+  const [selectedFarmId, setSelectedFarmId] = useState(farms[0]?.id || "market-default-farm");
+  const [selectedCrop, setSelectedCrop] = useState(normalizeCropSelection(stored.selectedCrop || farms[0]?.primaryCrop || "Beans"));
+  const [selectedMarket, setSelectedMarket] = useState(stored.selectedMarket || "");
+  const [priceType, setPriceType] = useState(stored.priceType || "Wholesale");
   const [timeframe, setTimeframe] = useState(stored.timeframe || "30D");
   const [targetPrice, setTargetPrice] = useState(stored.targetPrice || "750");
   const [alerts, setAlerts] = useState(stored.alerts || []);
-  const [backendMarket, setBackendMarket] = useState(null);
+  const [officialRecords, setOfficialRecords] = useState([]);
+  const [officialCurrentPrice, setOfficialCurrentPrice] = useState(null);
+  const [marketAnalysis, setMarketAnalysis] = useState(null);
   const [backendAlerts, setBackendAlerts] = useState([]);
-  const [marketState, setMarketState] = useState({
-    loading: false,
-    notice: "",
-    source: "Demo Market Data",
-  });
+  const [state, setState] = useState({ loading: false, notice: "", source: "Official Backend Price" });
 
   useEffect(() => {
-    saveStoredState({ selectedCrop, timeframe, targetPrice, alerts });
-  }, [selectedCrop, timeframe, targetPrice, alerts]);
+    saveStoredState({ selectedCrop, selectedMarket, priceType, timeframe, targetPrice, alerts });
+  }, [selectedCrop, selectedMarket, priceType, timeframe, targetPrice, alerts]);
 
   useEffect(() => {
     if (!farms.some((farm) => farm.id === selectedFarmId)) {
-      setSelectedFarmId(farms?.[0]?.id || "market-default-farm");
+      setSelectedFarmId(farms[0]?.id || "market-default-farm");
     }
   }, [farms, selectedFarmId]);
 
-  const selectedFarm = useMemo(
-    () => farms.find((farm) => farm.id === selectedFarmId) || farms?.[0] || null,
-    [farms, selectedFarmId]
-  );
-
-  const localMarket = useMemo(
-    () => buildMarketData({ farm: selectedFarm, crop: selectedCrop, timeframe }),
-    [selectedFarm, selectedCrop, timeframe]
-  );
+  const selectedFarm = useMemo(() => farms.find((farm) => farm.id === selectedFarmId) || farms[0] || null, [farms, selectedFarmId]);
   const backendFarmId = selectedFarm?.backendFarmId || selectedFarm?.id || "";
-  const backendMode = isBackendSessionActive() && Boolean(selectedFarm?.backendFarmId);
-  const market = backendMarket || localMarket;
-  const visibleAlerts = backendMode ? backendAlerts : alerts;
-  const marketCoordinateLabel =
-    selectedFarm?.location?.lat !== undefined && selectedFarm?.location?.lng !== undefined
-      ? `${selectedFarm.location.lat.toFixed(4)}, ${selectedFarm.location.lng.toFixed(4)}`
-      : selectedFarm?.latitude !== undefined && selectedFarm?.longitude !== undefined
-        ? `${Number(selectedFarm.latitude).toFixed(4)}, ${Number(selectedFarm.longitude).toFixed(4)}`
-        : "--";
-  const bestMarketWholesaleLabel = market.bestMarket?.wholesalePriceLabel
-    || (market.bestMarket?.wholesalePrice ? `${formatRwf(market.bestMarket.wholesalePrice)} / kg` : "--");
-  const bestMarketExportLabel = market.bestMarket?.exportPriceLabel
-    || (market.bestMarket?.exportPrice ? `${formatRwf(market.bestMarket.exportPrice)} / kg` : "--");
+  const backendMode = isBackendSessionActive() && Boolean(backendFarmId);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const records = await phase1BackendService.cropPrices.list({ cropName: selectedCrop, status: "Active" });
+        if (cancelled) return;
+        const latest = dedupeLatestPrices(Array.isArray(records) ? records : []);
+        setOfficialRecords(latest);
+        if (!selectedMarket || !latest.some((record) => record.marketName === selectedMarket)) {
+          const districtMatch = latest.find((record) => record.district === selectedFarm?.district);
+          setSelectedMarket(districtMatch?.marketName || latest[0]?.marketName || "");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setOfficialRecords([]);
+          setSelectedMarket("");
+          setState((current) => ({ ...current, notice: error?.message || "Failed to load official crop prices." }));
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedCrop, selectedFarm?.district, selectedMarket]);
 
   useEffect(() => {
     let cancelled = false;
-
-    if (!backendMode || !backendFarmId) {
-      setBackendMarket(null);
-      setBackendAlerts([]);
-      setMarketState({
-        loading: false,
-        notice: "Using demo/local market intelligence for this farm.",
-        source: "Demo Market Data",
-      });
-      return undefined;
+    if (!selectedCrop || !selectedMarket) {
+      setOfficialCurrentPrice(null);
+      return () => { cancelled = true; };
     }
 
-    async function loadBackendMarket() {
-      setMarketState({
-        loading: true,
-        notice: "",
-        source: "Live Backend Market Data",
-      });
-
+    (async () => {
       try {
-        const [analysis, alertItems] = await Promise.all([
-          phase1BackendService.market.analyze(backendFarmId, {
+        const current = await phase1BackendService.cropPrices.currentPrice({
+          crop: selectedCrop,
+          market: selectedMarket,
+          district: selectedFarm?.district,
+          priceType,
+        });
+        if (!cancelled) setOfficialCurrentPrice(current);
+      } catch (error) {
+        if (!cancelled) {
+          setOfficialCurrentPrice(null);
+          setState((current) => ({ ...current, notice: error?.message || `No official ${priceType.toLowerCase()} price exists yet for ${selectedCrop} at ${selectedMarket}.` }));
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [selectedCrop, selectedMarket, selectedFarm?.district, priceType]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!backendMode || !backendFarmId || !selectedCrop || !selectedMarket) {
+      setMarketAnalysis(null);
+      setBackendAlerts([]);
+      return () => { cancelled = true; };
+    }
+
+    (async () => {
+      try {
+        setState({ loading: true, notice: "Loading official market analysis...", source: "Official Backend Price" });
+        const [analysis, alertList] = await Promise.all([
+          phase1BackendService.market.latest(backendFarmId, {
             crop: selectedCrop,
             timeframe,
+            priceType,
+            marketName: selectedMarket,
+            district: selectedFarm?.district,
           }),
           phase1BackendService.market.listAlerts(backendFarmId),
         ]);
-
         if (cancelled) return;
-
-        setBackendMarket(analysis || null);
-        setBackendAlerts(alertItems || []);
-        setMarketState({
+        setMarketAnalysis(analysis || null);
+        setBackendAlerts(Array.isArray(alertList) ? alertList : []);
+        setState({
           loading: false,
           notice: analysis
-            ? "Using backend market analysis with local fallback preserved."
-            : "No backend market analysis found yet. Showing demo market data.",
-          source: analysis ? "Live Backend Market Data" : "Demo Market Data",
+            ? "Official price loaded from Market Officer records. Forecasts and rankings are derived from backend analysis."
+            : "Official price loaded. Advanced market analysis is not available yet.",
+          source: analysis ? "Official Backend Price + Analysis" : "Official Backend Price",
         });
       } catch (error) {
         if (cancelled) return;
-
-        console.warn("Market backend load failed. Falling back to demo market data.", error);
-        setBackendMarket(null);
+        setMarketAnalysis(null);
         setBackendAlerts([]);
-        setMarketState({
+        setState({
           loading: false,
-          notice: "Backend market data is unavailable right now. Showing demo market data for presentation mode.",
-          source: "Demo Market Data",
+          notice: officialCurrentPrice
+            ? "Official price loaded. Advanced market analysis is unavailable right now."
+            : error?.message || "Unable to load backend market analysis.",
+          source: "Official Backend Price",
         });
       }
-    }
+    })();
 
-    loadBackendMarket();
+    return () => { cancelled = true; };
+  }, [backendMode, backendFarmId, selectedCrop, selectedMarket, priceType, timeframe, selectedFarm?.district, officialCurrentPrice]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [backendFarmId, backendMode, selectedCrop, timeframe]);
+  const marketOptions = useMemo(() => officialRecords.map((record) => record.marketName), [officialRecords]);
+  const rankingRows = useMemo(() => {
+    if (Array.isArray(marketAnalysis?.markets) && marketAnalysis.markets.length) return marketAnalysis.markets;
+    return buildFallbackRanking(officialRecords, priceType);
+  }, [marketAnalysis, officialRecords, priceType]);
+  const visibleAlerts = backendMode ? backendAlerts : alerts;
+  const bestMarket = marketAnalysis?.bestMarket || rankingRows[0] || null;
+  const forecastRows = Array.isArray(marketAnalysis?.forecasts) ? marketAnalysis.forecasts : [];
+  const selectedMarketRow = useMemo(
+    () => rankingRows.find((row) => row.name === selectedMarket) || bestMarket || null,
+    [bestMarket, rankingRows, selectedMarket]
+  );
+  const forecastConfidence = useMemo(() => {
+    if (!forecastRows.length) return null;
+    const total = forecastRows.reduce((sum, forecast) => sum + Number(forecast.confidence || 0), 0);
+    return Math.round(total / forecastRows.length);
+  }, [forecastRows]);
+  const currentPriceUnit = officialCurrentPrice?.unit || officialRecords[0]?.unit || "kg";
+  const alertDisabled = !officialCurrentPrice || Number(targetPrice) <= 0;
 
   const createAlert = async () => {
-    const price = Number(targetPrice);
-    if (!price || !market.bestMarket) return;
+    const numericTarget = Number(targetPrice);
+    if (!numericTarget || !officialCurrentPrice) return;
+
     const localAlert = {
-      id: `${selectedFarm.id}-${selectedCrop}-${price}-${market.bestMarket.name}`,
+      id: `${selectedFarmId}-${selectedCrop}-${priceType}-${numericTarget}`,
       crop: selectedCrop,
-      targetPrice: Math.round(price),
-      currentPrice: market.bestMarket.currentPrice,
+      targetPrice: Math.round(numericTarget),
+      currentPrice: officialCurrentPrice.currentPrice,
       createdAt: new Date().toISOString(),
-      status: price <= market.bestMarket.currentPrice ? "Target reached" : "Monitoring",
+      status: numericTarget <= officialCurrentPrice.currentPrice ? "Target reached" : "Monitoring",
     };
 
     if (backendMode && backendFarmId) {
       try {
         const created = await phase1BackendService.market.createAlert(backendFarmId, {
           crop: selectedCrop,
-          targetPrice: Math.round(price),
+          targetPrice: Math.round(numericTarget),
+          currentPrice: officialCurrentPrice.currentPrice,
+          bestMarketName: bestMarket?.name || officialCurrentPrice.market,
+          status: localAlert.status,
         });
-        setBackendAlerts((current) => {
-          if (current.some((item) => item.id === created.id)) return current;
-          return [created, ...current].slice(0, 6);
-        });
-        setMarketState((current) => ({
-          ...current,
-          notice: `Price alert saved for ${selectedCrop} in ${market.bestMarket.name}.`,
-        }));
+        setBackendAlerts((current) => [created, ...current]);
         return;
-      } catch (error) {
-        console.warn("Backend market alert save failed. Falling back to local alert storage.", error);
+      } catch {
+        // Fall back to local alert state if backend alert creation fails.
       }
     }
 
-    setAlerts((current) => {
-      if (current.some((item) => item.id === localAlert.id)) return current;
-      return [localAlert, ...current].slice(0, 6);
-    });
-    setMarketState((current) => ({
-      ...current,
-      notice: `Local demo alert created for ${selectedCrop}.`,
-      source: current.source || "Demo Market Data",
-    }));
-  };
-
-  const CROP_EMOJI = {
-    Wheat: "\u{1F33E}", Corn: "\u{1F33D}", Soybeans: "\u{1FAD8}", Rice: "\u{1F35A}", Barley: "\u{1F33E}",
-    Beans: "\u{1FAD8}", "Irish Potato": "\u{1F954}", "Sweet Potato": "\u{1F360}", Cassava: "\u{1F331}",
-    Sorghum: "\u{1F33E}", Banana: "\u{1F34C}", Plantain: "\u{1F34C}", Groundnuts: "\u{1F95C}", Peas: "\u{1FADB}",
-    Coffee: "\u2615", Tea: "\u{1F375}",
+    setAlerts((current) => [localAlert, ...current]);
   };
 
   return (
-    <PageShell>
+    <PageShell maxWidth="1380px" className="market-intelligence-page">
       <PageHeader
         title="Market Intelligence"
-        subtitle="Live crop pricing, demand forecasting, nearby market comparison, and AI selling guidance."
-        actions={
-          <div className="mk-header-actions">
-            <StatusBadge variant={backendMode ? "success" : "default"}>
-              {backendMode ? "Backend linked" : "Demo data"}
-            </StatusBadge>
-          </div>
-        }
+        subtitle="Official crop prices from Market Officers, with backend analysis layered on top for forecasts, ranking, and selling guidance."
+        actions={<StatusBadge variant="success">{state.source}</StatusBadge>}
       />
 
-      <div className="mk-filter-bar">
-        <div className="mk-filter-left">
-          <label className="mk-filter-field">
-            <span className="mk-filter-label">Farm</span>
-            <select value={selectedFarmId} onChange={(e) => setSelectedFarmId(e.target.value)}>
-              {farms.map((farm) => (
-                <option key={farm.id} value={farm.id}>
-                  {farm.name} &mdash; {farm.region}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="mk-filter-field">
-            <span className="mk-filter-label">Timeframe</span>
-            <div className="mk-tab-group">
-              {["30D", "90D", "6M"].map((t) => (
-                <button key={t} type="button" className={`mk-tab ${timeframe === t ? "active" : ""}`} onClick={() => setTimeframe(t)}>
-                  {t === "30D" ? "30 Days" : t === "90D" ? "90 Days" : "6 Months"}
-                </button>
-              ))}
+      <AppCard className="mk-hero-card" padding={false}>
+        <div className="mk-hero-top">
+          <div className="mk-hero-copy">
+            <span className="mk-hero-eyebrow">Official market intelligence</span>
+            <h2>Track the current official price, compare nearby markets, and plan where to sell.</h2>
+            <p>
+              The values below come from the same Market Officer price records stored in MySQL. Forecasts and recommendations are clearly separated from the official current price.
+            </p>
+          </div>
+          <div className="mk-hero-stats">
+            <div className="mk-hero-stat">
+              <span>Selected Crop</span>
+              <strong>{selectedCrop}</strong>
+            </div>
+            <div className="mk-hero-stat">
+              <span>Tracked Markets</span>
+              <strong>{rankingRows.length || 0}</strong>
+            </div>
+            <div className="mk-hero-stat">
+              <span>Current Price Type</span>
+              <strong>{priceType}</strong>
             </div>
           </div>
-          <label className="mk-filter-field mk-target-field">
-            <span className="mk-filter-label">Target Price (RWF)</span>
-            <div className="mk-target-input-wrap">
-              <input type="number" step="1" value={targetPrice} onChange={(e) => setTargetPrice(e.target.value)} placeholder="e.g. 750" />
-              <button type="button" className="mk-alert-btn" onClick={createAlert} title="Set price alert">
-                <Bell size={16} />
-              </button>
-            </div>
-          </label>
         </div>
-        <div className="mk-filter-right">
-          <div className="mk-context-chips">
-            <span className="mk-context-chip">{market.district}</span>
-            <span className="mk-context-chip">{market.province}</span>
+        <div className="mk-filter-bar mk-filter-bar-hero">
+          <div className="mk-filter-left">
+            <label className="mk-filter-field">
+              <span className="mk-filter-label">Farm</span>
+              <select value={selectedFarmId} onChange={(event) => setSelectedFarmId(event.target.value)}>
+                {farms.map((farm) => (
+                  <option key={farm.id} value={farm.id}>{farm.name || farm.farmName}</option>
+                ))}
+              </select>
+            </label>
+            <label className="mk-filter-field">
+              <span className="mk-filter-label">Crop</span>
+              <select value={selectedCrop} onChange={(event) => setSelectedCrop(event.target.value)}>
+                {CROP_OPTIONS.map((crop) => <option key={crop} value={crop}>{crop}</option>)}
+              </select>
+            </label>
+            <label className="mk-filter-field">
+              <span className="mk-filter-label">Market</span>
+              <select value={selectedMarket} onChange={(event) => setSelectedMarket(event.target.value)}>
+                {marketOptions.map((market) => <option key={market} value={market}>{market}</option>)}
+              </select>
+            </label>
+            <label className="mk-filter-field">
+              <span className="mk-filter-label">Price Type</span>
+              <select value={priceType} onChange={(event) => setPriceType(event.target.value)}>
+                {PRICE_TYPE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+            </label>
+            <label className="mk-filter-field">
+              <span className="mk-filter-label">Forecast Window</span>
+              <select value={timeframe} onChange={(event) => setTimeframe(event.target.value)}>
+                {TIMEFRAME_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+            </label>
+          </div>
+          <div className="mk-filter-right">
+            <div className="mk-context-chips">
+              <span className="mk-context-chip">{selectedFarm?.district || "District unavailable"}</span>
+              <span className="mk-context-chip">{selectedMarket || "No market selected"}</span>
+              <span className="mk-context-chip">{backendMode ? "Backend session active" : "Backend session unavailable"}</span>
+            </div>
           </div>
         </div>
-      </div>
+      </AppCard>
 
-      {marketState.notice ? (
-        <div className="mk-notice">
-          <Info size={14} />
-          <span>{marketState.notice}</span>
+      {(state.notice || state.loading) ? (
+        <div className={`mk-notice ${state.loading ? "loading" : ""}`}>
+          <span className="mk-notice-dot" />
+          <span>{state.loading ? "Loading official market analysis..." : state.notice}</span>
         </div>
       ) : null}
 
-      <div className="mk-crop-strip">
-        <div className="mk-crop-chips">
-          {cropFilters.map((crop) => (
-            <button key={crop} type="button" className={`mk-crop-chip ${selectedCrop === crop ? "active" : ""}`} onClick={() => setSelectedCrop(crop)}>
-              <span className="mk-chip-emoji">{CROP_EMOJI[crop] || "\u{1F331}"}</span>
-              <span>{crop}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
       <div className="mk-kpi-grid">
         <div className="mk-kpi-card">
-          <div className="mk-kpi-icon green"><DollarSign size={20} /></div>
+          <div className="mk-kpi-icon green"><DollarSign size={18} /></div>
           <div className="mk-kpi-body">
-            <span className="mk-kpi-label">Current Price</span>
-            <strong className="mk-kpi-value">{formatRwf(market.currentPrice)}</strong>
-            <span className="mk-kpi-sub">/{selectedCrop} kg</span>
+            <span className="mk-kpi-label">Current Official Price</span>
+            <strong className="mk-kpi-value">{formatRwf(officialCurrentPrice?.currentPrice)}</strong>
+            <span className="mk-kpi-sub">{officialCurrentPrice ? `${officialCurrentPrice.priceType} | ${officialCurrentPrice.market}` : "No official price selected"}</span>
           </div>
-          <span className={`mk-kpi-trend ${(market.forecasts?.[0]?.forecastChange ?? 0) >= 0 ? "up" : "down"}`}>
-            {(market.forecasts?.[0]?.forecastChange ?? 0) >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-            {(market.forecasts?.[0]?.forecastChange ?? 0) >= 0 ? "+" : ""}{market.forecasts?.[0]?.forecastChange ?? 0}%
+          <span className={`mk-kpi-trend ${Number(officialCurrentPrice?.percentageChange) < 0 ? "down" : "up"}`}>
+            {formatChange(officialCurrentPrice?.percentageChange)}
           </span>
         </div>
+
         <div className="mk-kpi-card">
-          <div className="mk-kpi-icon blue"><TrendingUp size={20} /></div>
+          <div className="mk-kpi-icon blue"><Clock size={18} /></div>
           <div className="mk-kpi-body">
-            <span className="mk-kpi-label">Demand Forecast</span>
-            <strong className="mk-kpi-value">{market.demandForecast}<small>/100</small></strong>
-            <span className="mk-kpi-sub">{getDemandLabel(market.demandForecast)} demand</span>
+            <span className="mk-kpi-label">Previous Official Price</span>
+            <strong className="mk-kpi-value">{formatRwf(officialCurrentPrice?.previousPrice)}</strong>
+            <span className="mk-kpi-sub">{officialCurrentPrice ? `Effective ${formatDate(officialCurrentPrice.effectiveDate)}` : "No previous record"}</span>
           </div>
-          <span className={`mk-kpi-trend ${market.demandForecast >= 70 ? "up" : "down"}`}>
-            {market.demandForecast >= 70 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-            {market.demandForecast >= 70 ? "Strong" : "Weak"}
-          </span>
         </div>
+
         <div className="mk-kpi-card">
-          <div className="mk-kpi-icon amber"><Star size={20} /></div>
+          <div className="mk-kpi-icon amber"><MapPinned size={18} /></div>
           <div className="mk-kpi-body">
-            <span className="mk-kpi-label">Best Market Score</span>
-            <strong className="mk-kpi-value">{market.bestMarket?.opportunityScore || 0}<small>/100</small></strong>
-            <span className="mk-kpi-sub">{market.bestMarket?.recommendation || "\u2014"}</span>
+            <span className="mk-kpi-label">Best Market Right Now</span>
+            <strong className="mk-kpi-value">{bestMarket?.name || "--"}</strong>
+            <span className="mk-kpi-sub">{bestMarket ? formatPriceLabel(bestMarket, currentPriceUnit) : "No ranked market available"}</span>
           </div>
-          <StatusBadge variant={market.bestMarket?.recommendation === "Best Choice" ? "success" : market.bestMarket?.recommendation === "Good Option" ? "info" : "default"}>
-            {market.bestMarket?.name || "\u2014"}
-          </StatusBadge>
         </div>
+
         <div className="mk-kpi-card">
-          <div className="mk-kpi-icon purple"><Bot size={20} /></div>
+          <div className="mk-kpi-icon purple"><BarChart3 size={18} /></div>
           <div className="mk-kpi-body">
-            <span className="mk-kpi-label">AI Confidence</span>
-            <strong className="mk-kpi-value">{market.aiConfidence}<small>%</small></strong>
-            <div className="mk-kpi-bar-track"><div className="mk-kpi-bar-fill" style={{ width: `${market.aiConfidence}%` }} /></div>
+            <span className="mk-kpi-label">Forecast Confidence</span>
+            <strong className="mk-kpi-value">{forecastConfidence != null ? `${forecastConfidence}%` : "--"}</strong>
+            <span className="mk-kpi-sub">{forecastRows.length ? `${forecastRows.length} forecast points from backend analysis` : "Analysis unavailable"}</span>
           </div>
-          <span className="mk-kpi-extra">{market.aiDecision}</span>
-        </div>
-        <div className="mk-kpi-card">
-          <div className="mk-kpi-icon green"><BarChart3 size={20} /></div>
-          <div className="mk-kpi-body">
-            <span className="mk-kpi-label">Forecast Change</span>
-            <strong className="mk-kpi-value">{market.forecasts[1].forecastChange >= 0 ? "+" : ""}{market.forecasts[1].forecastChange}<small>%</small></strong>
-            <span className="mk-kpi-sub">{getTrendLabel(market.forecasts[1].forecastChange)}</span>
-          </div>
-          <span className="mk-kpi-trend-label">30-day outlook</span>
         </div>
       </div>
 
       <div className="mk-main-layout">
         <div className="mk-main-left">
-
-          <AppCard className="mk-chart-card">
-            <div className="mk-card-head">
-              <div className="mk-card-head-left">
-                <BarChart3 size={18} />
-                <h3>Price Trend &mdash; {timeframe}</h3>
+          <AppCard className="mk-price-card">
+            <div className="mk-card-head mk-card-head-split">
+              <div>
+                <div className="mk-card-title-row">
+                  <DollarSign size={18} />
+                  <h3>Official Price Overview</h3>
+                </div>
+                <span className="mk-card-subtitle">This is the current official price from Market Officer records, not a generated estimate.</span>
               </div>
-              <div className="mk-card-head-right">
-                <span className={`mk-trend-badge ${market.forecasts[1].forecastChange >= 0 ? "up" : "down"}`}>
-                  {market.forecasts[1].forecastChange >= 0 ? "+" : ""}{market.forecasts[1].forecastChange}% 30d
-                </span>
-              </div>
+              <StatusBadge variant="success">MySQL source</StatusBadge>
             </div>
-            <div className="mk-chart-body">
-              <div className="mk-chart-visual">
-                <div className="mk-chart-area">
-                  <div className="mk-chart-target-line" style={{ bottom: `${Math.min((Number(targetPrice) / (market.currentPrice || 1)) * 50, 90)}%` }}>
-                    <span className="mk-chart-target-label">Target: {formatRwf(Number(targetPrice))}</span>
+
+            {officialCurrentPrice ? (
+              <div className="mk-price-overview">
+                <div className="mk-price-spotlight">
+                  <span className="mk-price-spotlight-label">Current official {priceType.toLowerCase()} price</span>
+                  <strong className="mk-price-spotlight-value">{formatRwf(officialCurrentPrice.currentPrice)}</strong>
+                  <span className="mk-price-spotlight-unit">per {officialCurrentPrice.unit}</span>
+                  <div className="mk-price-change-row">
+                    <StatusBadge variant={Number(officialCurrentPrice.percentageChange) < 0 ? "red" : "success"}>
+                      {formatChange(officialCurrentPrice.percentageChange)} vs previous official price
+                    </StatusBadge>
+                    <span className="mk-price-update-meta">Updated by {officialCurrentPrice.updatedBy || "--"} on {formatDate(officialCurrentPrice.effectiveDate)}</span>
                   </div>
-                  <div className="mk-chart-today-line">
-                    <span className="mk-chart-today-label">Today</span>
+                </div>
+
+                <div className="mk-price-detail-grid">
+                  <div className="mk-price-detail-item"><span>Crop</span><strong>{officialCurrentPrice.crop}</strong></div>
+                  <div className="mk-price-detail-item"><span>Market</span><strong>{officialCurrentPrice.market}</strong></div>
+                  <div className="mk-price-detail-item"><span>District</span><strong>{officialCurrentPrice.district}</strong></div>
+                  <div className="mk-price-detail-item"><span>Price Type</span><strong>{officialCurrentPrice.priceType}</strong></div>
+                  <div className="mk-price-detail-item"><span>Previous Price</span><strong>{formatRwf(officialCurrentPrice.previousPrice)}</strong></div>
+                  <div className="mk-price-detail-item"><span>Change</span><strong>{formatChange(officialCurrentPrice.percentageChange)}</strong></div>
+                  <div className="mk-price-detail-item"><span>Effective Date</span><strong>{formatDate(officialCurrentPrice.effectiveDate)}</strong></div>
+                  <div className="mk-price-detail-item"><span>Updated By</span><strong>{officialCurrentPrice.updatedBy || "--"}</strong></div>
+                </div>
+              </div>
+            ) : (
+              <p className="mk-empty">No official price exists yet for the selected crop, market, and price type.</p>
+            )}
+          </AppCard>
+          <AppCard>
+            <div className="mk-card-head mk-card-head-split">
+              <div>
+                <div className="mk-card-title-row">
+                  <MapPinned size={18} />
+                  <h3>Nearby Markets and Official Prices</h3>
+                </div>
+                <span className="mk-card-subtitle">Compare nearby markets using the latest official {priceType.toLowerCase()} prices.</span>
+              </div>
+              <StatusBadge variant="default">{rankingRows.length} markets tracked</StatusBadge>
+            </div>
+
+            {rankingRows.length ? (
+              <>
+                <div className="mk-ranking-summary">
+                  <p>
+                    {bestMarket
+                      ? `${bestMarket.name} currently offers the strongest visible official price for ${selectedCrop}.`
+                      : `Official prices are available for ${rankingRows.length} markets.`}
+                  </p>
+                </div>
+                <div className="mk-ranking-wrap">
+                  <div className="mk-ranking-head mk-ranking-head-compact">
+                    <span className="mk-r-col-rank">#</span>
+                    <span className="mk-r-col-market">Market</span>
+                    <span className="mk-r-col-price">Official Price</span>
+                    <span className="mk-r-col-demand">Demand</span>
+                    <span className="mk-r-col-trend">Trend</span>
+                    <span className="mk-r-col-score">Score</span>
                   </div>
-                  <div className="mk-chart-bars-container">
-                    {market.trendBars.map((height, index) => (
-                      <div key={index} className="mk-chart-bar-wrap" style={{ flex: 1 }}>
-                        <div
-                          className={`mk-chart-bar ${index === market.trendBars.length - 1 ? "active" : ""} ${index >= market.trendBars.length - 3 ? "predicted" : ""}`}
-                          style={{ height: `${height}%` }}
-                          title={`${height}%`}
-                        />
+                  {rankingRows.map((row, index) => {
+                    const demandTone = getDemandTone(row.demandLabel);
+                    const trendTone = getTrendTone(row.trendLabel);
+                    const isSelected = row.name === selectedMarket;
+                    return (
+                      <div key={row.id || `${row.name}-${index}`} className={`mk-ranking-row mk-ranking-row-compact ${index === 0 ? "best" : ""} ${isSelected ? "selected" : ""}`}>
+                        <span className="mk-r-col-rank">{index + 1}</span>
+                        <div className="mk-r-col-market mk-r-market-info-wrap">
+                          <div className="mk-r-market-info">
+                            <div className="mk-r-market-title-row">
+                              <strong>{row.name}</strong>
+                              {index === 0 ? <span className="mk-best-badge">Best price</span> : null}
+                              {isSelected ? <span className="mk-selected-badge">Selected</span> : null}
+                            </div>
+                            <span className="mk-r-market-district">{row.district || "District unavailable"}</span>
+                            <span className="mk-r-market-meta">Updated {formatDate(row.updatedAt || officialCurrentPrice?.effectiveDate)}</span>
+                          </div>
+                        </div>
+                        <strong className="mk-r-col-price">{formatPriceLabel(row, currentPriceUnit)}</strong>
+                        <span className={`mk-r-col-demand ${demandTone}`}>{row.demandLabel || "Official price"}</span>
+                        <span className={`mk-r-col-trend ${trendTone}`}>{row.trendLabel || "--"}</span>
+                        <span className="mk-r-col-score">{row.opportunityScore || "--"}</span>
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
-                <div className="mk-chart-axis">
-                  <span>Start</span>
-                  <span>Mid</span>
-                  <span>Now</span>
-                </div>
-              </div>
-              <div className="mk-chart-legend">
-                <span className="mk-legend-item"><span className="mk-legend-dot historical" /> Historical</span>
-                <span className="mk-legend-item"><span className="mk-legend-dot predicted" /> Predicted</span>
-                <span className="mk-legend-item"><span className="mk-legend-line target" /> Target Price</span>
-                <span className="mk-legend-item"><span className="mk-legend-dash today" /> Today</span>
-              </div>
-            </div>
+              </>
+            ) : (
+              <p className="mk-empty">No official market prices are available for the selected crop.</p>
+            )}
           </AppCard>
 
           <AppCard>
-            <div className="mk-card-head">
-              <Clock size={18} />
-              <h3>Price Forecasting</h3>
-            </div>
-            <div className="mk-forecast-grid">
-              {market.forecasts.map((forecast) => (
-                <div key={forecast.label} className="mk-forecast-card">
-                  <div className="mk-fc-head">
-                    <span className="mk-fc-label">{forecast.label}</span>
-                    <div className={`mk-fc-change ${forecast.forecastChange >= 0 ? "up" : "down"}`}>
-                      {forecast.forecastChange >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                      <span>{forecast.forecastChange >= 0 ? "+" : ""}{forecast.forecastChange}%</span>
-                    </div>
-                  </div>
-                  <div className="mk-fc-prices">
-                    <div className="mk-fc-current">
-                      <span className="mk-fc-pricelabel">Current</span>
-                      <strong>{formatRwf(forecast.currentPrice)}</strong>
-                    </div>
-                    <ChevronRight size={14} className="mk-fc-arrow" />
-                    <div className="mk-fc-predicted">
-                      <span className="mk-fc-pricelabel">Predicted</span>
-                      <strong>{formatRwf(forecast.predictedPrice)}</strong>
-                    </div>
-                  </div>
-                  <div className="mk-fc-mini-chart">
-                    <div className="mk-fc-mini-bar-wrap">
-                      <div className="mk-fc-mini-bar current" style={{ height: "100%" }} />
-                    </div>
-                    <div className="mk-fc-mini-bar-wrap">
-                      <div className="mk-fc-mini-bar predicted" style={{ height: `${(forecast.predictedPrice / Math.max(forecast.currentPrice, forecast.predictedPrice)) * 100}%` }} />
-                    </div>
-                  </div>
-                  <div className="mk-fc-footer">
-                    <span className="mk-fc-confidence">{forecast.confidence}% confidence</span>
-                    <span className={`mk-fc-rec ${forecast.forecastChange >= 4 ? "buy" : forecast.forecastChange >= 0 ? "hold" : "sell"}`}>
-                      {forecast.forecastChange >= 4 ? "Buy" : forecast.forecastChange >= 0 ? "Hold" : "Sell"}
-                    </span>
-                  </div>
+            <div className="mk-card-head mk-card-head-split">
+              <div>
+                <div className="mk-card-title-row">
+                  <Clock size={18} />
+                  <h3>Forecast Outlook</h3>
                 </div>
-              ))}
-            </div>
-          </AppCard>
-
-          <AppCard>
-            <div className="mk-card-head">
-              <MapPinned size={18} />
-              <h3>Nearby Market Ranking</h3>
-              <span className="mk-card-subtitle">Sorted by opportunity score</span>
-            </div>
-            <div className="mk-ranking-wrap">
-              <div className="mk-ranking-head">
-                <span className="mk-r-col-rank">#</span>
-                <span className="mk-r-col-market">Market</span>
-                <span className="mk-r-col-dist">Distance</span>
-                <span className="mk-r-col-price">Price</span>
-                <span className="mk-r-col-demand">Demand</span>
-                <span className="mk-r-col-trend">Trend</span>
-                <span className="mk-r-col-access">Access</span>
-                <span className="mk-r-col-score">Score</span>
-                <span className="mk-r-col-action" />
+                <span className="mk-card-subtitle">Forecasted values start from the current official price and remain clearly labeled as projections.</span>
               </div>
-              {market.markets.map((row, index) => (
-                <div key={row.id} className={`mk-ranking-row ${index === 0 ? "best" : ""}`}>
-                  <span className="mk-r-col-rank">{index === 0 ? <Award size={16} className="mk-best-icon" /> : index + 1}</span>
-                  <div className="mk-r-col-market">
-                    <MapPinned size={14} className="mk-r-market-icon" />
-                    <div className="mk-r-market-info">
-                      <strong>{row.name}</strong>
-                      <span className="mk-r-market-district">{row.district}</span>
+              <StatusBadge variant="default">{timeframe}</StatusBadge>
+            </div>
+            {forecastRows.length ? (
+              <div className="mk-forecast-grid">
+                {forecastRows.map((forecast) => (
+                  <div key={forecast.label} className="mk-forecast-card">
+                    <div className="mk-fc-head">
+                      <span className="mk-fc-label">{forecast.label}</span>
+                      <div className={`mk-fc-change ${forecast.forecastChange >= 0 ? "up" : "down"}`}>
+                        {forecast.forecastChange >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+                        <span>{forecast.forecastChange >= 0 ? "+" : ""}{forecast.forecastChange}%</span>
+                      </div>
                     </div>
-                    {index === 0 && <span className="mk-best-badge">Best Choice</span>}
+                    <div className="mk-fc-prices">
+                      <div className="mk-fc-current">
+                        <span className="mk-fc-pricelabel">Official now</span>
+                        <strong>{formatRwf(forecast.currentPrice)}</strong>
+                      </div>
+                      <div className="mk-fc-predicted">
+                        <span className="mk-fc-pricelabel">Forecast</span>
+                        <strong>{formatRwf(forecast.predictedPrice)}</strong>
+                      </div>
+                    </div>
+                    <div className="mk-fc-footer">
+                      <span className="mk-fc-confidence">{forecast.confidence}% confidence</span>
+                    </div>
                   </div>
-                  <span className="mk-r-col-dist">{row.distanceLabel}</span>
-                  <strong className="mk-r-col-price">{row.currentPriceLabel || formatRwf(row.currentPrice)}</strong>
-                  <span className={`mk-r-col-demand ${row.demandLabel === "High" ? "high" : row.demandLabel === "Medium" ? "mid" : "low"}`}>{row.demandLabel}</span>
-                  <span className={`mk-r-col-trend ${row.trendLabel === "Rising Fast" || row.trendLabel === "Rising" ? "up" : "down"}`}>{row.trendLabel}</span>
-                  <span className="mk-r-col-access">
-                    <div className="mk-access-bar-bg"><div className="mk-access-bar-fill" style={{ width: `${row.accessibilityScore}%` }} /></div>
-                    <span>{row.accessibilityScore}%</span>
-                  </span>
-                  <span className="mk-r-col-score">{row.opportunityScore}</span>
-                  <span className="mk-r-col-action">
-                    <a href={`https://www.google.com/maps/search/?api=1&query=${row.coordinates.lat},${row.coordinates.lng}`} target="_blank" rel="noreferrer" className="mk-view-map-btn" title="View on map">
-                      <Navigation size={14} />
-                    </a>
-                  </span>
-                </div>
-              ))}
-            </div>
-          </AppCard>
-
-          <AppCard>
-            <div className="mk-card-head">
-              <Globe size={18} />
-              <h3>Farm &amp; Markets Map</h3>
-              <div className="mk-card-head-right">
-                {market.bestMarket && <span className="mk-map-distance">{market.bestMarket.distanceLabel} to best market</span>}
+                ))}
               </div>
-            </div>
-            <div className="mk-map-body">
-              <div className="mk-map-embed">
-                <iframe title="Nearby market map" src={market.mapUrl} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
-              </div>
-              <div className="mk-map-footer">
-                <div className="mk-map-legend-row">
-                  <span className="mk-map-legend-item"><MapPinned size={12} /> Farm</span>
-                  <span className="mk-map-legend-item"><Navigation size={12} /> Markets</span>
-                </div>
-                <div className="mk-map-actions">
-                  {market.bestMarket ? (
-                    <>
-                      <a className="mk-map-link" href={`https://www.google.com/maps/search/?api=1&query=${market.bestMarket.coordinates.lat},${market.bestMarket.coordinates.lng}`} target="_blank" rel="noreferrer"><Eye size={14} /><span>View</span></a>
-                      <a className="mk-map-link primary" href={`https://www.google.com/maps/dir/?api=1&origin=${selectedFarm?.location?.lat ?? selectedFarm?.latitude ?? -1.9441},${selectedFarm?.location?.lng ?? selectedFarm?.longitude ?? 30.0619}&destination=${market.bestMarket.coordinates.lat},${market.bestMarket.coordinates.lng}`} target="_blank" rel="noreferrer"><Navigation size={14} /><span>Directions</span></a>
-                      <a className="mk-map-link" href={`https://www.google.com/maps/dir/?api=1&origin=${selectedFarm?.location?.lat ?? selectedFarm?.latitude ?? -1.9441},${selectedFarm?.location?.lng ?? selectedFarm?.longitude ?? 30.0619}&destination=${market.bestMarket.coordinates.lat},${market.bestMarket.coordinates.lng}&travelmode=driving`} target="_blank" rel="noreferrer"><Maximize2 size={14} /><span>Full Map</span></a>
-                    </>
-                  ) : (
-                    <a className="mk-map-link primary" href={`https://www.google.com/maps/search/?api=1&query=${selectedFarm?.location?.lat ?? -1.9441},${selectedFarm?.location?.lng ?? 30.0619}`} target="_blank" rel="noreferrer"><Maximize2 size={14} /><span>Open Map</span></a>
-                  )}
-                </div>
-              </div>
-            </div>
+            ) : (
+              <p className="mk-empty">Forecasting is unavailable until backend analysis runs for the selected crop and market.</p>
+            )}
           </AppCard>
         </div>
 
         <div className="mk-main-right">
-
           <div className="mk-ai-card">
             <div className="mk-ai-head">
-              <Bot size={22} />
+              <Bot size={18} />
               <div>
                 <h3>AI Selling Recommendation</h3>
-                <span>Location-aware market advisory</span>
+                <span>Recommendation text is separate from the official price record.</span>
               </div>
             </div>
-            <div className="mk-ai-body">
-              <div className="mk-ai-decision-row">
-                <span className="mk-ai-label">Recommended Action</span>
-                <strong className="mk-ai-decision">{market.aiDecision}</strong>
-              </div>
-              {market.bestMarket && (
-                <div className="mk-ai-row">
-                  <Store size={14} />
-                  <span>Best market: <strong>{market.bestMarket.name}</strong></span>
+            {marketAnalysis ? (
+              <div className="mk-ai-body">
+                <div className="mk-ai-decision-row">
+                  <span className="mk-ai-label">Recommended Action</span>
+                  <strong className="mk-ai-decision">{marketAnalysis.aiDecision}</strong>
                 </div>
-              )}
-              <div className="mk-ai-row">
-                <DollarSign size={14} />
-                <span>Expected price: <strong>{formatRwf(market.bestMarket?.currentPrice || market.currentPrice)}</strong></span>
-              </div>
-              <p className="mk-ai-reason">{market.aiReason}</p>
-              <div className="mk-ai-conf-section">
-                <div className="mk-ai-conf-top">
-                  <span>AI Confidence</span>
-                  <strong>{market.aiConfidence}%</strong>
+                <div className="mk-ai-row"><Store size={14} /><span>Best market: <strong>{bestMarket?.name || "--"}</strong></span></div>
+                <div className="mk-ai-row"><DollarSign size={14} /><span>Official price: <strong>{formatRwf(officialCurrentPrice?.currentPrice)}</strong></span></div>
+                <p className="mk-ai-reason">{marketAnalysis.aiReason}</p>
+                <div className="mk-ai-conf-section">
+                  <div className="mk-ai-conf-top"><span>AI Confidence</span><strong>{marketAnalysis.aiConfidence}%</strong></div>
+                  <div className="mk-ai-conf-track">
+                    <div className="mk-ai-conf-fill" style={{ width: `${marketAnalysis.aiConfidence}%` }} />
+                  </div>
                 </div>
-                <div className="mk-ai-conf-track"><div className="mk-ai-conf-fill" style={{ width: `${market.aiConfidence}%` }} /></div>
               </div>
-            </div>
-            <button type="button" className="mk-ai-cta">
-              <ChevronRight size={16} />
-              <span>Generate Full Selling Advisory</span>
-            </button>
+            ) : (
+              <div className="mk-ai-body">
+                <div className="mk-ai-decision-row">
+                  <span className="mk-ai-label">Current Status</span>
+                  <strong className="mk-ai-decision">Official price available</strong>
+                </div>
+                <p className="mk-ai-reason">Advanced recommendation text is not available yet, but the current official price and nearby market ranking are still live from the backend.</p>
+              </div>
+            )}
           </div>
 
           <AppCard>
-            <div className="mk-card-head">
-              <Truck size={18} />
-              <h3>Logistics &amp; Accessibility</h3>
-            </div>
-            <div className="mk-logistics-grid">
-              <div className="mk-logi-card">
-                <Route size={18} />
-                <strong>Route Accessibility</strong>
-                <p>{market.logisticsTips?.[0]}</p>
-              </div>
-              <div className="mk-logi-card">
-                <Truck size={18} />
-                <strong>Transport Recommendation</strong>
-                <p>{market.logisticsTips[1]}</p>
-              </div>
-              <div className="mk-logi-card">
-                <ShipWheel size={18} />
-                <strong>Bulk Selling Advice</strong>
-                <p>{market.logisticsTips[2]}</p>
-              </div>
-            </div>
-          </AppCard>
-
-          <AppCard>
-            <div className="mk-card-head">
-              <Warehouse size={18} />
-              <h3>Wholesale &amp; Export</h3>
-            </div>
-            <div className="mk-export-grid">
-              <div className="mk-export-card">
-                <Store size={16} />
-                <strong>Wholesale Price</strong>
-                <span className="mk-export-value">{bestMarketWholesaleLabel}</span>
-                <div className="mk-export-meta">
-                  <span>Buyer demand: <strong>{getDemandLabel(market.demandForecast)}</strong></span>
+            <div className="mk-card-head mk-card-head-split">
+              <div>
+                <div className="mk-card-title-row">
+                  <Navigation size={18} />
+                  <h3>Market Snapshot</h3>
                 </div>
+                <span className="mk-card-subtitle">Quick context for the selected market and district.</span>
               </div>
-              <div className="mk-export-card">
-                <Globe size={16} />
-                <strong>Export Benchmark</strong>
-                <span className="mk-export-value">{bestMarketExportLabel}</span>
-                <div className="mk-export-meta">
-                  <span>Best channel: <strong>{market.aiDecision?.includes("Export") ? "Export" : "Local Wholesale"}</strong></span>
+            </div>
+            <div className="mk-summary-stack">
+              <div className="mk-summary-row"><span>Selected market</span><strong>{selectedMarketRow?.name || selectedMarket || "--"}</strong></div>
+              <div className="mk-summary-row"><span>District</span><strong>{selectedMarketRow?.district || selectedFarm?.district || "--"}</strong></div>
+              <div className="mk-summary-row"><span>Visible official price</span><strong>{selectedMarketRow ? formatPriceLabel(selectedMarketRow, currentPriceUnit) : "--"}</strong></div>
+              <div className="mk-summary-row"><span>Tracked markets</span><strong>{rankingRows.length || 0}</strong></div>
+              <div className="mk-summary-row"><span>Price type</span><strong>{priceType}</strong></div>
+            </div>
+          </AppCard>
+
+          <AppCard>
+            <div className="mk-card-head mk-card-head-split">
+              <div>
+                <div className="mk-card-title-row">
+                  <Bell size={18} />
+                  <h3>Price Alerts</h3>
                 </div>
+                <span className="mk-card-subtitle">Set a target and monitor when the official price reaches it.</span>
               </div>
             </div>
-          </AppCard>
-
-          <AppCard>
-            <div className="mk-card-head">
-              <PackageCheck size={18} />
-              <h3>Market Platforms</h3>
-            </div>
-            <div className="mk-platforms-list">
-              {market.platforms.map((platform) => (
-                <a key={platform.title} href={platform.href} target="_blank" rel="noreferrer" className="mk-platform-card">
-                  <div className="mk-platform-body">
-                    <strong>{platform.title}</strong>
-                    <span>{platform.description}</span>
-                  </div>
-                  <ExternalLink size={14} className="mk-platform-icon" />
-                </a>
-              ))}
-            </div>
-          </AppCard>
-
-          <AppCard>
-            <div className="mk-card-head">
-              <Bell size={18} />
-              <h3>Price Alerts</h3>
+            <div className="mk-alert-create-row">
+              <input
+                className="mk-alert-input"
+                type="number"
+                min="1"
+                value={targetPrice}
+                onChange={(event) => setTargetPrice(event.target.value)}
+                placeholder="Target price in RWF"
+              />
+              <ActionButton onClick={createAlert} disabled={alertDisabled}>Create Alert</ActionButton>
             </div>
             <div className="mk-alerts-list">
-              {visibleAlerts.length ? (
-                visibleAlerts.map((alert) => (
-                  <div key={alert.id} className="mk-alert-item">
-                    <div className="mk-alert-top">
-                      <strong>{alert.crop}</strong>
-                      <StatusBadge variant={alert.status === "Target reached" ? "success" : "default"}>
-                        {alert.status}
-                      </StatusBadge>
-                    </div>
-                    <div className="mk-alert-details">
-                      <span>Target: {formatRwf(alert.targetPrice)}</span>
-                      <span>Current: {formatRwf(alert.currentPrice)}</span>
-                    </div>
-                    <small>{new Date(alert.createdAt).toLocaleDateString("en-ZA")}</small>
-                  </div>
-                ))
-              ) : (
-                <p className="mk-empty">No price alerts yet. Enter a target price above.</p>
-              )}
+              {visibleAlerts.length ? visibleAlerts.slice(0, 4).map((alert) => (
+                <div key={alert.id} className="mk-alert-item">
+                  <div className="mk-alert-top"><strong>{alert.crop}</strong><StatusBadge variant={alert.status === "Target reached" ? "success" : "default"}>{alert.status}</StatusBadge></div>
+                  <div className="mk-alert-details"><span>Target: {formatRwf(alert.targetPrice)}</span><span>Current: {formatRwf(alert.currentPrice)}</span></div>
+                  <small>{formatDate(alert.createdAt)}</small>
+                </div>
+              )) : <p className="mk-empty">No price alerts yet.</p>}
             </div>
           </AppCard>
+
+          {(marketAnalysis?.platforms || []).length ? (
+            <AppCard>
+              <div className="mk-card-head mk-card-head-split">
+                <div>
+                  <div className="mk-card-title-row">
+                    <Globe size={18} />
+                    <h3>Market Platforms</h3>
+                  </div>
+                  <span className="mk-card-subtitle">Useful channels for additional market monitoring.</span>
+                </div>
+              </div>
+              <div className="mk-platforms-list">
+                {(marketAnalysis?.platforms || []).map((platform) => (
+                  <a key={platform.title} href={platform.href} target="_blank" rel="noreferrer" className="mk-platform-card">
+                    <div className="mk-platform-body"><strong>{platform.title}</strong><span>{platform.description}</span></div>
+                    <ExternalLink size={14} className="mk-platform-icon" />
+                  </a>
+                ))}
+              </div>
+            </AppCard>
+          ) : null}
         </div>
       </div>
     </PageShell>
   );
 }
+
+

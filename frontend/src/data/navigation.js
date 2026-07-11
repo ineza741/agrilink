@@ -7,9 +7,10 @@ import {
   Home,
   Map,
   Sprout,
-  Tractor,
+  TrendingUp,
   Users,
   FileText,
+  History,
 } from "lucide-react";
 
 export const adminNavigationSections = [
@@ -18,6 +19,7 @@ export const adminNavigationSections = [
     items: [
       { label: "Admin Dashboard", path: "/dashboard", icon: Home },
       { label: "Farmer Management", path: "/farms", icon: Users },
+      { label: "Market Officer Applications", path: "/market-officer-applications", icon: Users },
       { label: "Regional Monitoring Dashboard", path: "/regional-monitoring", icon: Map },
       { label: "Content Management", path: "/recommendations", icon: FileText },
       { label: "System Notifications", path: "/notifications", icon: BellRing },
@@ -40,10 +42,25 @@ export const farmerNavigationSections = [
       { label: "AI Recommendations", path: "/ai-recommendation", icon: Sprout },
       { label: "Market Intelligence", path: "/market-intelligence", icon: BarChart3 },
       { label: "Pest & Disease", path: "/pests-diseases", icon: Bug },
-      { label: "Irrigation & Fertilizer", path: "/irrigation-fertilizer", icon: Tractor },
+      { label: "Irrigation Management", path: "/irrigation-fertilizer", icon: Droplets },
       { label: "Analytics & Reports", path: "/analytics", icon: BarChart3 },
       { label: "Notifications", path: "/notifications", icon: BellRing },
-      { label: "Community & Knowledge", path: "/community", icon: Users },
+    ],
+  },
+];
+
+export const marketOfficerNavigationSections = [
+  {
+    title: "Main Menu",
+    items: [
+      { label: "Dashboard", path: "/market-officer/dashboard", icon: Home },
+      { label: "Crop Prices", path: "/market-officer/prices", icon: TrendingUp },
+    ],
+  },
+  {
+    title: "Account",
+    items: [
+      { label: "Profile", path: "/market-officer/profile", icon: Users },
     ],
   },
 ];
@@ -69,9 +86,13 @@ export const routeMeta = {
   "/analytics": { crumb: "Analytics and Reports" },
   "/notifications": { crumb: "Notifications" },
   "/community": { crumb: "Community & Knowledge" },
-  "/irrigation-fertilizer": { crumb: "Irrigation & Fertilizer" },
+  "/irrigation-fertilizer": { crumb: "Irrigation Management" },
   "/regional-monitoring": { crumb: "Regional Monitoring Dashboard" },
-  "/settings": { crumb: "Settings" },
   "/farms": { crumb: "Farmer Management" },
   "/farms/new": { crumb: "Add New Farm" },
+  "/market-officer-applications": { crumb: "Market Officer Applications" },
+  "/crop-prices": { crumb: "Crop Prices" },
+  "/market-officer/dashboard": { crumb: "Dashboard" },
+  "/market-officer/prices": { crumb: "Crop Prices" },
+  "/market-officer/profile": { crumb: "Profile" },
 };

@@ -10,6 +10,23 @@ const register = asyncHandler(async (req, res) => {
   });
 });
 
+const registerMarketOfficer = asyncHandler(async (req, res) => {
+  const result = await authService.register({ ...req.validated.body, role: "MarketOfficer" });
+  if (result.pendingApproval) {
+    res.status(201).json({
+      success: true,
+      message: result.message,
+      data: result,
+    });
+  } else {
+    res.status(201).json({
+      success: true,
+      message: "Market Officer account registered successfully.",
+      data: result,
+    });
+  }
+});
+
 const login = asyncHandler(async (req, res) => {
   const result = await authService.login(req.validated.body);
   res.json({
@@ -27,8 +44,19 @@ const me = asyncHandler(async (req, res) => {
   });
 });
 
+const updateProfile = asyncHandler(async (req, res) => {
+  const user = await authService.updateProfile(req.user.id, req.validated.body);
+  res.json({
+    success: true,
+    message: "Profile updated successfully.",
+    data: user,
+  });
+});
+
 module.exports = {
   register,
+  registerMarketOfficer,
   login,
   me,
+  updateProfile,
 };

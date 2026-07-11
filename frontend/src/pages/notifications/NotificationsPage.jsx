@@ -41,7 +41,6 @@ import { StatusBadge } from "../../components/common/StatusBadge";
 import { FilterChip } from "../../components/common/FilterBar";
 
 const NOTIFICATION_STORAGE_KEY = "agri-feed-notification-center-v3";
-const DEMO_MODE = true;
 
 const severityRank = { critical: 0, high: 1, warning: 2, info: 3 };
 
@@ -658,7 +657,7 @@ export function NotificationsPage() {
             <AppCard>
               <div className="notif-sidebar-head"><Info size={16} /><h3>Alert Context</h3></div>
               <p className="notif-context-text">
-                {DEMO_MODE ? `Demo alerts for ${primaryFarm.name} in ${primaryFarm.district}.` : "Live integrated alert streams."}
+                {!backendLoading ? `Demo alerts for ${primaryFarm.name} in ${primaryFarm.district}.` : "Live integrated alert streams."}
               </p>
               <ActionButton variant="secondary" size="sm" onClick={() => openRelatedModule("/dashboard")}>
                 <ExternalLink size={14} />

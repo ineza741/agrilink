@@ -151,6 +151,104 @@ const cropHistoryIdSchema = z.object({
   query: z.object({}).optional(),
 });
 
+const marketOfficerRegisterSchema = z.object({
+  body: z.object({
+    fullName: z.string().min(3),
+    email: z.string().email(),
+    phone: z.string().min(8),
+    password: z.string().min(8),
+    marketName: z.string().min(2),
+    district: z.string().min(2),
+    sector: z.string().min(2),
+    organization: z.string().optional().nullable(),
+    employeeNumber: z.string().optional().nullable(),
+    notes: z.string().optional().nullable(),
+  }),
+  params: z.object({}).optional(),
+  query: z.object({}).optional(),
+});
+
+const marketOfficerIdSchema = z.object({
+  body: z.object({}).optional(),
+  params: z.object({
+    id: z.string().uuid(),
+  }),
+  query: z.object({}).optional(),
+});
+
+const marketOfficerRejectSchema = z.object({
+  body: z.object({
+    reason: z.string().min(3),
+  }),
+  params: z.object({
+    id: z.string().uuid(),
+  }),
+  query: z.object({}).optional(),
+});
+
+const cropPriceCreateSchema = z.object({
+  body: z.object({
+    cropName: z.string().min(2),
+    cropVariety: z.string().optional().nullable(),
+    marketName: z.string().min(2),
+    district: z.string().min(2),
+    sector: z.string().optional().nullable(),
+    unit: z.string().default("kg"),
+    currency: z.string().default("RWF"),
+    wholesalePrice: z.coerce.number().positive(),
+    retailPrice: z.coerce.number().positive(),
+    farmGatePrice: z.coerce.number().positive().optional().nullable(),
+    effectiveDate: z.string().min(1),
+    reason: z.string().min(3).optional(),
+    notes: z.string().optional().nullable(),
+  }),
+  params: z.object({}).optional(),
+  query: z.object({}).optional(),
+});
+
+const cropPriceUpdateSchema = z.object({
+  body: z.object({
+    cropName: z.string().min(2).optional(),
+    cropVariety: z.string().optional().nullable(),
+    marketName: z.string().min(2).optional(),
+    district: z.string().min(2).optional(),
+    sector: z.string().optional().nullable(),
+    unit: z.string().optional(),
+    currency: z.string().optional(),
+    wholesalePrice: z.coerce.number().positive().optional(),
+    retailPrice: z.coerce.number().positive().optional(),
+    farmGatePrice: z.coerce.number().positive().optional().nullable(),
+    effectiveDate: z.string().optional(),
+    notes: z.string().optional().nullable(),
+    reason: z.string().min(3),
+  }),
+  params: z.object({
+    id: z.string().uuid(),
+  }),
+  query: z.object({}).optional(),
+});
+
+const cropPriceIdSchema = z.object({
+  body: z.object({}).optional(),
+  params: z.object({
+    id: z.string().uuid(),
+  }),
+  query: z.object({}).optional(),
+});
+
+const updateProfileSchema = z.object({
+  body: z.object({
+    fullName: z.string().min(3).optional(),
+    phone: z.string().min(8).optional(),
+    marketName: z.string().min(2).optional(),
+    district: z.string().min(2).optional(),
+    sector: z.string().min(2).optional(),
+    organization: z.string().optional(),
+  }),
+  params: z.object({}).optional(),
+  query: z.object({}).optional(),
+});
+
 module.exports = {
   registerSchema,
   loginSchema,
@@ -164,4 +262,11 @@ module.exports = {
   cropHistoryFarmIdSchema,
   cropHistoryIdSchema,
   uuidParam,
+  marketOfficerRegisterSchema,
+  marketOfficerIdSchema,
+  marketOfficerRejectSchema,
+  cropPriceCreateSchema,
+  cropPriceUpdateSchema,
+  cropPriceIdSchema,
+  updateProfileSchema,
 };

@@ -1,6 +1,7 @@
 ﻿const asyncHandler = require("../utils/asyncHandler");
 const adminService = require("../services/adminService");
 const contentManagementService = require("../services/contentManagementService");
+const marketOfficerService = require("../services/marketOfficerService");
 
 const getDashboardSummary = asyncHandler(async (_req, res) => {
   const summary = await adminService.getDashboardSummary();
@@ -91,6 +92,54 @@ const saveContentSandbox = asyncHandler(async (req, res) => {
   res.status(201).json({ success: true, data: payload });
 });
 
+const listMarketOfficers = asyncHandler(async (req, res) => {
+  const officers = await marketOfficerService.listMarketOfficers(req.query);
+  res.json({ success: true, data: officers });
+});
+
+const listPendingMarketOfficers = asyncHandler(async (_req, res) => {
+  const officers = await marketOfficerService.listPendingMarketOfficers();
+  res.json({ success: true, data: officers });
+});
+
+const getMarketOfficerById = asyncHandler(async (req, res) => {
+  const officer = await marketOfficerService.getMarketOfficerById(req.validated.params.id);
+  res.json({ success: true, data: officer });
+});
+
+const approveMarketOfficer = asyncHandler(async (req, res) => {
+  const result = await marketOfficerService.approveMarketOfficer({
+    officerId: req.validated.params.id,
+    adminUser: req.user,
+  });
+  res.json({ success: true, message: "Market Officer account approved successfully.", data: result });
+});
+
+const rejectMarketOfficer = asyncHandler(async (req, res) => {
+  const result = await marketOfficerService.rejectMarketOfficer({
+    officerId: req.validated.params.id,
+    reason: req.validated.body.reason,
+    adminUser: req.user,
+  });
+  res.json({ success: true, message: "Market Officer account rejected.", data: result });
+});
+
+const suspendMarketOfficer = asyncHandler(async (req, res) => {
+  const result = await marketOfficerService.suspendMarketOfficer({
+    officerId: req.validated.params.id,
+    adminUser: req.user,
+  });
+  res.json({ success: true, message: "Market Officer account suspended.", data: result });
+});
+
+const reactivateMarketOfficer = asyncHandler(async (req, res) => {
+  const result = await marketOfficerService.reactivateMarketOfficer({
+    officerId: req.validated.params.id,
+    adminUser: req.user,
+  });
+  res.json({ success: true, message: "Market Officer account reactivated.", data: result });
+});
+
 module.exports = {
   getDashboardSummary,
   getPendingFarmers,
@@ -105,4 +154,11 @@ module.exports = {
   syncFertilizerStandards,
   testContentSandbox,
   saveContentSandbox,
+  listMarketOfficers,
+  listPendingMarketOfficers,
+  getMarketOfficerById,
+  approveMarketOfficer,
+  rejectMarketOfficer,
+  suspendMarketOfficer,
+  reactivateMarketOfficer,
 };

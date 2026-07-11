@@ -36,7 +36,6 @@ import { StatusBadge } from "../../components/common/StatusBadge";
 import { FilterChip } from "../../components/common/FilterBar";
 
 const COMMUNITY_STORAGE_KEY = "agri-feed-community-module-v2";
-const DEMO_MODE = true;
 
 const initialData = {
   stats: { totalDiscussions: 186, activeExperts: 24, validatedPractices: 41, upcomingEvents: 8, knowledgeArticles: 62 },
@@ -127,12 +126,14 @@ export function CommunityPage() {
 
   useEffect(() => {
     let isMounted = true;
+    let safetyTimeoutId;
     async function syncCommunityDashboard() {
       if (!isBackendSessionActive()) return;
       setIsSyncing(true);
-      try { const dashboard = await phase1BackendService.community.dashboard(); if (!isMounted || !dashboard) return; setState(normalizeCommunityState(dashboard)); setCommunityMode("backend"); } catch (error) { if (import.meta.env.DEV) console.warn("Community backend sync failed", error); if (isMounted) setCommunityMode("demo"); } finally { if (isMounted) setIsSyncing(false); }
+      safetyTimeoutId = setTimeout(() => { if (isMounted) setIsSyncing(false); }, 5000);
+      try { const dashboard = await phase1BackendService.community.dashboard(); if (!isMounted || !dashboard) return; clearTimeout(safetyTimeoutId); setState(normalizeCommunityState(dashboard)); setCommunityMode("backend"); } catch (error) { clearTimeout(safetyTimeoutId); if (import.meta.env.DEV) console.warn("Community backend sync failed", error); if (isMounted) setCommunityMode("demo"); } finally { if (isMounted) setIsSyncing(false); }
     }
-    syncCommunityDashboard(); return () => { isMounted = false; };
+    syncCommunityDashboard(); return () => { isMounted = false; clearTimeout(safetyTimeoutId); };
   }, []);
 
   useEffect(() => { if (!message) return; const timeoutId = window.setTimeout(() => setMessage(""), 3200); return () => window.clearTimeout(timeoutId); }, [message]);
