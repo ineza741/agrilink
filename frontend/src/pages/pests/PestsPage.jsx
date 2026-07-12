@@ -1,1397 +1,595 @@
 import {
-  AlertTriangle, ArrowUpRight, BadgeCheck, Bug, CheckCircle2, ChevronRight, Clock,
-  CloudDrizzle, CloudLightning, Download, Droplets, Eye, FileClock, ImageUp, Info,
-  MapPinned, Navigation, RefreshCw, Search, ShieldAlert, ShieldCheck, Sparkles, Sprout,
-  Target, Thermometer, ThermometerSun, Trash2, TrendingDown, TrendingUp, Upload, Users, X,
+  BadgeCheck, Bug, CheckCircle2, ChevronDown, CreativeCommons, Droplets, ImageUp, MapPinned,
+  Scan, Search, Thermometer, Upload, X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { toast } from "sonner";
 import { PageShell } from "../../components/common/PageShell";
 import { PageHeader } from "../../components/common/PageHeader";
 import { AppCard } from "../../components/common/AppCard";
-import { SectionCard } from "../../components/common/SectionCard";
-import { MetricCard } from "../../components/common/MetricCard";
 import { ActionButton } from "../../components/common/ActionButton";
 import { StatusBadge } from "../../components/common/StatusBadge";
-import { ImageCard } from "../../components/common/ImageCard";
-import ImageWithFallback from "../../components/common/ImageWithFallback";
-import { useAuth } from "../../context/AuthContext";
+import { PlantHealthImage } from "../../components/common/PlantHealthImage";
 import { useFarmerData } from "../../context/FarmerDataContext";
-import { apiClient } from "../../services/api";
 import { isBackendSessionActive, phase1BackendService } from "../../services/phase1Backend";
-import { downloadJsonFile, downloadTextFile } from "../../utils/actions";
 
-const PEST_STORAGE_KEY = "agri-feed-pest-module-v2";
-
-const cropOptions = ["Potato", "Maize", "Beans", "Tomato", "Vegetables", "Cereals"];
-const symptomOptions = ["Yellow Spots", "Brown Holes", "White Mold", "Wilting"];
-
-const cropEconomics = {
-  Potato: { pricePerKg: 520, yieldPerHa: 18 },
-  Maize: { pricePerKg: 680, yieldPerHa: 5.5 },
-  Beans: { pricePerKg: 980, yieldPerHa: 1.9 },
-  Tomato: { pricePerKg: 850, yieldPerHa: 12 },
-  Vegetables: { pricePerKg: 740, yieldPerHa: 10 },
-  Cereals: { pricePerKg: 610, yieldPerHa: 4.8 },
-};
-
-const diseaseLibrary = [
-  {
-    id: "late-blight",
-    name: "Late Blight",
-    scientificName: "Phytophthora infestans",
-    affectedCrops: ["Potato", "Tomato"],
-    commonSymptoms: ["Yellow Spots", "White Mold"],
-    preventionAdvice: "Use resistant varieties, improve field drainage, and avoid prolonged canopy wetness.",
-    treatment: {
-      chemical: "Apply copper-based fungicide or cymoxanil mix at 5-7 day intervals under disease pressure.",
-      organic: "Use Trichoderma and remove infected foliage to reduce spore spread.",
-    },
-    ipmAdvice: "Combine weekly scouting, drainage control, and sanitation of infected residues.",
-    weatherProfile: {
-      humidityMin: 75,
-      humidityMax: 95,
-      temperatureMin: 16,
-      temperatureMax: 24,
-      rainfallMin: 10,
-    },
-    symptomWeights: {
-      "Yellow Spots": 22,
-      "White Mold": 26,
-      "Brown Holes": 6,
-      Wilting: 10,
-    },
-    imageUrl:
-      "https://images.unsplash.com/photo-1649088311431-9ffe92a4d4a4?w=800&q=80",
-  },
-  {
-    id: "green-peach-aphid",
-    name: "Green Peach Aphid",
-    scientificName: "Myzus persicae",
-    affectedCrops: ["Vegetables", "Beans", "Potato", "Tomato"],
-    commonSymptoms: ["Wilting", "Yellow Spots"],
-    preventionAdvice: "Control alternate host weeds, scout leaf undersides, and protect beneficial insects.",
-    treatment: {
-      chemical: "Apply selective systemic insecticide at economic threshold to reduce vector spread.",
-      organic: "Use neem extract plus predator release and sticky-trap monitoring.",
-    },
-    ipmAdvice: "Start with field scouting and biological control before broad chemical intervention.",
-    weatherProfile: {
-      humidityMin: 65,
-      humidityMax: 88,
-      temperatureMin: 20,
-      temperatureMax: 28,
-      rainfallMin: 2,
-    },
-    symptomWeights: {
-      "Yellow Spots": 20,
-      "White Mold": 4,
-      "Brown Holes": 5,
-      Wilting: 24,
-    },
-    imageUrl:
-      "https://images.unsplash.com/photo-1522325636832-5dbc1440f793?w=800&q=80",
-  },
-  {
-    id: "powdery-mildew",
-    name: "Powdery Mildew",
-    scientificName: "Erysiphales spp.",
-    affectedCrops: ["Beans", "Vegetables"],
-    commonSymptoms: ["White Mold", "Yellow Spots"],
-    preventionAdvice: "Reduce excessive nitrogen, space crops for airflow, and irrigate early in the day.",
-    treatment: {
-      chemical: "Use sulfur-based fungicide when disease is first observed under suitable weather.",
-      organic: "Use bicarbonate foliar spray with resistant variety rotation.",
-    },
-    ipmAdvice: "Prioritize spacing, canopy ventilation, and balanced nitrogen management.",
-    weatherProfile: {
-      humidityMin: 60,
-      humidityMax: 82,
-      temperatureMin: 18,
-      temperatureMax: 27,
-      rainfallMin: 0,
-    },
-    symptomWeights: {
-      "Yellow Spots": 14,
-      "White Mold": 28,
-      "Brown Holes": 4,
-      Wilting: 8,
-    },
-    imageUrl:
-      "https://images.unsplash.com/photo-1602332659518-1e068472e7ab?w=800&q=80",
-  },
-  {
-    id: "fall-armyworm",
-    name: "Fall Armyworm",
-    scientificName: "Spodoptera frugiperda",
-    affectedCrops: ["Maize", "Cereals"],
-    commonSymptoms: ["Brown Holes", "Wilting"],
-    preventionAdvice: "Scout maize whorls twice weekly and destroy egg masses before larval establishment.",
-    treatment: {
-      chemical: "Target larvae early with selective caterpillar insecticide in the whorl stage.",
-      organic: "Use ash/neem mix in the whorl and conserve parasitoids where possible.",
-    },
-    ipmAdvice: "Use pheromone traps, early scouting, and targeted control before heavy foliar damage.",
-    weatherProfile: {
-      humidityMin: 55,
-      humidityMax: 85,
-      temperatureMin: 22,
-      temperatureMax: 31,
-      rainfallMin: 5,
-    },
-    symptomWeights: {
-      "Yellow Spots": 6,
-      "White Mold": 3,
-      "Brown Holes": 28,
-      Wilting: 18,
-    },
-    imageUrl:
-      "https://images.unsplash.com/photo-1634049785220-33c3d8d2d336?w=800&q=80",
-  },
-];
-
-const outbreakHistorySeed = [
-  {
-    id: "seed-1",
-    date: "2026-05-22T09:10:00.000Z",
-    monthLabel: "May 2026",
-    pathogen: "Phytophthora infestans",
-    severity: "Moderate",
-    action: "Drainage correction and preventive fungicide",
-    district: "Northern Highlands",
-  },
-  {
-    id: "seed-2",
-    date: "2026-04-18T08:20:00.000Z",
-    monthLabel: "Apr 2026",
-    pathogen: "Myzus persicae",
-    severity: "Low",
-    action: "Sticky-trap monitoring",
-    district: "Northern Highlands",
-  },
-  {
-    id: "seed-3",
-    date: "2025-12-09T12:10:00.000Z",
-    monthLabel: "Dec 2025",
-    pathogen: "Spodoptera frugiperda",
-    severity: "High",
-    action: "Whorl-stage intervention",
-    district: "Kicukiro District",
-  },
-];
-
-function createDefaultFarm() {
-  return {
-    id: "pest-default-farm",
-    name: "Primary Advisory Plot",
-    region: "Northern Highlands",
-    sizeHectares: 12,
-    irrigationType: "Drip Irrigation",
-    primaryCrop: "Potato",
-    location: { lat: -1.94, lng: 29.87, label: "Primary advisory zone" },
-  };
+function formatDate(value) {
+  if (!value) return "--";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "--";
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-function loadStoredState() {
-  try {
-    return JSON.parse(localStorage.getItem(PEST_STORAGE_KEY) || "{}");
-  } catch {
-    return {};
-  }
+function normalizeFarm(v) {
+  if (!v) return null;
+  return { id: v.id, name: v.name || v.farmName || "", district: v.district || "", latitude: v.latitude ?? v.location?.lat ?? null, longitude: v.longitude ?? v.location?.lng ?? null };
 }
 
-function saveStoredState(state) {
-  localStorage.setItem(PEST_STORAGE_KEY, JSON.stringify(state));
-}
-
-function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), max);
-}
-
-function formatRwf(value) {
-  return new Intl.NumberFormat("en-RW", {
-    style: "currency",
-    currency: "RWF",
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
-function formatShortDate(value) {
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
-function inferDistrict(farm) {
-  const region = farm?.region || farm?.location?.label || "";
-  if (/kicukiro/i.test(region)) return "Kicukiro District";
-  if (/gasabo/i.test(region)) return "Gasabo District";
-  if (/nyarugenge/i.test(region)) return "Nyarugenge District";
-  if (/bugesera/i.test(region)) return "Bugesera District";
-  return region.split(",")[0] || "Unknown District";
-}
-
-function deriveCropStage(crop) {
-  const month = new Date().getMonth();
-  const cropMap = {
-    Potato: ["Tuber bulking", "Flowering", "Vegetative", "Harvest preparation"],
-    Maize: ["Flowering", "Grain filling", "Vegetative", "Harvest preparation"],
-    Beans: ["Flowering", "Pod filling", "Vegetative", "Harvest preparation"],
-    Tomato: ["Fruit set", "Flowering", "Vegetative", "Harvesting"],
-    Vegetables: ["Vegetative", "Leaf expansion", "Transplant recovery", "Harvesting"],
-    Cereals: ["Tillering", "Flowering", "Grain filling", "Harvest preparation"],
-  };
-
-  const cycle = cropMap[crop] || cropMap.Vegetables;
-  return cycle[month % cycle.length];
-}
-
-function getPriorityLabel(score) {
-  if (score >= 85) return "Critical";
-  if (score >= 72) return "High";
-  if (score >= 54) return "Medium";
-  return "Low";
-}
-
-function getRiskLabel(score) {
-  if (score >= 80) return "High";
-  if (score >= 55) return "Moderate";
-  return "Low";
-}
-
-function weatherCodeDescription(code) {
-  const mapping = {
-    0: "Clear sky",
-    1: "Mainly clear",
-    2: "Partly cloudy",
-    3: "Overcast",
-    45: "Fog",
-    48: "Rime fog",
-    51: "Light drizzle",
-    53: "Moderate drizzle",
-    55: "Dense drizzle",
-    61: "Slight rain",
-    63: "Moderate rain",
-    65: "Heavy rain",
-    80: "Slight rain showers",
-    81: "Moderate rain showers",
-    82: "Violent rain showers",
-    95: "Thunderstorm",
-  };
-  return mapping[code] || "Variable conditions";
-}
-
-function buildWeatherContribution(weather) {
-  if (!weather) {
-    return {
-      current: null,
-      forecast: null,
-      explanation: "Live weather signals are still loading for this farm.",
-    };
-  }
-
-  const current = {
-    temperature: Number(weather.current?.temperature_2m ?? 0),
-    humidity: Number(weather.current?.relative_humidity_2m ?? 0),
-    rainfall: Number(weather.current?.rain ?? weather.current?.precipitation ?? 0),
-    windSpeed: Number(weather.current?.wind_speed_10m ?? 0),
-    description: weatherCodeDescription(Number(weather.current?.weather_code ?? 0)),
-  };
-
-  const daily = weather.daily || {};
-  const rainSeries = Array.isArray(daily.rain_sum) ? daily.rain_sum : [];
-  const humiditySeries = Array.isArray(daily.relative_humidity_2m_max)
-    ? daily.relative_humidity_2m_max
-    : [];
-  const tempSeries = Array.isArray(daily.temperature_2m_max) ? daily.temperature_2m_max : [];
-
-  const totalRain = rainSeries.reduce((sum, value) => sum + Number(value || 0), 0);
-  const humidDays = humiditySeries.filter((value) => Number(value || 0) >= 75).length;
-  const warmDays = tempSeries.filter((value) => Number(value || 0) >= 24 && Number(value || 0) <= 30).length;
-  const forecast = {
-    totalRain,
-    humidDays,
-    warmDays,
-    peakHumidity: Math.max(...humiditySeries, current.humidity),
-    peakTemperature: Math.max(...tempSeries, current.temperature),
-  };
-
-  return {
-    current,
-    forecast,
-    explanation: `Humidity of ${current.humidity}% with ${current.temperature}C conditions and ${totalRain.toFixed(
-      1
-    )} mm forecast rain shapes pest and disease pressure for the next 7 days.`,
-  };
-}
-
-function diseaseWeatherScore(disease, weatherContribution) {
-  if (!weatherContribution?.current || !weatherContribution?.forecast) {
-    return 12;
-  }
-
-  const profile = disease.weatherProfile;
-  const { current, forecast } = weatherContribution;
-  let score = 0;
-
-  if (current.humidity >= profile.humidityMin) score += 12;
-  if (current.humidity <= profile.humidityMax) score += 8;
-  if (current.temperature >= profile.temperatureMin && current.temperature <= profile.temperatureMax) score += 18;
-  if (forecast.totalRain >= profile.rainfallMin) score += 10;
-  if (forecast.humidDays >= 3) score += 8;
-  if (forecast.warmDays >= 3) score += 8;
-
-  return clamp(score, 0, 64);
-}
-
-function computeDiagnoses({
-  farm,
-  crop,
-  symptom,
-  affectedArea,
-  uploadedImageName,
-  weatherContribution,
-  historyLog,
-}) {
-  const cropStage = deriveCropStage(crop);
-  const district = inferDistrict(farm);
-  const imageBoost = uploadedImageName ? 6 : 0;
-
-  const ranked = diseaseLibrary
-    .map((disease) => {
-      const cropMatch = disease.affectedCrops.includes(crop)
-        ? 28
-        : disease.affectedCrops.includes("Vegetables") && (crop === "Tomato" || crop === "Vegetables")
-          ? 22
-          : disease.affectedCrops.includes("Cereals") && (crop === "Maize" || crop === "Cereals")
-            ? 20
-            : 0;
-      const symptomMatch = disease.symptomWeights[symptom] || 4;
-      const weatherMatch = diseaseWeatherScore(disease, weatherContribution);
-      const historyMatch = historyLog.filter(
-        (entry) =>
-          entry.pathogen.toLowerCase().includes(disease.scientificName.split(" ")[0].toLowerCase()) &&
-          entry.district === district
-      ).length;
-      const historyBoost = clamp(historyMatch * 7, 0, 18);
-      const areaBoost = affectedArea * 0.18;
-      const score = clamp(
-        Math.round(cropMatch + symptomMatch + weatherMatch + historyBoost + areaBoost + imageBoost),
-        16,
-        98
-      );
-
-      return {
-        ...disease,
-        score,
-        stageRelevance:
-          cropStage.toLowerCase().includes("flower") || cropStage.toLowerCase().includes("bulking")
-            ? 1.12
-            : 1,
-      };
-    })
-    .map((item) => ({
-      ...item,
-      weightedScore: clamp(Math.round(item.score * item.stageRelevance), 18, 99),
-    }))
-    .sort((a, b) => b.weightedScore - a.weightedScore);
-
-  const top = ranked.length ? ranked[0] : null;
-  if (!top) return { ranked, topDiagnosis: null, confidence: 0, explanation: "No diagnosis available.", affectedCrops: [], recommendedActions: [], outbreakForecast: { currentRisk: "Low", trend: "Stable", riskFactors: [], forecast7Day: "Low", forecast30Day: "Low" }, riskTrend: "stable", district: "", weather: null };
-  const second = ranked[1];
-  const confidence = clamp(
-    Math.round(top.weightedScore - (second ? Math.max(0, second.weightedScore - 8) * 0.25 : 0)),
-    54,
-    97
-  );
-
-  const farmRiskScore = clamp(
-    Math.round(top.weightedScore * 0.58 + affectedArea * 0.32 + (weatherContribution?.forecast?.humidDays || 0) * 2),
-    18,
-    98
-  );
-  const regionalRiskScore = clamp(
-    Math.round(top.weightedScore * 0.42 + (weatherContribution?.forecast?.totalRain || 0) * 1.1 + (weatherContribution?.forecast?.peakHumidity || 0) * 0.25),
-    18,
-    99
-  );
-
-  const yieldLoss = clamp(Math.round(farmRiskScore * 0.16 + affectedArea * 0.12), 4, 38);
-  const economics = cropEconomics[crop] || cropEconomics.Vegetables;
-  const fieldArea = Number(farm?.sizeHectares || 1);
-  const economicLoss = Math.round(((economics.yieldPerHa * fieldArea * 1000 * economics.pricePerKg) * yieldLoss) / 100);
-
-  const currentRisk = getRiskLabel(farmRiskScore);
-  const forecastRiskScore = clamp(
-    Math.round(farmRiskScore + (weatherContribution?.forecast?.humidDays || 0) * 4 + ((weatherContribution?.forecast?.totalRain || 0) > 18 ? 8 : 0)),
-    20,
-    99
-  );
-  const forecastRisk = getRiskLabel(forecastRiskScore);
-  const priorityScore = clamp(
-    Math.round(confidence * 0.35 + farmRiskScore * 0.35 + regionalRiskScore * 0.15 + affectedArea * 0.15),
-    20,
-    100
-  );
-  const priority = getPriorityLabel(priorityScore);
-
-  return {
-    ranked,
-    topDiagnosis: top,
-    confidence,
-    cropStage,
-    currentRisk,
-    forecastRisk,
-    farmRiskScore,
-    regionalRiskScore,
-    yieldLoss,
-    economicLoss,
-    priority,
-    district,
-    explanation: {
-      soil: `${farm?.landType || "Field"} conditions on ${farm?.name} increase canopy vulnerability where nutrient stress and moisture imbalance are present.`,
-      weather: weatherContribution?.explanation || "Weather context is still being loaded for this farm.",
-      market: `Potential ${formatRwf(economicLoss)} loss is significant for ${crop} supply planning and market timing.`,
-      stage: `${crop} is currently in the ${cropStage} stage, which raises sensitivity to ${top.name.toLowerCase()}.`,
-      confidence: `Confidence combines symptom strength, crop fit, weather suitability, prior outbreaks in ${district}, and image evidence.`,
-    },
-    outbreakForecast: {
-      currentRisk,
-      predictedRisk: forecastRisk,
-      confidence: clamp(Math.round(confidence - 4 + (weatherContribution?.forecast?.humidDays || 0)), 52, 96),
-      drivers: `Humidity above ${weatherContribution?.forecast?.peakHumidity || weatherContribution?.current?.humidity || 0}% and ${(
-        weatherContribution?.forecast?.totalRain || 0
-      ).toFixed(1)} mm of rain over the next 7 days increase outbreak pressure.`,
-    },
-  };
-}
-
-function buildDynamicRecommendation(diagnosisModel, farm, crop) {
-  const top = diagnosisModel?.topDiagnosis;
-  if (!top) return { recommendationId: `rec-${farm?.id}-unknown`, diseaseName: "Unknown", actionType: "Pest/Disease", title: `Control issue on ${farm?.name || "Farm"}`, accepted: 0, rejected: 0, completed: 0, guidance: [] };
-  return {
-    recommendationId: `rec-${farm.id}-${top.id}`,
-    diseaseName: top.name,
-    actionType: "Pest/Disease",
-    title: `Control ${top.name} on ${farm.name}`,
-    accepted: 0,
-    rejected: 0,
-    completed: 0,
-    guidance: [
-      `Scout ${farm.name} within 24 hours and confirm ${top.name.toLowerCase()} hotspots.`,
-      `Apply the primary intervention suited to ${crop}: ${top.treatment?.chemical || "Consult specialist"}.`,
-      `Reassess in 3-5 days and update image evidence if symptoms expand.`,
-    ],
-  };
-}
+const ALL_CROPS = ["Maize", "Beans", "Irish Potato", "Sweet Potato", "Cassava", "Rice", "Wheat", "Tomato", "Banana", "Coffee", "Soybean", "Sorghum"];
 
 export function PestsPage() {
-  const { user } = useAuth();
   const { currentFarms } = useFarmerData();
-  const fallbackFarm = useMemo(() => createDefaultFarm(), []);
-  const farms = useMemo(
-    () => ((Array.isArray(currentFarms) ? currentFarms : []).length ? currentFarms : [fallbackFarm]),
-    [currentFarms, fallbackFarm]
-  );
-  const stored = useMemo(() => loadStoredState(), []);
+  const backendMode = isBackendSessionActive();
 
-  const [selectedFarmId, setSelectedFarmId] = useState(farms[0]?.id || "pest-default-farm");
-  const [selectedCrop, setSelectedCrop] = useState(farms[0]?.primaryCrop || "Potato");
-  const [selectedSymptom, setSelectedSymptom] = useState("Yellow Spots");
-  const [affectedArea, setAffectedArea] = useState(28);
+  const farms = useMemo(() => (Array.isArray(currentFarms) && currentFarms.length > 0 ? currentFarms : []), [currentFarms]);
+  const [selectedFarmId, setSelectedFarmId] = useState("");
+  const [selectedCrop, setSelectedCrop] = useState("");
+  const [selectedSymptoms, setSelectedSymptoms] = useState([]);
+  const [affectedArea, setAffectedArea] = useState(30);
+  const [uploadedImage, setUploadedImage] = useState(null);
   const [uploadedImageName, setUploadedImageName] = useState("");
+  const [recognition, setRecognition] = useState(null);
+  const [recognitionLoading, setRecognitionLoading] = useState(false);
+
+  const [symptomOptions, setSymptomOptions] = useState([]);
+  const [symptomSearch, setSymptomSearch] = useState("");
+  const [symptomDropdownOpen, setSymptomDropdownOpen] = useState(false);
+  const symptomRef = useRef(null);
+
+  const [diagnosis, setDiagnosis] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [outbreak, setOutbreak] = useState(null);
+  const [libraryData, setLibraryData] = useState([]);
+  const [libraryPagination, setLibraryPagination] = useState(null);
   const [librarySearch, setLibrarySearch] = useState("");
-  const [historyLog, setHistoryLog] = useState(() => stored.historyLog || outbreakHistorySeed);
-  const [actionLog, setActionLog] = useState(() => stored.actionLog || []);
-  const [backendDiagnosis, setBackendDiagnosis] = useState(null);
-  const [backendHistoryLog, setBackendHistoryLog] = useState([]);
-  const [backendActionLog, setBackendActionLog] = useState([]);
-  const [backendLibrary, setBackendLibrary] = useState([]);
-  const [pestState, setPestState] = useState({
-    loading: false,
-    notice: "",
-    source: "Demo Pest Data",
-  });
-  const [weatherState, setWeatherState] = useState({
-    loading: true,
-    error: "",
-    data: null,
-    lastUpdated: "",
-  });
+  const [libraryCrop, setLibraryCrop] = useState("");
+  const [libraryType, setLibraryType] = useState("All");
+  const [libraryPage, setLibraryPage] = useState(1);
+
+  const [diagnosisLoading, setDiagnosisLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [outbreakLoading, setOutbreakLoading] = useState(false);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [analysisSubmitting, setAnalysisSubmitting] = useState(false);
+  const [actionLoading, setActionLoading] = useState("");
+
+  const selectedFarm = useMemo(() => {
+    if (!selectedFarmId || farms.length === 0) return null;
+    return farms.find((f) => String(f.id) === String(selectedFarmId)) || null;
+  }, [farms, selectedFarmId]);
+
+  const farmInfo = useMemo(() => normalizeFarm(selectedFarm), [selectedFarm]);
+  const farmDistrict = farmInfo?.district || "";
+
+  const cropOptions = useMemo(() => {
+    if (!selectedFarm?.primaryCrop) return ALL_CROPS;
+    return [selectedFarm.primaryCrop, ...ALL_CROPS.filter((c) => c !== selectedFarm.primaryCrop)];
+  }, [selectedFarm]);
 
   useEffect(() => {
-    saveStoredState({ historyLog, actionLog });
-  }, [historyLog, actionLog]);
+    if (farms.length > 0 && !selectedFarmId) setSelectedFarmId(farms[0].id);
+  }, [farms, selectedFarmId]);
 
-  const selectedFarm = useMemo(
-    () => farms.find((farm) => farm.id === selectedFarmId) || farms[0],
-    [farms, selectedFarmId]
-  );
-  const backendFarmId = selectedFarm?.backendFarmId || "";
-  const backendMode = isBackendSessionActive() && Boolean(backendFarmId);
-
+  // Load diagnosis & history when farm or crop changes
   useEffect(() => {
-    setSelectedCrop(selectedFarm?.primaryCrop || "Potato");
-  }, [selectedFarm?.id, selectedFarm?.primaryCrop]);
-
-  useEffect(() => {
-    let active = true;
-    async function loadWeather() {
-      if (!selectedFarm?.location?.lat || !selectedFarm?.location?.lng) {
-        setWeatherState({
-          loading: false,
-          error: "Demo weather context is being used until this farm has valid coordinates.",
-          data: null,
-          lastUpdated: "",
-        });
-        return;
-      }
-
-      setWeatherState((current) => ({ ...current, loading: true, error: "" }));
+    if (!selectedFarmId || !farmInfo?.id) return;
+    let cancelled = false;
+    (async () => {
+      setDiagnosisLoading(true);
       try {
-        const response = await apiClient.weather.forecast(selectedFarm?.location?.lat, selectedFarm?.location?.lng, {
-          timeoutMs: 4500,
-        });
-        if (!active) return;
-        setWeatherState({
-          loading: false,
-          error: "",
-          data: response,
-          lastUpdated: response.current?.time || new Date().toISOString(),
-        });
-      } catch {
-        if (!active) return;
-        setWeatherState({
-          loading: false,
-          error: "Live weather is temporarily unavailable, so demo weather context is being used for pest forecasting.",
-          data: null,
-          lastUpdated: "",
-        });
-      }
-    }
-
-    loadWeather();
-    const timeout = setTimeout(() => {
-      if (active) setWeatherState(prev => ({ ...prev, loading: false, error: "Live weather timed out. Using demo data for pest forecasting." }));
-    }, 5000);
-    return () => {
-      active = false;
-      clearTimeout(timeout);
-    };
-  }, [selectedFarm?.id, selectedFarm?.location?.lat, selectedFarm?.location?.lng]);
-
-  const weatherContribution = useMemo(
-    () => buildWeatherContribution(weatherState.data),
-    [weatherState.data]
-  );
-
-  const diagnosisModel = useMemo(
-    () =>
-      computeDiagnoses({
-        farm: selectedFarm,
-        crop: selectedCrop,
-        symptom: selectedSymptom,
-        affectedArea,
-        uploadedImageName,
-        weatherContribution,
-        historyLog,
-      }),
-    [affectedArea, historyLog, selectedCrop, selectedFarm, selectedSymptom, uploadedImageName, weatherContribution]
-  );
-
-  useEffect(() => {
-    let active = true;
-    let safetyTimeoutId;
-
-    if (!backendMode || !backendFarmId) {
-      setBackendDiagnosis(null);
-      setBackendHistoryLog([]);
-      setBackendActionLog([]);
-      setBackendLibrary([]);
-      setPestState({
-        loading: false,
-        notice: "Using demo/local pest intelligence for this farm.",
-        source: "Demo Pest Data",
-      });
-      return undefined;
-    }
-
-    async function loadBackendPestData() {
-      setPestState({
-        loading: true,
-        notice: "",
-        source: "Backend Pest Data",
-      });
-
-      safetyTimeoutId = setTimeout(() => {
-        if (active) {
-          setPestState({
-            loading: false,
-            notice: "Backend pest data timed out. Showing demo pest intelligence.",
-            source: "Demo Pest Data",
-          });
-        }
-      }, 5000);
-
-      try {
-        const [latestResult, historyResult, libraryResult] = await Promise.allSettled([
-          phase1BackendService.pests.latest(backendFarmId),
-          phase1BackendService.pests.history(backendFarmId),
-          phase1BackendService.pests.library({ crop: selectedCrop }),
+        const [diag, hist] = await Promise.all([
+          phase1BackendService.pests.latest(selectedFarmId),
+          phase1BackendService.pests.history(selectedFarmId),
         ]);
-
-        if (!active) return;
-        clearTimeout(safetyTimeoutId);
-
-        setBackendDiagnosis(latestResult.status === "fulfilled" ? latestResult.value || null : null);
-        setBackendHistoryLog(historyResult.status === "fulfilled" ? historyResult.value || [] : []);
-        setBackendLibrary(libraryResult.status === "fulfilled" ? libraryResult.value || [] : []);
-
-        const latestDiagnosis = latestResult.status === "fulfilled" ? latestResult.value : null;
-        if (latestDiagnosis?.id) {
-          const actions = await phase1BackendService.pests.listActions(latestDiagnosis.id);
-          if (!active) return;
-          setBackendActionLog(actions || []);
-        } else {
-          setBackendActionLog([]);
+        if (cancelled) return;
+        if (diag) {
+          setDiagnosis(diag);
+          if (!selectedCrop && diag.crop) setSelectedCrop(diag.crop);
         }
+        setHistory(Array.isArray(hist) ? hist : []);
+      } catch { /* ignore */ }
+      if (!cancelled) setDiagnosisLoading(false);
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFarmId, farmInfo?.id]);
 
-        setPestState({
-          loading: false,
-          notice: latestDiagnosis
-            ? "Using backend pest diagnosis history with demo fallback preserved."
-            : "No backend pest diagnosis exists yet for this farm. Demo intelligence remains available.",
-          source: latestDiagnosis ? "Backend Pest Data" : "Demo Pest Data",
-        });
-      } catch (error) {
-        if (!active) return;
-        clearTimeout(safetyTimeoutId);
-        console.warn("Pest backend load failed. Falling back to demo pest intelligence.", error);
-        setBackendDiagnosis(null);
-        setBackendHistoryLog([]);
-        setBackendActionLog([]);
-        setBackendLibrary([]);
-        setPestState({
-          loading: false,
-          notice: "Backend pest data is unavailable right now. Showing demo pest intelligence for presentation mode.",
-          source: "Demo Pest Data",
-        });
-      }
-    }
-
-    loadBackendPestData();
-
-    return () => {
-      active = false;
-      clearTimeout(safetyTimeoutId);
-    };
-  }, [backendFarmId, backendMode, selectedCrop]);
-
-  const dynamicRecommendation = useMemo(
-    () => buildDynamicRecommendation(diagnosisModel, selectedFarm, selectedCrop),
-    [diagnosisModel, selectedCrop, selectedFarm]
-  );
-
-  const activeDiagnosis = backendDiagnosis || diagnosisModel;
-  const activeRecommendation = activeDiagnosis?.recommendation || dynamicRecommendation;
-  const activeHistoryLog = backendMode && backendHistoryLog.length ? backendHistoryLog : historyLog;
-
-  const trackedRecommendation = useMemo(
-    () => {
-      const source = backendMode ? backendActionLog : actionLog;
-      return source
-        .filter((entry) => entry.recommendationId === activeRecommendation?.recommendationId)
-        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    },
-    [actionLog, activeRecommendation?.recommendationId, backendActionLog, backendMode]
-  );
-
-  const treatmentEffectiveness = useMemo(() => {
-    const completed = trackedRecommendation.filter((entry) => entry.feedbackStatus === "completed").length;
-    const accepted = trackedRecommendation.filter((entry) => entry.feedbackStatus === "accepted").length;
-    if (!accepted) return 0;
-    return Math.round((completed / accepted) * 100);
-  }, [trackedRecommendation]);
-
-  const displayedLibrary = useMemo(
-    () =>
-      (backendLibrary.length ? backendLibrary : (diagnosisModel?.ranked || [])).filter((item) => {
-        const query = librarySearch.toLowerCase();
-        return (
-          !query ||
-          item.name.toLowerCase().includes(query) ||
-          item.scientificName.toLowerCase().includes(query) ||
-          item.affectedCrops.join(" ").toLowerCase().includes(query)
-        );
-      }),
-    [backendLibrary, diagnosisModel?.ranked, librarySearch]
-  );
-
-  const regionalTracking = useMemo(() => {
-    const totalDistrictEvents = activeHistoryLog.filter((entry) => entry.district === activeDiagnosis.district).length;
-    const trend =
-      activeDiagnosis.outbreakForecast.predictedRisk === "High"
-        ? "Increasing"
-        : activeDiagnosis.outbreakForecast.predictedRisk === "Moderate"
-          ? "Stable"
-          : "Decreasing";
-    return {
-      district: activeDiagnosis.district,
-      intensity: clamp(Math.round(activeDiagnosis.regionalRiskScore / 10), 2, 10),
-      trend,
-      clusterCount: 2 + totalDistrictEvents,
-    };
-  }, [activeDiagnosis, activeHistoryLog]);
-
-  const activityFeed = useMemo(() => {
-    const items = [
-      {
-        id: "weather-link",
-        tone: activeDiagnosis.outbreakForecast.predictedRisk === "High" ? "critical" : "review",
-        title: "Weather-driven outbreak pressure updated",
-        detail: weatherContribution.explanation,
-        timestamp: weatherState.lastUpdated || new Date().toISOString(),
-      },
-      {
-        id: "diagnosis",
-        tone: activeDiagnosis.priority === "Critical" ? "critical" : "review",
-        title: `${activeDiagnosis?.topDiagnosis?.name} detected for ${selectedCrop}`,
-        detail: `${activeDiagnosis.currentRisk} current risk with ${activeDiagnosis.confidence}% confidence on ${selectedFarm?.name}.`,
-        timestamp: new Date().toISOString(),
-      },
-      ...trackedRecommendation.map((entry) => ({
-        id: entry.id,
-        tone: entry.feedbackStatus === "completed" ? "live" : entry.feedbackStatus === "rejected" ? "critical" : "review",
-        title: `Farmer action ${entry.feedbackStatus}`,
-        detail:
-          entry.feedbackStatus === "rejected" && entry.rejectionReason
-            ? `Recommendation rejected: ${entry.rejectionReason}.`
-            : `Recommendation ${entry.feedbackStatus} for ${entry.actionType}.`,
-        timestamp: entry.timestamp,
-      })),
-    ];
-
-    return items.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 6);
-  }, [activeDiagnosis, selectedCrop, selectedFarm?.name, trackedRecommendation, weatherContribution.explanation, weatherState.lastUpdated]);
-
-  const submitSymptomCheck = async () => {
-    if (backendMode && backendFarmId) {
+  useEffect(() => {
+    if (!farmDistrict) return;
+    let cancelled = false;
+    (async () => {
+      setOutbreakLoading(true);
       try {
-        setPestState((current) => ({ ...current, loading: true, notice: "" }));
-        const diagnosis = await phase1BackendService.pests.analyze(backendFarmId, {
-          crop: selectedCrop,
-          symptom: selectedSymptom,
-          affectedArea,
-          uploadedImageName,
-          weatherContribution,
-        });
-        setBackendDiagnosis(diagnosis);
-        setBackendHistoryLog(diagnosis.historyLog || []);
-        setBackendLibrary(diagnosis.library || []);
-        setBackendActionLog([]);
-        setPestState({
-          loading: false,
-          notice: `Backend pest diagnosis saved for ${selectedCrop} on ${selectedFarm?.name}.`,
-          source: "Backend Pest Data",
-        });
-        return;
-      } catch (error) {
-        console.warn("Backend pest analysis failed. Falling back to local history entry.", error);
-        setPestState({
-          loading: false,
-          notice: "Backend pest diagnosis is unavailable right now. Local demo pest logic is still active.",
-          source: "Demo Pest Data",
-        });
-      }
-    }
+        const data = await phase1BackendService.pests.outbreaks({ district: farmDistrict });
+        if (!cancelled) setOutbreak(data);
+      } catch { /* ignore */ }
+      if (!cancelled) setOutbreakLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [farmDistrict]);
 
-    const event = {
-      id: `history-${Date.now()}`,
-      date: new Date().toISOString(),
-      monthLabel: new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric" }).format(new Date()),
-      pathogen: diagnosisModel?.topDiagnosis?.scientificName || "Unknown pathogen",
-      severity: diagnosisModel.currentRisk,
-      action: diagnosisModel.priority === "Critical" ? "Immediate field intervention" : "Guided field scouting",
-      district: diagnosisModel.district,
-    };
-
-    setHistoryLog((current) => [event, ...current].slice(0, 10));
-  };
-
-  const trackRecommendation = async (feedbackStatus) => {
-    if (backendMode && activeDiagnosis?.id && activeRecommendation?.recommendationId) {
+  // Load symptoms when crop changes
+  useEffect(() => {
+    if (!selectedCrop) { setSymptomOptions([]); return; }
+    let cancelled = false;
+    (async () => {
       try {
-        const created = await phase1BackendService.pests.addAction(activeDiagnosis.id, {
-          recommendationId: activeRecommendation.recommendationId,
-          actionType: activeRecommendation.actionType || "Pest/Disease",
-          feedbackStatus,
-          rejectionReason: "",
-        });
-        setBackendActionLog((current) => [created, ...current].slice(0, 30));
-        setPestState((current) => ({
-          ...current,
-          notice: `Backend farmer action recorded as ${feedbackStatus}.`,
-          source: "Backend Pest Data",
-        }));
-        return;
-      } catch (error) {
-        console.warn("Backend pest action logging failed. Falling back to local action log.", error);
-      }
+        const data = await phase1BackendService.pests.symptoms(selectedCrop);
+        if (!cancelled) setSymptomOptions(Array.isArray(data) ? data : []);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedCrop]);
+
+  // Load library
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLibraryLoading(true);
+      try {
+        const params = { page: libraryPage, pageSize: 9 };
+        if (librarySearch) params.search = librarySearch;
+        if (libraryCrop) params.crop = libraryCrop;
+        if (libraryType && libraryType !== "All") params.type = libraryType;
+        const result = await phase1BackendService.pests.library(params);
+        if (!cancelled) {
+          setLibraryData(Array.isArray(result.data) ? result.data : []);
+          setLibraryPagination(result.pagination || null);
+        }
+      } catch { /* ignore */ }
+      if (!cancelled) setLibraryLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [librarySearch, libraryCrop, libraryType, libraryPage]);
+
+  // Close popover on outside click
+  useEffect(() => {
+    if (!symptomDropdownOpen) return;
+    function handleClick(e) {
+      if (symptomRef.current && !symptomRef.current.contains(e.target)) setSymptomDropdownOpen(false);
     }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [symptomDropdownOpen]);
 
-    const nextRecord = {
-      id: `pest-action-${Date.now()}`,
-      recommendationId: activeRecommendation.recommendationId,
-      farmerId: user?.id || "demo-farmer",
-      farmId: selectedFarm?.id,
-      actionType: activeRecommendation.actionType,
-      feedbackStatus,
-      rejectionReason: "",
-      timestamp: new Date().toISOString(),
-    };
-    setActionLog((current) => [nextRecord, ...current].slice(0, 30));
-  };
+  const filteredSymptoms = useMemo(() => {
+    if (!symptomSearch) return symptomOptions;
+    const q = symptomSearch.toLowerCase();
+    return symptomOptions.filter((s) => s.name.toLowerCase().includes(q));
+  }, [symptomOptions, symptomSearch]);
 
-  const downloadProtocol = () => {
-    downloadTextFile(
-      `${(diagnosisModel?.topDiagnosis?.name || "pest").toLowerCase().replace(/\s+/g, "-")}-protocol.txt`,
-      `Protocol: ${activeDiagnosis?.topDiagnosis?.name || "Unknown"}\nConfidence: ${activeDiagnosis?.confidence || 0}%\nRisk: ${activeDiagnosis?.currentRisk || "Unknown"}\nPriority: ${activeDiagnosis?.priority || "Unknown"}\n\nChemical treatment:\n${activeDiagnosis?.topDiagnosis?.treatment?.chemical || "N/A"}\n\nOrganic / IPM:\n${activeDiagnosis?.topDiagnosis?.treatment?.organic || "N/A"}\n\nPreventive measure:\n${activeDiagnosis?.topDiagnosis?.preventionAdvice || "N/A"}`
+  const toggleSymptom = useCallback((name) => {
+    setSelectedSymptoms((prev) =>
+      prev.includes(name) ? prev.filter((s) => s !== name) : [...prev, name]
     );
-  };
+  }, []);
 
-  const downloadHistoryReport = () => {
-    downloadJsonFile("pest-disease-history.json", {
-      farm: selectedFarm,
-      crop: selectedCrop,
-      symptom: selectedSymptom,
-      affectedArea,
-      weatherContribution,
-      diagnosisModel: activeDiagnosis,
-      historyLog: activeHistoryLog,
-      actionLog: trackedRecommendation,
-    });
-  };
+  const visibleChips = selectedSymptoms.slice(0, 4);
+  const extraChips = selectedSymptoms.length - 4;
+
+  const handleImageUpload = useCallback(async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/jpg"].includes(file.type)) {
+      toast.error("Only JPG and PNG files are accepted.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File size must be under 5 MB.");
+      return;
+    }
+    setUploadedImage(file);
+    setUploadedImageName(file.name);
+    if (backendMode) {
+      setRecognitionLoading(true);
+      try {
+        const result = await phase1BackendService.pests.uploadImage(file);
+        setRecognition(result);
+        if (result?.matchedCondition?.name) {
+          toast.success("Image recognized", { description: `Detected: ${result.matchedCondition.name}` });
+        }
+      } catch (err) {
+        setRecognition({ inference: { error: err.message } });
+      }
+      setRecognitionLoading(false);
+    }
+  }, [backendMode]);
+
+  const handleAnalyze = useCallback(async () => {
+    if (!selectedFarmId || !selectedCrop) {
+      toast.error("Select a farm and crop before analyzing.");
+      return;
+    }
+    if (selectedSymptoms.length === 0) {
+      toast.error("Select at least one symptom.");
+      return;
+    }
+    setAnalysisSubmitting(true);
+    try {
+      const result = await phase1BackendService.pests.analyze(selectedFarmId, {
+        crop: selectedCrop,
+        symptoms: selectedSymptoms,
+        affectedArea,
+        uploadedImageName: uploadedImage ? uploadedImage.name : "",
+      });
+      setDiagnosis(result);
+      toast.success("Analysis completed", { description: "A new pest and disease assessment has been saved." });
+      const hist = await phase1BackendService.pests.history(selectedFarmId);
+      setHistory(Array.isArray(hist) ? hist : []);
+    } catch (err) {
+      toast.error("Analysis failed", { description: err?.message || "Unable to complete analysis." });
+    }
+    setAnalysisSubmitting(false);
+  }, [selectedFarmId, selectedCrop, selectedSymptoms, affectedArea, uploadedImage]);
+
+  const handleReset = useCallback(() => {
+    setSelectedSymptoms([]);
+    setAffectedArea(30);
+    setUploadedImage(null);
+    setUploadedImageName("");
+    setRecognition(null);
+  }, []);
+
+  const handleAction = useCallback(async (action) => {
+    if (!diagnosis?.id) return;
+    setActionLoading(action);
+    try {
+      let result;
+      if (action === "accept") result = await phase1BackendService.pests.acceptDiagnosis(diagnosis.id);
+      else if (action === "complete") result = await phase1BackendService.pests.completeDiagnosis(diagnosis.id);
+      else if (action === "reject") result = await phase1BackendService.pests.rejectDiagnosis(diagnosis.id);
+      if (result) {
+        setDiagnosis((prev) => ({ ...prev, ...result }));
+        const actionLabel = action === "accept" ? "accepted" : action === "complete" ? "completed" : "rejected";
+        toast.success(`Recommendation ${actionLabel}`);
+      }
+    } catch (err) {
+      toast.error("Action failed", { description: err?.message });
+    }
+    setActionLoading("");
+  }, [diagnosis]);
 
   return (
-    <PageShell>
-      <PageHeader
-        title="Pest &amp; Disease Intelligence"
-        subtitle="AI-assisted pest and disease risk detection using symptoms, crop, weather, outbreak records, and image evidence."
-        actions={
-          <div className="pdi-header-actions">
-            <ActionButton variant="secondary" size="sm" onClick={downloadProtocol}>
-              <Download size={14} />
-              <span>Protocol</span>
-            </ActionButton>
-            <ActionButton variant="secondary" size="sm" onClick={downloadHistoryReport}>
-              <Download size={14} />
-              <span>Export</span>
-            </ActionButton>
-          </div>
-        }
-      />
+    <PageShell maxWidth="1380px">
+      <PageHeader title="Pest & Disease Intelligence" subtitle="Real-time pest diagnosis, regional outbreak tracking, and disease reference library." />
 
       <div className="pdi-filter-bar">
         <div className="pdi-filter-left">
           <label className="pdi-filter-field">
             <span className="pdi-filter-label">Farm</span>
-            <select value={selectedFarmId} onChange={(e) => setSelectedFarmId(e.target.value)}>
-              {farms.map((farm) => (
-                <option key={farm.id} value={farm.id}>{farm.name} &mdash; {farm.region}</option>
-              ))}
+            <select value={selectedFarmId} onChange={(e) => { setSelectedFarmId(e.target.value); setSelectedCrop(""); setDiagnosis(null); setHistory([]); }}>
+              {farms.map((f) => <option key={f.id} value={f.id}>{f.name || f.farmName}</option>)}
+              {farms.length === 0 && <option value="">No farms available</option>}
             </select>
           </label>
           <label className="pdi-filter-field">
             <span className="pdi-filter-label">Crop</span>
-            <select value={selectedCrop} onChange={(e) => setSelectedCrop(e.target.value)}>
-              {cropOptions.map((crop) => (<option key={crop} value={crop}>{crop}</option>))}
-            </select>
-          </label>
-          <label className="pdi-filter-field">
-            <span className="pdi-filter-label">Symptom</span>
-            <select value={selectedSymptom} onChange={(e) => setSelectedSymptom(e.target.value)}>
-              {symptomOptions.map((s) => (<option key={s} value={s}>{s}</option>))}
+            <select value={selectedCrop} onChange={(e) => { setSelectedCrop(e.target.value); setSelectedSymptoms([]); }}>
+              <option value="">Select crop</option>
+              {cropOptions.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </label>
         </div>
         <div className="pdi-filter-right">
-          <StatusBadge variant={pestState.source === "Backend Pest Data" ? "success" : "default"}>
-            {pestState.source}
-          </StatusBadge>
-          {backendMode ? <StatusBadge variant="info">Backend linked</StatusBadge> : null}
-        </div>
-      </div>
-
-      {pestState.notice ? (
-        <div className="pdi-notice"><Info size={14} /><span>{pestState.notice}</span></div>
-      ) : null}
-      {weatherState.error ? (
-        <div className="pdi-warning"><AlertTriangle size={14} /><span>{weatherState.error}</span></div>
-      ) : null}
-
-      <div className="pdi-kpi-grid">
-        <div className="pdi-kpi-card">
-          <div className={`pdi-kpi-icon ${activeDiagnosis.outbreakForecast.currentRisk === "High" ? "red" : activeDiagnosis.outbreakForecast.currentRisk === "Moderate" ? "amber" : "green"}`}>
-            <ShieldAlert size={20} />
-          </div>
-          <div className="pdi-kpi-body">
-            <span className="pdi-kpi-label">Current Risk</span>
-            <strong className="pdi-kpi-value">{activeDiagnosis.outbreakForecast.currentRisk}</strong>
-          </div>
-          <span className={`pdi-kpi-badge ${activeDiagnosis.outbreakForecast.currentRisk === "High" ? "red" : activeDiagnosis.outbreakForecast.currentRisk === "Moderate" ? "amber" : "green"}`}>
-            {activeDiagnosis.outbreakForecast.currentRisk}
-          </span>
-        </div>
-        <div className="pdi-kpi-card">
-          <div className={`pdi-kpi-icon ${activeDiagnosis.outbreakForecast.predictedRisk === "High" ? "red" : activeDiagnosis.outbreakForecast.predictedRisk === "Moderate" ? "amber" : "green"}`}>
-            <CloudLightning size={20} />
-          </div>
-          <div className="pdi-kpi-body">
-            <span className="pdi-kpi-label">Predicted Risk</span>
-            <strong className="pdi-kpi-value">{activeDiagnosis.outbreakForecast.predictedRisk}</strong>
-          </div>
-          <span className={`pdi-kpi-badge ${activeDiagnosis.outbreakForecast.predictedRisk === "High" ? "red" : activeDiagnosis.outbreakForecast.predictedRisk === "Moderate" ? "amber" : "green"}`}>
-            {activeDiagnosis.outbreakForecast.predictedRisk}
-          </span>
-        </div>
-        <div className="pdi-kpi-card">
-          <div className="pdi-kpi-icon green"><BadgeCheck size={20} /></div>
-          <div className="pdi-kpi-body">
-            <span className="pdi-kpi-label">AI Confidence</span>
-            <strong className="pdi-kpi-value">{activeDiagnosis.outbreakForecast.confidence}<small>%</small></strong>
-            <div className="pdi-kpi-bar"><div className="pdi-kpi-bar-fill" style={{ width: `${activeDiagnosis.outbreakForecast.confidence}%` }} /></div>
-          </div>
-        </div>
-        <div className="pdi-kpi-card">
-          <div className={`pdi-kpi-icon ${activeDiagnosis.yieldLoss >= 30 ? "red" : activeDiagnosis.yieldLoss >= 15 ? "amber" : "green"}`}>
-            <TrendingDown size={20} />
-          </div>
-          <div className="pdi-kpi-body">
-            <span className="pdi-kpi-label">Yield Loss</span>
-            <strong className="pdi-kpi-value">{activeDiagnosis.yieldLoss}<small>%</small></strong>
-            <span className="pdi-kpi-sub">Estimated crop reduction</span>
-          </div>
-        </div>
-        <div className="pdi-kpi-card">
-          <div className={`pdi-kpi-icon ${activeDiagnosis.economicLoss >= 1000000 ? "red" : activeDiagnosis.economicLoss >= 500000 ? "amber" : "green"}`}>
-            <AlertTriangle size={20} />
-          </div>
-          <div className="pdi-kpi-body">
-            <span className="pdi-kpi-label">Economic Loss</span>
-            <strong className="pdi-kpi-value">{formatRwf(activeDiagnosis.economicLoss)}</strong>
-          </div>
+          <StatusBadge variant={backendMode ? "success" : "default"}>{backendMode ? "Backend connected" : "Offline mode"}</StatusBadge>
         </div>
       </div>
 
       <div className="pdi-main-layout">
         <div className="pdi-main-left">
-
-          <div className="pdi-diagnosis-row">
-            <div className="pdi-diagnosis-card">
-              <div className="pdi-diag-image-wrap">
-                <img
-                  src={activeDiagnosis?.topDiagnosis?.imageUrl}
-                  alt={activeDiagnosis?.topDiagnosis?.name}
-                  className="pdi-diag-image"
-                  onError={(e) => { e.target.style.opacity = "0"; }}
-                />
-                <span className="pdi-img-letter">{activeDiagnosis?.topDiagnosis?.name?.charAt(0)}</span>
-                <div className="pdi-diag-image-overlay">
-                  <StatusBadge variant={activeDiagnosis.priority === "Critical" ? "error" : activeDiagnosis.priority === "High" ? "warning" : "info"}>
-                    {activeDiagnosis.priority} Priority
-                  </StatusBadge>
-                  <span className="pdi-diag-conf">{activeDiagnosis.confidence}% AI match</span>
+          <div className="pdi-diagnosis-card">
+            <div className="pdi-card-head"><h3>Current Diagnosis</h3></div>
+            {diagnosisLoading && <p className="pdi-loading">Loading diagnosis...</p>}
+            {!diagnosisLoading && !diagnosis && (
+              <p className="pdi-empty">Not enough information is available to produce a diagnosis. Select symptoms or upload a crop image.</p>
+            )}
+            {!diagnosisLoading && diagnosis && (
+              <div className="pdi-diagnosis-row">
+                <div className="pdi-diag-image-wrap">
+                  <PlantHealthImage
+                    src={diagnosis.conditionImageUrl || diagnosis.topDiagnosis?.imageUrl}
+                    alt={diagnosis.diseaseName}
+                  />
+                  <div className="pdi-diag-conf">{diagnosis.confidence}%</div>
                 </div>
-              </div>
-              <div className="pdi-diag-body">
-                <div className="pdi-diag-head">
-                  <div>
-                    <h2>{activeDiagnosis?.topDiagnosis?.name}</h2>
-                    <span className="pdi-diag-sci">{activeDiagnosis?.topDiagnosis?.scientificName}</span>
+                <div className="pdi-diag-body">
+                  <div className="pdi-diag-head">
+                    <h2>{diagnosis.diseaseName}</h2>
+                    <span className="pdi-diag-sci">{diagnosis.scientificName}</span>
                   </div>
-                </div>
-                <div className="pdi-diag-meta-grid">
-                  <div className="pdi-diag-meta-item">
-                    <span className="pdi-diag-meta-label">Affected Crop</span>
-                    <strong>{selectedCrop}</strong>
+                  <div className="pdi-diag-meta-grid">
+                    <div className="pdi-diag-meta-item"><span className="pdi-diag-meta-label">Severity</span><strong>{diagnosis.priority || diagnosis.currentRisk}</strong></div>
+                    <div className="pdi-diag-meta-item"><span className="pdi-diag-meta-label">Diagnostic match</span><strong>{diagnosis.confidence}%</strong></div>
+                    <div className="pdi-diag-meta-item"><span className="pdi-diag-meta-label">Affected crop</span><strong>{diagnosis.crop}</strong></div>
+                    <div className="pdi-diag-meta-item"><span className="pdi-diag-meta-label">Crop stage</span><strong>{diagnosis.cropStage}</strong></div>
+                    <div className="pdi-diag-meta-item"><span className="pdi-diag-meta-label">Symptoms</span><strong>{(Array.isArray(diagnosis.symptoms) ? diagnosis.symptoms : [diagnosis.symptom]).join(", ")}</strong></div>
+                    <div className="pdi-diag-meta-item"><span className="pdi-diag-meta-label">Status</span><StatusBadge variant={diagnosis.status === "Accepted" ? "success" : diagnosis.status === "Completed" ? "success" : diagnosis.status === "Rejected" ? "red" : "default"}>{diagnosis.status}</StatusBadge></div>
                   </div>
-                  <div className="pdi-diag-meta-item">
-                    <span className="pdi-diag-meta-label">Crop Stage</span>
-                    <strong>{activeDiagnosis.cropStage}</strong>
-                  </div>
-                  <div className="pdi-diag-meta-item">
-                    <span className="pdi-diag-meta-label">Symptoms</span>
-                    <strong>{selectedSymptom}</strong>
-                  </div>
-                  <div className="pdi-diag-meta-item">
-                    <span className="pdi-diag-meta-label">Weather Trigger</span>
-                    <strong>{weatherContribution.current?.humidity ?? "--"}% / {weatherContribution.current?.temperature ?? "--"}&deg;C</strong>
-                  </div>
-                </div>
-                <div className="pdi-diag-weather-line">
-                  <ThermometerSun size={14} />
-                  <span>Humidity {weatherContribution.current?.humidity ?? "--"}% &amp; {weatherContribution.current?.temperature ?? "--"}C &mdash; favorable for {activeDiagnosis?.topDiagnosis?.name?.toLowerCase()}</span>
-                </div>
-                <p className="pdi-diag-explanation">{weatherContribution.explanation}</p>
-                <div className="pdi-diag-actions">
-                  <ActionButton variant="primary" size="sm" onClick={() => trackRecommendation("accepted")}>
-                    <CheckCircle2 size={14} /><span>Accept Recommendation</span>
-                  </ActionButton>
-                  <ActionButton variant="secondary" size="sm" onClick={() => trackRecommendation("completed")}>
-                    <BadgeCheck size={14} /><span>Mark Complete</span>
-                  </ActionButton>
-                  <ActionButton variant="secondary" size="sm" onClick={() => trackRecommendation("rejected")}>
-                    <X size={14} /><span>Reject</span>
-                  </ActionButton>
-                </div>
-              </div>
-            </div>
-
-            <div className="pdi-symptom-card">
-              <div className="pdi-card-head">
-                <Bug size={18} />
-                <h3>Symptom Checker</h3>
-              </div>
-              <div className="pdi-symptom-body">
-                <div className="pdi-symptom-info">
-                  <div className="pdi-symptom-info-item">
-                    <span className="pdi-symptom-info-label">Farm</span>
-                    <strong>{selectedFarm?.name}</strong>
-                  </div>
-                  <div className="pdi-symptom-info-item">
-                    <span className="pdi-symptom-info-label">Crop</span>
-                    <strong>{selectedCrop}</strong>
-                  </div>
-                </div>
-                <div className="pdi-symptom-chips">
-                  <span className="pdi-chips-label">Symptoms</span>
-                  <div className="pdi-chips-row">
-                    {symptomOptions.map((symptom) => (
-                      <button key={symptom} type="button" className={`pdi-chip ${selectedSymptom === symptom ? "active" : ""}`} onClick={() => setSelectedSymptom(symptom)}>
-                        {symptom}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="pdi-slider-row">
-                  <span className="pdi-slider-label">Affected Area: <strong>{affectedArea}%</strong></span>
-                  <input type="range" min="0" max="100" value={affectedArea} onChange={(e) => setAffectedArea(Number(e.target.value))} className="pdi-range" />
-                </div>
-                <div className="pdi-upload-area">
-                  {uploadedImageName ? (
-                    <div className="pdi-upload-preview">
-                      <span className="pdi-upload-name"><ImageUp size={14} /> {uploadedImageName}</span>
-                      <button type="button" className="pdi-upload-remove" onClick={() => setUploadedImageName("")}>
-                        <Trash2 size={14} />
-                      </button>
+                  {diagnosis.weatherContribution?.current && (
+                    <div className="pdi-diag-weather-line">
+                      <Thermometer size={14} /> {diagnosis.weatherContribution.current.temperature || "--"}C
+                      <Droplets size={14} /> {diagnosis.weatherContribution.current.humidity || "--"}% humidity
                     </div>
-                  ) : (
-                    <label className="pdi-upload-label">
-                      <Upload size={18} />
-                      <span>Upload crop image</span>
-                      <input type="file" accept=".jpg,.jpeg,.png,.webp" className="pdi-upload-input" onChange={(e) => setUploadedImageName(e.target.files?.[0]?.name || "")} />
-                    </label>
                   )}
-                </div>
-                <div className="pdi-weather-mini">
-                  <span><Thermometer size={14} /> {weatherContribution.current?.temperature ?? "--"}C</span>
-                  <span><Droplets size={14} /> {weatherContribution.current?.humidity ?? "--"}%</span>
-                  <span><CloudDrizzle size={14} /> {(weatherContribution.forecast?.totalRain ?? 0).toFixed(1)}mm/7d</span>
-                </div>
-                <div className="pdi-symptom-actions">
-                  <ActionButton variant="primary" size="sm" onClick={submitSymptomCheck}>
-                    <Search size={14} /><span>Analyze Symptoms</span>
-                  </ActionButton>
-                  <ActionButton variant="secondary" size="sm" onClick={() => { setSelectedSymptom("Yellow Spots"); setAffectedArea(28); setUploadedImageName(""); }}>
-                    <RefreshCw size={14} /><span>Reset</span>
-                  </ActionButton>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="pdi-forecast-card">
-            <div className="pdi-card-head">
-              <CloudLightning size={18} />
-              <h3>7-Day Outbreak Forecast</h3>
-            </div>
-            <div className="pdi-forecast-body">
-              <div className="pdi-forecast-days">
-                {(() => {
-                  const today = new Date();
-                  const risks = ["Low", "Moderate", "High", "Moderate", "High", "Moderate", "Low"];
-                  const weathers = ["Partly Cloudy", "Light Rain", "Heavy Rain", "Light Rain", "Overcast", "Light Rain", "Clear"];
-                  return Array.from({ length: 7 }, (_, i) => {
-                    const d = new Date(today);
-                    d.setDate(d.getDate() + i);
-                    const dayName = d.toLocaleDateString("en-US", { weekday: "short" });
-                    const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-                    const risk = i === 0 ? activeDiagnosis.outbreakForecast.currentRisk : i === 1 ? activeDiagnosis.outbreakForecast.predictedRisk : risks[i];
-                    const weather = weathers[i];
-                    const isMax = risk === "High";
-                    return (
-                      <div key={i} className={`pdi-forecast-day ${isMax ? "high" : ""}`}>
-                        <span className="pdi-fd-name">{dayName}</span>
-                        <span className="pdi-fd-date">{dateStr}</span>
-                        <div className={`pdi-fd-risk ${risk.toLowerCase()}`}>{risk}</div>
-                        <span className="pdi-fd-weather">{weather}</span>
-                        <div className="pdi-fd-stats">
-                          <span><Droplets size={10} /> {60 + i * 4}%</span>
-                          <span><CloudDrizzle size={10} /> {2 + i * 3}mm</span>
-                        </div>
-                        <span className="pdi-fd-action">{isMax ? "Scout fields" : "Monitor"}</span>
-                      </div>
-                    );
-                  });
-                })()}
-              </div>
-              <p className="pdi-forecast-drivers">{activeDiagnosis.outbreakForecast.drivers}</p>
-            </div>
-          </div>
-
-          <div className="pdi-treatment-row">
-            <div className="pdi-treatment-card chemical">
-              <div className="pdi-treat-head">
-                <ShieldCheck size={18} />
-                <span className="pdi-treat-icon-bg">Chem</span>
-              </div>
-              <strong>Chemical Control</strong>
-              <p>{activeDiagnosis?.topDiagnosis?.treatment?.chemical}</p>
-              <div className="pdi-treat-meta">
-                <span className="pdi-treat-timing"><Clock size={12} /> Apply within 24-48h</span>
-                <span className="pdi-treat-safety"><ShieldAlert size={12} /> Use protective gear</span>
-              </div>
-              <div className="pdi-treat-eff"><div className="pdi-treat-eff-fill" style={{ width: "85%" }} />85% effective</div>
-            </div>
-            <div className="pdi-treatment-card organic">
-              <div className="pdi-treat-head">
-                <Sparkles size={18} />
-                <span className="pdi-treat-icon-bg">IPM</span>
-              </div>
-              <strong>Organic / IPM Control</strong>
-              <p>{activeDiagnosis?.topDiagnosis?.treatment?.organic}</p>
-              <div className="pdi-treat-meta">
-                <span className="pdi-treat-timing"><Clock size={12} /> Apply at first sign</span>
-                <span className="pdi-treat-safety"><ShieldAlert size={12} /> Safe for beneficials</span>
-              </div>
-              <div className="pdi-treat-eff"><div className="pdi-treat-eff-fill" style={{ width: "72%" }} />72% effective</div>
-            </div>
-            <div className="pdi-treatment-card preventive">
-              <div className="pdi-treat-head">
-                <CheckCircle2 size={18} />
-                <span className="pdi-treat-icon-bg">Prev</span>
-              </div>
-              <strong>Preventive Action</strong>
-              <p>{activeDiagnosis?.topDiagnosis?.preventionAdvice}</p>
-              <div className="pdi-treat-meta">
-                <span className="pdi-treat-timing"><Clock size={12} /> Ongoing practice</span>
-                <span className="pdi-treat-safety"><ShieldAlert size={12} /> No chemicals needed</span>
-              </div>
-              <div className="pdi-treat-eff"><div className="pdi-treat-eff-fill" style={{ width: "90%" }} />90% preventive</div>
-            </div>
-          </div>
-
-          <AppCard>
-            <div className="pdi-card-head">
-              <Sparkles size={18} />
-              <h3>Why This Diagnosis?</h3>
-            </div>
-            <div className="pdi-explain-grid">
-              <div className="pdi-explain-item">
-                <div className="pdi-explain-icon"><CloudLightning size={16} /></div>
-                <div>
-                  <strong>Weather Trigger</strong>
-                  <p>{activeDiagnosis.explanation.weather}</p>
-                </div>
-              </div>
-              <div className="pdi-explain-item">
-                <div className="pdi-explain-icon"><MapPinned size={16} /></div>
-                <div>
-                  <strong>Farm Risk</strong>
-                  <p>{activeDiagnosis.explanation.soil}</p>
-                </div>
-              </div>
-              <div className="pdi-explain-item">
-                <div className="pdi-explain-icon"><Sprout size={16} /></div>
-                <div>
-                  <strong>Crop Stage</strong>
-                  <p>{activeDiagnosis.explanation.stage}</p>
-                </div>
-              </div>
-              <div className="pdi-explain-item">
-                <div className="pdi-explain-icon"><Target size={16} /></div>
-                <div>
-                  <strong>Symptom Match</strong>
-                   <p>Symptoms of "{selectedSymptom}" match the known profile of {activeDiagnosis?.topDiagnosis?.name} with strong correlation.</p>
-                </div>
-              </div>
-              <div className="pdi-explain-item">
-                <div className="pdi-explain-icon"><AlertTriangle size={16} /></div>
-                <div>
-                  <strong>Economic Impact</strong>
-                  <p>{activeDiagnosis.explanation.market}</p>
-                </div>
-              </div>
-              <div className="pdi-explain-item">
-                <div className="pdi-explain-icon"><BadgeCheck size={16} /></div>
-                <div>
-                  <strong>AI Confidence</strong>
-                  <p>{activeDiagnosis.explanation.confidence}</p>
-                </div>
-              </div>
-            </div>
-          </AppCard>
-
-          <AppCard>
-            <div className="pdi-card-head">
-              <Search size={18} />
-              <h3>Disease Library</h3>
-              <input type="text" placeholder="Search diseases/pests..." value={librarySearch} onChange={(e) => setLibrarySearch(e.target.value)} className="pdi-search-input" />
-            </div>
-            <div className="pdi-library-grid">
-              {displayedLibrary.map((card) => (
-                <div key={card.id} className="pdi-library-card">
-                  <div className="pdi-lib-img-wrap">
-                    <img src={card.imageUrl} alt={card.name} className="pdi-lib-img" onError={(e) => { e.target.style.opacity = "0"; }} />
-                    <span className="pdi-img-letter">{card.name.charAt(0)}</span>
-                    <StatusBadge variant={card.affectedCrops.includes(selectedCrop) ? "success" : "default"}>{selectedCrop}</StatusBadge>
+                  <p className="pdi-diag-explanation">{diagnosis.explanation?.summary || "Current weather conditions and reported symptoms are consistent with the detected disease risk."}</p>
+                  <div className="pdi-diag-actions">
+                    <ActionButton onClick={() => handleAction("accept")} disabled={actionLoading === "accept" || diagnosis.status !== "Pending"}>
+                      {actionLoading === "accept" ? "Accepting..." : <><BadgeCheck size={14} /> Accept Recommendation</>}
+                    </ActionButton>
+                    <ActionButton onClick={() => handleAction("complete")} disabled={actionLoading === "complete" || diagnosis.status === "Completed"}>
+                      {actionLoading === "complete" ? "Completing..." : <><CheckCircle2 size={14} /> Mark Complete</>}
+                    </ActionButton>
+                    <ActionButton onClick={() => handleAction("reject")} disabled={actionLoading === "reject" || diagnosis.status !== "Pending"}>
+                      {actionLoading === "reject" ? "Rejecting..." : <><X size={14} /> Reject</>}
+                    </ActionButton>
                   </div>
-                  <div className="pdi-lib-body">
-                    <h4>{card.name}</h4>
-                    <span className="pdi-lib-sci">{card.scientificName}</span>
-                    <div className="pdi-lib-tags">
-                      <span className="pdi-lib-tag crop">{card.affectedCrops.join(", ")}</span>
-                      <span className="pdi-lib-tag symptom">{card.commonSymptoms.join(", ")}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <AppCard>
+            <div className="pdi-card-head"><h3>Historical Records</h3></div>
+            {historyLoading && <p className="pdi-loading">Loading history...</p>}
+            {!historyLoading && history.length === 0 && <p className="pdi-empty">No diagnosis records found for this farm.</p>}
+            {!historyLoading && history.length > 0 && (
+              <>
+                <div className="pdi-history-table">
+                  <div className="pdi-history-head">
+                    <span className="pdi-h-date">Date</span>
+                    <span className="pdi-h-pathogen">Pathogen</span>
+                    <span className="pdi-h-severity">Severity</span>
+                    <span className="pdi-h-action">Action</span>
+                    <span className="pdi-h-outcome">Outcome</span>
+                  </div>
+                  {history.slice(0, 5).map((row) => (
+                    <div key={row.id} className="pdi-history-row">
+                      <span className="pdi-h-date">{formatDate(row.date)}</span>
+                      <span className="pdi-h-pathogen">{row.pathogen}</span>
+                      <span className="pdi-h-severity">{row.severity}</span>
+                      <span className="pdi-h-action">{row.action}</span>
+                      <span className="pdi-h-outcome">{row.outcome}</span>
                     </div>
-                    <p className="pdi-lib-prev">{card.preventionAdvice}</p>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+                {history.length > 5 && <p style={{ textAlign: "center", marginTop: 12, fontSize: 13, color: "#6b7280" }}>+{history.length - 5} more records. View All History</p>}
+              </>
+            )}
           </AppCard>
         </div>
 
         <div className="pdi-main-right">
-          <AppCard>
-            <div className="pdi-card-head">
-              <MapPinned size={18} />
-              <h3>Regional Outbreak Tracking</h3>
-            </div>
-            <div className="pdi-regional-body">
-              <div className="pdi-regional-top">
-                <div className="pdi-regional-district">
-                  <strong>{regionalTracking.district}</strong>
-                  <span className={`pdi-risk-badge ${activeDiagnosis.outbreakForecast.currentRisk.toLowerCase()}`}>
-                    {activeDiagnosis.outbreakForecast.currentRisk} Risk
-                  </span>
-                </div>
-                <div className="pdi-regional-intensity">
-                  <span>Outbreak Intensity</span>
-                  <div className="pdi-intensity-bar-bg">
-                    <div className="pdi-intensity-bar-fill" style={{ width: `${regionalTracking.intensity * 10}%` }} />
+          <div className="pdi-symptom-card">
+            <div className="pdi-card-head"><h3>Symptom Checker</h3></div>
+            <div className="pdi-symptom-body">
+              <div className="pdi-symptom-info">
+                <div className="pdi-symptom-info-item"><span className="pdi-symptom-info-label">Farm</span><strong>{farmInfo?.name || "--"}</strong></div>
+                <div className="pdi-symptom-info-item"><span className="pdi-symptom-info-label">Crop</span><strong>{selectedCrop || "Not selected"}</strong></div>
+              </div>
+
+              {!selectedCrop ? (
+                <p className="pdi-empty" style={{ fontSize: 13, margin: "12px 0" }}>Select a crop to view relevant symptoms.</p>
+              ) : symptomOptions.length === 0 ? (
+                <p className="pdi-empty" style={{ fontSize: 13, margin: "12px 0" }}>No verified symptoms are configured for this crop.</p>
+              ) : (
+                <>
+                  <div className="pdi-chips-label">Symptoms</div>
+                  <div className="pdi-symptom-select-wrap" ref={symptomRef}>
+                    <button
+                      type="button"
+                      className="pdi-symptom-trigger"
+                      onClick={() => setSymptomDropdownOpen((prev) => !prev)}
+                      disabled={!selectedCrop}
+                    >
+                      {selectedSymptoms.length === 0
+                        ? "Select symptoms..."
+                        : `${selectedSymptoms.length} selected`}
+                      <ChevronDown size={14} />
+                    </button>
+
+                    {symptomDropdownOpen && (
+                      <div className="pdi-symptom-dropdown">
+                        <div className="pdi-symptom-search-wrap">
+                          <Search size={14} />
+                          <input
+                            type="text"
+                            className="pdi-symptom-search"
+                            placeholder="Search symptoms..."
+                            value={symptomSearch}
+                            onChange={(e) => setSymptomSearch(e.target.value)}
+                            autoFocus
+                          />
+                        </div>
+                        <div className="pdi-symptom-list">
+                          {filteredSymptoms.length === 0 && (
+                            <div className="pdi-symptom-empty">No symptoms match your search.</div>
+                          )}
+                          {filteredSymptoms.map((s) => (
+                            <label key={s.name} className={`pdi-symptom-option ${selectedSymptoms.includes(s.name) ? "checked" : ""}`}>
+                              <input
+                                type="checkbox"
+                                checked={selectedSymptoms.includes(s.name)}
+                                onChange={() => toggleSymptom(s.name)}
+                              />
+                              <span className="pdi-symptom-option-name">{s.name}</span>
+                              <span className="pdi-symptom-option-count">x{s.conditionCount}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedSymptoms.length > 0 && (
+                      <div className="pdi-chips-row">
+                        {visibleChips.map((s) => (
+                          <button key={s} type="button" className="pdi-chip active" onClick={() => toggleSymptom(s)}>
+                            {s} <X size={12} />
+                          </button>
+                        ))}
+                        {extraChips > 0 && <span className="pdi-chip-more">+{extraChips} more</span>}
+                        <button type="button" className="pdi-chip-clear" onClick={() => setSelectedSymptoms([])}>Clear All</button>
+                      </div>
+                    )}
                   </div>
-                  <strong>{regionalTracking.intensity}/10</strong>
-                </div>
-              </div>
-              <div className="pdi-regional-stats">
-                <div className="pdi-regional-stat">
-                  <span className="pdi-reg-stat-label">Trend</span>
-                  <span className={`pdi-reg-stat-value ${regionalTracking.trend === "Increasing" ? "up" : regionalTracking.trend === "Decreasing" ? "down" : ""}`}>
-                    {regionalTracking.trend === "Increasing" ? <TrendingUp size={14} /> : regionalTracking.trend === "Decreasing" ? <TrendingDown size={14} /> : null}
-                    {regionalTracking.trend}
-                  </span>
-                </div>
-                <div className="pdi-regional-stat">
-                  <span className="pdi-reg-stat-label">Nearby Cases</span>
-                  <strong className="pdi-reg-stat-value">{regionalTracking.clusterCount}</strong>
-                </div>
-              </div>
-              <div className="pdi-regional-map">
-                <div className="pdi-reg-map-visual">
-                  <MapPinned size={18} className="pdi-reg-map-farm" />
-                  <div className="pdi-reg-map-marker" style={{ top: "30%", left: "60%" }} />
-                  <div className="pdi-reg-map-marker" style={{ top: "55%", left: "40%" }} />
-                  <div className="pdi-reg-map-marker" style={{ top: "45%", left: "70%" }} />
-                </div>
-                <span className="pdi-reg-map-label">2.5 km radius &bull; {regionalTracking.clusterCount} confirmed events</span>
-              </div>
-            </div>
-          </AppCard>
+                </>
+              )}
 
-          <AppCard>
-            <div className="pdi-card-head">
-              <FileClock size={18} />
-              <h3>Historical Records</h3>
-            </div>
-            <div className="pdi-history-table">
-              <div className="pdi-history-head">
-                <span>Date</span>
-                <span>Pathogen</span>
-                <span>Severity</span>
-                <span>Action Taken</span>
-                <span>Outcome</span>
+              <div className="pdi-slider-row">
+                <span className="pdi-slider-label">Affected area: {affectedArea}%</span>
+                <input type="range" className="pdi-range" min={0} max={100} value={affectedArea} onChange={(e) => setAffectedArea(Number(e.target.value))} />
               </div>
-              {activeHistoryLog.slice(0, 6).map((row) => (
-                <div key={row.id || `${row.date}-${row.pathogen}`} className="pdi-history-row">
-                  <span className="pdi-h-date">{row.monthLabel || new Date(row.date).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>
-                  <strong className="pdi-h-pathogen">{row.pathogen}</strong>
-                  <span className={`pdi-h-severity ${String(row.severity).toLowerCase()}`}>{row.severity}</span>
-                  <span className="pdi-h-action">{row.action}</span>
-                  <span className={`pdi-h-outcome ${row.severity === "Low" ? "good" : row.severity === "Moderate" ? "warn" : "bad"}`}>
-                    {row.severity === "Low" ? "Controlled" : row.severity === "Moderate" ? "Managed" : "Active"}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </AppCard>
 
-          <AppCard>
-            <div className="pdi-card-head">
-              <BadgeCheck size={18} />
-              <h3>Recommendation Tracker</h3>
-            </div>
-            <div className="pdi-rec-body">
-              <div className="pdi-rec-card">
-                <div className="pdi-rec-title">{activeRecommendation.title}</div>
-                <div className="pdi-rec-eff">
-                  <span>Tractor Effect</span>
-                  <div className="pdi-rec-eff-bar"><div className="pdi-rec-eff-fill" style={{ width: `${treatmentEffectiveness}%` }} /></div>
-                  <strong>{treatmentEffectiveness}%</strong>
-                </div>
-              </div>
-              <div className="pdi-rec-guidance">
-                <strong>Steps</strong>
-                <ol>
-                   {(Array.isArray(activeRecommendation?.guidance) ? activeRecommendation.guidance : []).map((item) => (<li key={item}>{item}</li>))}
-                </ol>
-              </div>
-              <div className="pdi-rec-tracking">
-                <strong>Activity Log</strong>
-                {trackedRecommendation.length ? (
-                  trackedRecommendation.slice(0, 4).map((entry) => (
-                    <div key={entry.id} className="pdi-rec-entry">
-                      <StatusBadge variant={entry.feedbackStatus === "completed" ? "success" : entry.feedbackStatus === "accepted" ? "info" : "error"}>
-                        {entry.feedbackStatus}
-                      </StatusBadge>
-                      <span className="pdi-rec-date">{formatShortDate(entry.timestamp)}</span>
+              <div className="pdi-upload-area">
+                {uploadedImageName ? (
+                  <div className="pdi-upload-result">
+                    <div className="pdi-upload-preview">
+                      <ImageUp size={16} /><span className="pdi-upload-name">{uploadedImageName}</span>
+                      <button type="button" className="pdi-upload-remove" onClick={() => { setUploadedImage(null); setUploadedImageName(""); setRecognition(null); }}><X size={14} /></button>
                     </div>
-                  ))
+                    {recognitionLoading && <span className="pdi-recog-loading"><Scan size={14} /> Analyzing image...</span>}
+                    {!recognitionLoading && recognition && (
+                      <div className="pdi-recog-result">
+                        {recognition.matchedCondition ? (
+                          <span className="pdi-recog-match"><CheckCircle2 size={14} color="#16a34a" /> {recognition.matchedCondition.name}</span>
+                        ) : (
+                          <span className="pdi-recog-nomatch"><X size={14} color="#dc2626" /> No disease match found</span>
+                        )}
+                        {recognition.inference?.quality && (
+                          <span className="pdi-recog-quality">Image quality: {recognition.inference.quality}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 ) : (
-                  <p className="pdi-empty">No action feedback recorded yet.</p>
+                  <label className={`pdi-upload-label ${!selectedCrop ? "disabled" : ""}`}>
+                    <Upload size={16} /> Upload crop image (JPG/PNG, max 5 MB)
+                    <input type="file" className="pdi-upload-input" accept="image/jpeg,image/png,image/jpg" onChange={handleImageUpload} disabled={!selectedCrop} />
+                  </label>
                 )}
               </div>
+
+              <div className="pdi-symptom-actions">
+                <ActionButton onClick={handleAnalyze} disabled={analysisSubmitting || !selectedCrop || selectedSymptoms.length === 0}>
+                  {analysisSubmitting ? "Analyzing..." : "Analyze Symptoms"}
+                </ActionButton>
+                <ActionButton onClick={handleReset} disabled={analysisSubmitting}>Reset</ActionButton>
+              </div>
             </div>
-          </AppCard>
+          </div>
+
+          <div className="pdi-regional-body">
+            <div className="pdi-card-head"><h3>Regional Outbreak Tracking</h3></div>
+            {outbreakLoading && <p className="pdi-loading">Loading outbreak data...</p>}
+            {!outbreakLoading && !outbreak && <p className="pdi-empty">No confirmed regional outbreak records are available for this district.</p>}
+            {!outbreakLoading && outbreak && (
+              <>
+                <div className="pdi-regional-top">
+                  <span className="pdi-regional-district">{farmDistrict || outbreak.district}</span>
+                  <span className={`pdi-risk-badge ${outbreak.risk === "High Risk" ? "high" : outbreak.risk === "Moderate Risk" ? "moderate" : "low"}`}>{outbreak.risk}</span>
+                </div>
+                <div className="pdi-regional-intensity">
+                  <span>Outbreak intensity: {outbreak.intensity}/10</span>
+                  <div className="pdi-intensity-bar-bg"><div className="pdi-intensity-bar-fill" style={{ width: `${outbreak.intensity * 10}%` }} /></div>
+                </div>
+                <div className="pdi-regional-stats">
+                  <div className="pdi-regional-stat"><span className="pdi-reg-stat-label">Trend</span><span className="pdi-reg-stat-value">{outbreak.trend}</span></div>
+                  <div className="pdi-regional-stat"><span className="pdi-reg-stat-label">Nearby cases</span><span className="pdi-reg-stat-value">{outbreak.nearbyCases}</span></div>
+                </div>
+                <div className="pdi-regional-map">
+                  <MapPinned size={16} />
+                  <span className="pdi-reg-map-label">{outbreak.nearbyCases > 0 ? `${outbreak.nearbyCases} confirmed case(s) in ${farmDistrict || outbreak.district}` : "No cases in this district"}</span>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      {weatherState.loading || pestState.loading ? (
-        <div className="pdi-loading">
-          <span>Loading pest intelligence...</span>
+      <AppCard>
+        <div className="pdi-card-head"><h3>Disease Library</h3></div>
+        <div className="pdi-lib-toolbar">
+          <div style={{ position: "relative", flex: 1, minWidth: 180 }}>
+            <Search size={15} style={{ position: "absolute", left: 10, top: 9, color: "#9ca3af" }} />
+            <input className="pdi-search-input" type="text" placeholder="Search diseases..." value={librarySearch} onChange={(e) => { setLibrarySearch(e.target.value); setLibraryPage(1); }} style={{ paddingLeft: 30, fontSize: 13 }} />
+          </div>
+          <select value={libraryCrop} onChange={(e) => { setLibraryCrop(e.target.value); setLibraryPage(1); }} className="pdi-lib-filter-select">
+            <option value="">All crops</option>
+            {ALL_CROPS.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select value={libraryType} onChange={(e) => { setLibraryType(e.target.value); setLibraryPage(1); }} className="pdi-lib-filter-select">
+            <option value="All">All</option>
+            <option value="Disease">Diseases</option>
+            <option value="Pest">Pests</option>
+          </select>
         </div>
-      ) : null}
+
+        {libraryLoading && <p className="pdi-loading">Loading library...</p>}
+        {!libraryLoading && libraryData.length === 0 && <p className="pdi-empty">No diseases or pests match the current filters.</p>}
+        {!libraryLoading && libraryData.length > 0 && (
+          <>
+            <div className="pdi-library-grid">
+              {libraryData.map((d) => (
+                <div key={d.id} className="pdi-library-card">
+                  <div className="pdi-lib-img-wrap">
+                    <PlantHealthImage src={d.imageUrl} alt={d.name} />
+                    {d.imageAuthor && (
+                      <span className="pdi-lib-credit" title={`${d.imageAuthor}${d.imageLicence ? " - " + d.imageLicence : ""}`}>
+                        <CreativeCommons size={10} /> {d.imageAuthor}
+                      </span>
+                    )}
+                    {d.recognitionSupported && (
+                      <span className="pdi-lib-recog-badge"><Scan size={10} /> AI Ready</span>
+                    )}
+                  </div>
+                  <div className="pdi-lib-body">
+                    <strong>{d.name}</strong>
+                    <span className="pdi-lib-sci">{d.scientificName}</span>
+                    <div className="pdi-lib-tags">
+                      <span className="pdi-lib-tag">{d.type}</span>
+                      <span className="pdi-lib-tag">{d.severity}</span>
+                    </div>
+                    <p className="pdi-lib-prev">{d.preventionAdvice?.slice(0, 120)}...</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {libraryPagination && libraryPagination.totalPages > 1 && (
+              <div className="pdi-lib-pagination">
+                <button
+                  type="button"
+                  className="pdi-page-btn"
+                  disabled={libraryPage <= 1}
+                  onClick={() => setLibraryPage((p) => Math.max(p - 1, 1))}
+                >
+                  Previous
+                </button>
+                <span className="pdi-page-info">
+                  Page {libraryPagination.page} of {libraryPagination.totalPages}
+                </span>
+                <button
+                  type="button"
+                  className="pdi-page-btn"
+                  disabled={libraryPage >= libraryPagination.totalPages}
+                  onClick={() => setLibraryPage((p) => Math.min(p + 1, libraryPagination.totalPages))}
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </AppCard>
     </PageShell>
   );
 }

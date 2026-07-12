@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="260" viewBox="0 0 400 260">
+  <rect width="400" height="260" fill="#e8f5e9"/>
+  <rect x="0" y="0" width="400" height="4" fill="#a5d6a7"/>
+  <g transform="translate(200,85)">
+    <path d="M-20-10 C-20-30 20-30 20-10 C20-5 15 0 10 5 L15 20 L-15 20 L-10 5 C-15 0-20-5-20-10Z" fill="#2e7d32" opacity="0.2"/>
+    <path d="M-8 5 C-8 0-4-3 0-3 C4-3 8 0 8 5 L5 15 L-5 15Z" fill="#2e7d32" opacity="0.35"/>
+    <circle cx="-8" cy="-12" r="2.5" fill="#2e7d32" opacity="0.3"/>
+    <circle cx="8" cy="-12" r="2.5" fill="#2e7d32" opacity="0.3"/>
+    <path d="M-12-8 Q0-25 12-8" stroke="#a5d6a7" stroke-width="1.5" fill="none" opacity="0.4"/>
+  </g>
+  <text x="200" y="155" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12" fill="#2e7d32" fill-opacity="0.5">Disease</text>
+  <text x="200" y="230" text-anchor="middle" font-family="system-ui,sans-serif" font-size="13" font-weight="600" fill="#2e7d32" fill-opacity="0.7">Cassava Brown Streak Disease</text>
+</svg>

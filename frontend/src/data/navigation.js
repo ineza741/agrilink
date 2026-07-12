@@ -3,14 +3,12 @@ import {
   Bug,
   Droplets,
   FlaskConical,
-  BellRing,
   Home,
   Map,
   Sprout,
   TrendingUp,
   Users,
   FileText,
-  History,
 } from "lucide-react";
 
 export const adminNavigationSections = [
@@ -22,7 +20,6 @@ export const adminNavigationSections = [
       { label: "Market Officer Applications", path: "/market-officer-applications", icon: Users },
       { label: "Regional Monitoring Dashboard", path: "/regional-monitoring", icon: Map },
       { label: "Content Management", path: "/recommendations", icon: FileText },
-      { label: "System Notifications", path: "/notifications", icon: BellRing },
     ],
   },
   {
@@ -44,7 +41,6 @@ export const farmerNavigationSections = [
       { label: "Pest & Disease", path: "/pests-diseases", icon: Bug },
       { label: "Irrigation Management", path: "/irrigation-fertilizer", icon: Droplets },
       { label: "Analytics & Reports", path: "/analytics", icon: BarChart3 },
-      { label: "Notifications", path: "/notifications", icon: BellRing },
     ],
   },
 ];

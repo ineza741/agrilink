@@ -1,4 +1,4 @@
-const express = require("express");
+﻿const express = require("express");
 
 const analyticsController = require("../controllers/analyticsController");
 const authenticate = require("../middleware/authenticate");
@@ -11,12 +11,31 @@ const {
   adminAnalyticsDashboardSchema,
   adminAnalyticsHistorySchema,
   adminAnalyticsExportSchema,
+  simpleReportSchema,
 } = require("../validations/phase8AnalyticsSchemas");
 
 const router = express.Router();
 
 router.use(authenticate);
 router.use(authorize("Farmer", "Admin", "ExtensionOfficer"));
+
+router.get(
+  "/simple-report",
+  validate(simpleReportSchema),
+  analyticsController.getSimpleReport,
+);
+
+router.get(
+  "/simple-report/export/pdf",
+  validate(simpleReportSchema),
+  analyticsController.exportSimpleReportPdf,
+);
+
+router.get(
+  "/simple-report/export/excel",
+  validate(simpleReportSchema),
+  analyticsController.exportSimpleReportExcel,
+);
 
 router.get(
   "/farms/:farmId/dashboard",

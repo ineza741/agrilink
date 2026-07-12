@@ -1,0 +1,34 @@
+{
+  "screenshots": [
+    "C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\e2e-test\\screenshots\\market-officer-final\\01-dashboard.png",
+    "C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\e2e-test\\screenshots\\market-officer-final\\02-crop-prices.png",
+    "C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\e2e-test\\screenshots\\market-officer-final\\03-price-saved.png",
+    "C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\e2e-test\\screenshots\\market-officer-final\\04-price-history.png",
+    "C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\e2e-test\\screenshots\\market-officer-final\\05-profile.png",
+    "C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\e2e-test\\screenshots\\market-officer-final\\06-profile-saved.png",
+    "C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\e2e-test\\screenshots\\market-officer-final\\07-pending-blocked.png"
+  ],
+  "passed": [
+    "Approved Market Officer lands on dashboard after login.",
+    "Sidebar shows only Dashboard, Crop Prices, and Profile for Market Officer.",
+    "Dashboard summary cards render.",
+    "Crop Prices route opens from sidebar.",
+    "Crop Prices table loaded backend rows.",
+    "Search for Wheat returns a matching price row.",
+    "Success toast appears after saving crop price.",
+    "Updated Wheat price appears immediately in the table.",
+    "Price details show the previous Wheat price.",
+    "Price details show the new Wheat price.",
+    "Updated Wheat price persists after browser refresh.",
+    "Profile success toast appears after save.",
+    "Profile update persists after refresh.",
+    "Farmer cannot stay on Market Officer dashboard route.",
+    "Approved Market Officer cannot stay on admin-only route.",
+    "Pending Market Officer is blocked from accessing protected Market Officer screens."
+  ],
+  "failed": [],
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  ],
+  "notes": []
+}

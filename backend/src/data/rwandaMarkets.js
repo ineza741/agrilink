@@ -1,0 +1,73 @@
+const RWANDA_MARKETS = [
+  // === Kigali City ===
+  { marketName: "Kimironko Market", province: "Kigali City", district: "Gasabo", sector: "Kimironko", latitude: -1.944, longitude: 30.1131, marketType: "District Market" },
+  { marketName: "Kicukiro New Modern Market", province: "Kigali City", district: "Kicukiro", sector: "Kicukiro", latitude: -1.9704, longitude: 30.1059, marketType: "Wholesale Market" },
+  { marketName: "Zinia Market", province: "Kigali City", district: "Kicukiro", sector: "Gatenga", latitude: -1.9838, longitude: 30.1014, marketType: "Local Produce Market" },
+  { marketName: "Kanserege Market", province: "Kigali City", district: "Kicukiro", sector: "Kanserege", latitude: -1.9927, longitude: 30.1086, marketType: "Local Produce Market" },
+  { marketName: "Nyabugogo Market", province: "Kigali City", district: "Nyarugenge", sector: "Nyabugogo", latitude: -1.9446, longitude: 30.0619, marketType: "Wholesale Market" },
+
+  // === Eastern Province ===
+  { marketName: "Nyamata Market", province: "Eastern Province", district: "Bugesera", sector: "Nyamata", latitude: -2.1405, longitude: 30.1022, marketType: "District Market" },
+  { marketName: "Gako Market", province: "Eastern Province", district: "Bugesera", sector: "Gako", latitude: -2.1754, longitude: 30.1035, marketType: "Local Produce Market" },
+  { marketName: "Ruhuha Market", province: "Eastern Province", district: "Bugesera", sector: "Ruhuha", latitude: -2.2392, longitude: 30.1936, marketType: "Local Produce Market" },
+  { marketName: "Gatsibo Market", province: "Eastern Province", district: "Gatsibo", sector: "Gatsibo", latitude: -1.7833, longitude: 30.3667, marketType: "District Market" },
+  { marketName: "Nyagihara Market", province: "Eastern Province", district: "Gatsibo", sector: "Nyagihara", latitude: -1.75, longitude: 30.4, marketType: "Local Produce Market" },
+  { marketName: "Kayonza Market", province: "Eastern Province", district: "Kayonza", sector: "Kayonza", latitude: -1.8772, longitude: 30.6451, marketType: "District Market" },
+  { marketName: "Mukarange Collection Point", province: "Eastern Province", district: "Kayonza", sector: "Mukarange", latitude: -1.8779, longitude: 30.6507, marketType: "Collection Center" },
+  { marketName: "Kirehe Market", province: "Eastern Province", district: "Kirehe", sector: "Kirehe", latitude: -2.0667, longitude: 30.3667, marketType: "District Market" },
+  { marketName: "Rusumo Market", province: "Eastern Province", district: "Kirehe", sector: "Rusumo", latitude: -2.1333, longitude: 30.7833, marketType: "Local Produce Market" },
+  { marketName: "Ngoma Market", province: "Eastern Province", district: "Ngoma", sector: "Ngoma", latitude: -2.0833, longitude: 30.55, marketType: "District Market" },
+  { marketName: "Kazo Market", province: "Eastern Province", district: "Ngoma", sector: "Kazo", latitude: -2.1167, longitude: 30.5833, marketType: "Local Produce Market" },
+  { marketName: "Nyagatare Market", province: "Eastern Province", district: "Nyagatare", sector: "Nyagatare", latitude: -1.3, longitude: 30.3333, marketType: "District Market" },
+  { marketName: "Karama Market", province: "Eastern Province", district: "Nyagatare", sector: "Karama", latitude: -1.35, longitude: 30.2833, marketType: "Local Produce Market" },
+  { marketName: "Rwamagana Market", province: "Eastern Province", district: "Rwamagana", sector: "Rwamagana", latitude: -1.9499, longitude: 30.4347, marketType: "District Market" },
+  { marketName: "Kigabiro Trading Hub", province: "Eastern Province", district: "Rwamagana", sector: "Kigabiro", latitude: -1.9524, longitude: 30.4416, marketType: "Cooperative Market" },
+
+  // === Northern Province ===
+  { marketName: "Cyanika Market", province: "Northern Province", district: "Burera", sector: "Cyanika", latitude: -1.3667, longitude: 29.6333, marketType: "District Market" },
+  { marketName: "Burera Market", province: "Northern Province", district: "Burera", sector: "Burera", latitude: -1.4667, longitude: 29.8, marketType: "Local Produce Market" },
+  { marketName: "Gakenke Market", province: "Northern Province", district: "Gakenke", sector: "Gakenke", latitude: -1.6833, longitude: 29.65, marketType: "District Market" },
+  { marketName: "Ruli Market", province: "Northern Province", district: "Gakenke", sector: "Ruli", latitude: -1.7167, longitude: 29.6833, marketType: "Local Produce Market" },
+  { marketName: "Byumba Market", province: "Northern Province", district: "Gicumbi", sector: "Byumba", latitude: -1.5833, longitude: 30.0667, marketType: "District Market" },
+  { marketName: "Gicumbi Market", province: "Northern Province", district: "Gicumbi", sector: "Gicumbi", latitude: -1.6333, longitude: 30.0, marketType: "Local Produce Market" },
+  { marketName: "Musanze Main Market", province: "Northern Province", district: "Musanze", sector: "Musanze", latitude: -1.4996, longitude: 29.6344, marketType: "District Market" },
+  { marketName: "Kinigi Exchange Point", province: "Northern Province", district: "Musanze", sector: "Kinigi", latitude: -1.4328, longitude: 29.5874, marketType: "Cooperative Market" },
+  { marketName: "Rulindo Market", province: "Northern Province", district: "Rulindo", sector: "Rulindo", latitude: -1.7167, longitude: 29.9333, marketType: "District Market" },
+  { marketName: "Kinihira Market", province: "Northern Province", district: "Rulindo", sector: "Kinihira", latitude: -1.75, longitude: 29.9167, marketType: "Local Produce Market" },
+
+  // === Southern Province ===
+  { marketName: "Save Market", province: "Southern Province", district: "Gisagara", sector: "Save", latitude: -2.5333, longitude: 29.7333, marketType: "District Market" },
+  { marketName: "Gisagara Market", province: "Southern Province", district: "Gisagara", sector: "Gisagara", latitude: -2.6, longitude: 29.7, marketType: "Local Produce Market" },
+  { marketName: "Huye Central Market", province: "Southern Province", district: "Huye", sector: "Huye", latitude: -2.5967, longitude: 29.7394, marketType: "District Market" },
+  { marketName: "Ngoma Trading Point", province: "Southern Province", district: "Huye", sector: "Ngoma", latitude: -2.6125, longitude: 29.7488, marketType: "Cooperative Market" },
+  { marketName: "Kamonyi Market", province: "Southern Province", district: "Kamonyi", sector: "Kamonyi", latitude: -2.0333, longitude: 29.9167, marketType: "District Market" },
+  { marketName: "Rukoma Market", province: "Southern Province", district: "Kamonyi", sector: "Rukoma", latitude: -2.0833, longitude: 29.8833, marketType: "Local Produce Market" },
+  { marketName: "Muhanga Market", province: "Southern Province", district: "Muhanga", sector: "Muhanga", latitude: -2.0833, longitude: 29.7667, marketType: "District Market" },
+  { marketName: "Nyamabuye Market", province: "Southern Province", district: "Muhanga", sector: "Nyamabuye", latitude: -2.1, longitude: 29.75, marketType: "Local Produce Market" },
+  { marketName: "Nyamagabe Market", province: "Southern Province", district: "Nyamagabe", sector: "Nyamagabe", latitude: -2.45, longitude: 29.5667, marketType: "District Market" },
+  { marketName: "Kitabi Market", province: "Southern Province", district: "Nyamagabe", sector: "Kitabi", latitude: -2.5, longitude: 29.5167, marketType: "Local Produce Market" },
+  { marketName: "Nyanza Market", province: "Southern Province", district: "Nyanza", sector: "Nyanza", latitude: -2.35, longitude: 29.7333, marketType: "District Market" },
+  { marketName: "Busasamana Market", province: "Southern Province", district: "Nyanza", sector: "Busasamana", latitude: -2.3167, longitude: 29.7, marketType: "Local Produce Market" },
+  { marketName: "Kibeho Market", province: "Southern Province", district: "Nyaruguru", sector: "Kibeho", latitude: -2.6333, longitude: 29.55, marketType: "District Market" },
+  { marketName: "Nyaruguru Market", province: "Southern Province", district: "Nyaruguru", sector: "Nyaruguru", latitude: -2.7, longitude: 29.5833, marketType: "Local Produce Market" },
+  { marketName: "Ruhango Market", province: "Southern Province", district: "Ruhango", sector: "Ruhango", latitude: -2.1833, longitude: 29.8333, marketType: "District Market" },
+  { marketName: "Ntongwe Market", province: "Southern Province", district: "Ruhango", sector: "Ntongwe", latitude: -2.2333, longitude: 29.8, marketType: "Local Produce Market" },
+
+  // === Western Province ===
+  { marketName: "Karongi Market", province: "Western Province", district: "Karongi", sector: "Karongi", latitude: -2.05, longitude: 29.35, marketType: "District Market" },
+  { marketName: "Rubengera Market", province: "Western Province", district: "Karongi", sector: "Rubengera", latitude: -2.1167, longitude: 29.4167, marketType: "Local Produce Market" },
+  { marketName: "Ngororero Market", province: "Western Province", district: "Ngororero", sector: "Ngororero", latitude: -1.8833, longitude: 29.6167, marketType: "District Market" },
+  { marketName: "Muhororo Market", province: "Western Province", district: "Ngororero", sector: "Muhororo", latitude: -1.85, longitude: 29.5667, marketType: "Local Produce Market" },
+  { marketName: "Nyabihu Market", province: "Western Province", district: "Nyabihu", sector: "Nyabihu", latitude: -1.6667, longitude: 29.5, marketType: "District Market" },
+  { marketName: "Mukamira Market", province: "Western Province", district: "Nyabihu", sector: "Mukamira", latitude: -1.6833, longitude: 29.45, marketType: "Local Produce Market" },
+  { marketName: "Nyamasheke Market", province: "Western Province", district: "Nyamasheke", sector: "Nyamasheke", latitude: -2.35, longitude: 29.1667, marketType: "District Market" },
+  { marketName: "Kanjongo Market", province: "Western Province", district: "Nyamasheke", sector: "Kanjongo", latitude: -2.4, longitude: 29.2, marketType: "Local Produce Market" },
+  { marketName: "Rubavu Border Market", province: "Western Province", district: "Rubavu", sector: "Rubavu", latitude: -1.679, longitude: 29.2589, marketType: "Export Market" },
+  { marketName: "Gisenyi Produce Market", province: "Western Province", district: "Rubavu", sector: "Gisenyi", latitude: -1.7026, longitude: 29.2579, marketType: "District Market" },
+  { marketName: "Cyangugu Market", province: "Western Province", district: "Rusizi", sector: "Cyangugu", latitude: -2.4833, longitude: 28.9, marketType: "District Market" },
+  { marketName: "Rusizi Market", province: "Western Province", district: "Rusizi", sector: "Rusizi", latitude: -2.45, longitude: 28.9333, marketType: "Local Produce Market" },
+  { marketName: "Rutsiro Market", province: "Western Province", district: "Rutsiro", sector: "Rutsiro", latitude: -1.9333, longitude: 29.3167, marketType: "District Market" },
+  { marketName: "Bugarama Market", province: "Western Province", district: "Rutsiro", sector: "Bugarama", latitude: -1.9833, longitude: 29.2667, marketType: "Local Produce Market" },
+];
+
+module.exports = { RWANDA_MARKETS };

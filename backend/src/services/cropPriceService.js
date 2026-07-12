@@ -184,16 +184,16 @@ async function getCurrentOfficialPrice({ cropName, marketName, district, priceTy
   });
 
   const currentPrice = Number(record[config.field]);
-  const previousPrice = latestHistory?.[config.historyField] != null
+  const rawPreviousPrice = latestHistory?.[config.historyField] != null
     ? Number(latestHistory[config.historyField])
     : normalizedPriceType === "Wholesale" && record.previousPrice != null
       ? Number(record.previousPrice)
       : null;
-  const percentageChange = previousPrice && currentPrice != null
+  const isInitialCreation = rawPreviousPrice === 0 && latestHistory != null;
+  const previousPrice = isInitialCreation ? currentPrice : rawPreviousPrice;
+  const percentageChange = previousPrice != null && currentPrice != null
     ? Number((((currentPrice - previousPrice) / previousPrice) * 100).toFixed(1))
-    : previousPrice === 0 && currentPrice != null
-      ? 0
-      : null;
+    : null;
 
   return {
     crop: record.cropName,
@@ -841,3 +841,4 @@ module.exports = {
   exportPriceHistoryPdf,
   exportPriceHistoryExcel,
 };
+

@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const authRoutes = require("./authRoutes");
 const farmerRoutes = require("./farmerRoutes");
 const farmRoutes = require("./farmRoutes");
@@ -14,6 +14,7 @@ const analyticsRoutes = require("./analyticsRoutes");
 const weatherRoutes = require("./weatherRoutes");
 const communityRoutes = require("./communityRoutes");
 const cropPriceRoutes = require("./cropPriceRoutes");
+const marketDirectoryRoutes = require("./marketDirectoryRoutes");
 
 const router = express.Router();
 
@@ -32,5 +33,6 @@ router.use("/weather", weatherRoutes);
 router.use("/community", communityRoutes);
 router.use("/admin", adminRoutes);
 router.use("/crop-prices", cropPriceRoutes);
+router.use("/market-directory", marketDirectoryRoutes);
 
 module.exports = router;

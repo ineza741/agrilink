@@ -1,0 +1,15 @@
+{
+  "passed": [
+    "Found Beans / Zinia Market / Wholesale row in Crop Prices.",
+    "Market Officer Crop Prices shows Beans at Zinia Market as RWF 500.",
+    "Farmer Market Intelligence shows the official price section.",
+    "Farmer Market Intelligence shows RWF 500 after Market Officer update.",
+    "Farmer Market Intelligence no longer shows demo-data messaging.",
+    "Farmer Market Intelligence still shows RWF 500 after refresh."
+  ],
+  "failed": [],
+  "screenshots": [
+    "C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\e2e-test\\screenshots\\market-price-sync\\01-market-officer-price-500.png",
+    "C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\e2e-test\\screenshots\\market-price-sync\\02-farmer-market-page.png"
+  ]
+}

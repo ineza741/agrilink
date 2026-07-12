@@ -1,0 +1,606 @@
+PrismaClientValidationError: 
+Invalid `prisma.marketAnalysis.create()` invocation in
+C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\services\marketService.js:367:47
+
+  364   timeframe: payload.timeframe || "30D",
+  365 });
+  366 
+→ 367 const created = await prisma.marketAnalysis.create({
+        data: {
+          farmId: "11111111-1111-4111-8111-111111111111",
+          timeframe: "90D",
+          district: undefined,
+          province: undefined,
+          currentPrice: undefined,
+          demandForecast: undefined,
+          bestMarketName: null,
+          aiDecision: undefined,
+          aiReason: undefined,
+          aiConfidence: undefined,
+          trendBars: undefined,
+          forecasts: undefined,
+          markets: undefined,
+          logisticsTips: undefined,
+          platforms: undefined,
+          mapUrl: undefined,
+      +   cropName: String
+        }
+      })
+
+Argument `cropName` is missing.
+    at Nn (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:29:1363)
+    at ei.handleRequestError (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6911)
+    at ei.handleAndLogRequestError (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6593)
+    at ei.request (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6300)
+    at async a (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:130:9551)
+    at async Object.analyzeMarket (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\services\marketService.js:367:19)
+    at async C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\controllers\marketController.js:5:20 {
+  clientVersion: '6.16.2'
+}
+PrismaClientValidationError: 
+Invalid `prisma.marketAnalysis.create()` invocation in
+C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\services\marketService.js:367:47
+
+  364   timeframe: payload.timeframe || "30D",
+  365 });
+  366 
+→ 367 const created = await prisma.marketAnalysis.create({
+        data: {
+          farmId: "11111111-1111-4111-8111-111111111111",
+          timeframe: "90D",
+          district: undefined,
+          province: undefined,
+          currentPrice: undefined,
+          demandForecast: undefined,
+          bestMarketName: null,
+          aiDecision: undefined,
+          aiReason: undefined,
+          aiConfidence: undefined,
+          trendBars: undefined,
+          forecasts: undefined,
+          markets: undefined,
+          logisticsTips: undefined,
+          platforms: undefined,
+          mapUrl: undefined,
+      +   cropName: String
+        }
+      })
+
+Argument `cropName` is missing.
+    at Nn (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:29:1363)
+    at ei.handleRequestError (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6911)
+    at ei.handleAndLogRequestError (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6593)
+    at ei.request (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6300)
+    at async a (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:130:9551)
+    at async Object.analyzeMarket (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\services\marketService.js:367:19)
+    at async C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\controllers\marketController.js:5:20 {
+  clientVersion: '6.16.2'
+}
+PrismaClientValidationError: 
+Invalid `prisma.marketAnalysis.create()` invocation in
+C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\services\marketService.js:367:47
+
+  364   timeframe: payload.timeframe || "30D",
+  365 });
+  366 
+→ 367 const created = await prisma.marketAnalysis.create({
+        data: {
+          farmId: "11111111-1111-4111-8111-111111111111",
+          timeframe: "90D",
+          district: undefined,
+          province: undefined,
+          currentPrice: undefined,
+          demandForecast: undefined,
+          bestMarketName: null,
+          aiDecision: undefined,
+          aiReason: undefined,
+          aiConfidence: undefined,
+          trendBars: undefined,
+          forecasts: undefined,
+          markets: undefined,
+          logisticsTips: undefined,
+          platforms: undefined,
+          mapUrl: undefined,
+      +   cropName: String
+        }
+      })
+
+Argument `cropName` is missing.
+    at Nn (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:29:1363)
+    at ei.handleRequestError (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6911)
+    at ei.handleAndLogRequestError (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6593)
+    at ei.request (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6300)
+    at async a (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:130:9551)
+    at async Object.analyzeMarket (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\services\marketService.js:367:19)
+    at async C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\controllers\marketController.js:5:20 {
+  clientVersion: '6.16.2'
+}
+PrismaClientValidationError: 
+Invalid `prisma.marketAnalysis.create()` invocation in
+C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\services\marketService.js:367:47
+
+  364   timeframe: payload.timeframe || "30D",
+  365 });
+  366 
+→ 367 const created = await prisma.marketAnalysis.create({
+        data: {
+          farmId: "11111111-1111-4111-8111-111111111111",
+          timeframe: "30D",
+          district: undefined,
+          province: undefined,
+          currentPrice: undefined,
+          demandForecast: undefined,
+          bestMarketName: null,
+          aiDecision: undefined,
+          aiReason: undefined,
+          aiConfidence: undefined,
+          trendBars: undefined,
+          forecasts: undefined,
+          markets: undefined,
+          logisticsTips: undefined,
+          platforms: undefined,
+          mapUrl: undefined,
+      +   cropName: String
+        }
+      })
+
+Argument `cropName` is missing.
+    at Nn (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:29:1363)
+    at ei.handleRequestError (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6911)
+    at ei.handleAndLogRequestError (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6593)
+    at ei.request (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6300)
+    at async a (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:130:9551)
+    at async Object.analyzeMarket (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\services\marketService.js:367:19)
+    at async C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\controllers\marketController.js:5:20 {
+  clientVersion: '6.16.2'
+}
+PrismaClientValidationError: 
+Invalid `prisma.marketAnalysis.create()` invocation in
+C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\services\marketService.js:367:47
+
+  364   timeframe: payload.timeframe || "30D",
+  365 });
+  366 
+→ 367 const created = await prisma.marketAnalysis.create({
+        data: {
+          farmId: "11111111-1111-4111-8111-111111111111",
+          timeframe: "30D",
+          district: undefined,
+          province: undefined,
+          currentPrice: undefined,
+          demandForecast: undefined,
+          bestMarketName: null,
+          aiDecision: undefined,
+          aiReason: undefined,
+          aiConfidence: undefined,
+          trendBars: undefined,
+          forecasts: undefined,
+          markets: undefined,
+          logisticsTips: undefined,
+          platforms: undefined,
+          mapUrl: undefined,
+      +   cropName: String
+        }
+      })
+
+Argument `cropName` is missing.
+    at Nn (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:29:1363)
+    at ei.handleRequestError (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6911)
+    at ei.handleAndLogRequestError (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6593)
+    at ei.request (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6300)
+    at async a (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:130:9551)
+    at async Object.analyzeMarket (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\services\marketService.js:367:19)
+    at async C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\controllers\marketController.js:5:20 {
+  clientVersion: '6.16.2'
+}
+PrismaClientValidationError: 
+Invalid `prisma.marketAnalysis.create()` invocation in
+C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\services\marketService.js:367:47
+
+  364   timeframe: payload.timeframe || "30D",
+  365 });
+  366 
+→ 367 const created = await prisma.marketAnalysis.create({
+        data: {
+          farmId: "11111111-1111-4111-8111-111111111111",
+          timeframe: "30D",
+          district: undefined,
+          province: undefined,
+          currentPrice: undefined,
+          demandForecast: undefined,
+          bestMarketName: null,
+          aiDecision: undefined,
+          aiReason: undefined,
+          aiConfidence: undefined,
+          trendBars: undefined,
+          forecasts: undefined,
+          markets: undefined,
+          logisticsTips: undefined,
+          platforms: undefined,
+          mapUrl: undefined,
+      +   cropName: String
+        }
+      })
+
+Argument `cropName` is missing.
+    at Nn (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:29:1363)
+    at ei.handleRequestError (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6911)
+    at ei.handleAndLogRequestError (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6593)
+    at ei.request (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6300)
+    at async a (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:130:9551)
+    at async Object.analyzeMarket (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\services\marketService.js:367:19)
+    at async C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\controllers\marketController.js:5:20 {
+  clientVersion: '6.16.2'
+}
+node:internal/modules/cjs/loader:1478
+  throw err;
+  ^
+
+Error: Cannot find module '../middleware/authMiddleware'
+Require stack:
+- C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\routes\marketDirectoryRoutes.js
+- C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\routes\index.js
+- C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+    at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+    at Module._load (node:internal/modules/cjs/loader:1261:25)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.require (node:internal/modules/cjs/loader:1575:12)
+    at require (node:internal/modules/helpers:191:16)
+    at Object.<anonymous> (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\routes\marketDirectoryRoutes.js:3:26)
+    at Module._compile (node:internal/modules/cjs/loader:1829:14)
+    at Object..js (node:internal/modules/cjs/loader:1969:10)
+    at Module.load (node:internal/modules/cjs/loader:1552:32)
+    at Module._load (node:internal/modules/cjs/loader:1354:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.require (node:internal/modules/cjs/loader:1575:12)
+    at require (node:internal/modules/helpers:191:16) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    'C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\backend\\src\\routes\\marketDirectoryRoutes.js',
+    'C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\backend\\src\\routes\\index.js',
+    'C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\backend\\src\\server.js'
+  ]
+}
+
+Node.js v25.8.2
+node:internal/modules/cjs/loader:1478
+  throw err;
+  ^
+
+Error: Cannot find module '../middleware/authMiddleware'
+Require stack:
+- C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\routes\marketDirectoryRoutes.js
+- C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\routes\index.js
+- C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+    at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+    at Module._load (node:internal/modules/cjs/loader:1261:25)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.require (node:internal/modules/cjs/loader:1575:12)
+    at require (node:internal/modules/helpers:191:16)
+    at Object.<anonymous> (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\routes\marketDirectoryRoutes.js:3:26)
+    at Module._compile (node:internal/modules/cjs/loader:1829:14)
+    at Object..js (node:internal/modules/cjs/loader:1969:10)
+    at Module.load (node:internal/modules/cjs/loader:1552:32)
+    at Module._load (node:internal/modules/cjs/loader:1354:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.require (node:internal/modules/cjs/loader:1575:12)
+    at require (node:internal/modules/helpers:191:16) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    'C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\backend\\src\\routes\\marketDirectoryRoutes.js',
+    'C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\backend\\src\\routes\\index.js',
+    'C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\backend\\src\\server.js'
+  ]
+}
+
+Node.js v25.8.2
+node:internal/modules/cjs/loader:1478
+  throw err;
+  ^
+
+Error: Cannot find module '../middleware/authMiddleware'
+Require stack:
+- C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\routes\marketDirectoryRoutes.js
+- C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\routes\index.js
+- C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+    at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+    at Module._load (node:internal/modules/cjs/loader:1261:25)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.require (node:internal/modules/cjs/loader:1575:12)
+    at require (node:internal/modules/helpers:191:16)
+    at Object.<anonymous> (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\routes\marketDirectoryRoutes.js:3:26)
+    at Module._compile (node:internal/modules/cjs/loader:1829:14)
+    at Object..js (node:internal/modules/cjs/loader:1969:10)
+    at Module.load (node:internal/modules/cjs/loader:1552:32)
+    at Module._load (node:internal/modules/cjs/loader:1354:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.require (node:internal/modules/cjs/loader:1575:12)
+    at require (node:internal/modules/helpers:191:16) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    'C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\backend\\src\\routes\\marketDirectoryRoutes.js',
+    'C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\backend\\src\\routes\\index.js',
+    'C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\backend\\src\\server.js'
+  ]
+}
+
+Node.js v25.8.2
+node:internal/modules/cjs/loader:1478
+  throw err;
+  ^
+
+Error: Cannot find module '../middleware/authMiddleware'
+Require stack:
+- C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\routes\marketDirectoryRoutes.js
+- C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\routes\index.js
+- C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+    at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+    at Module._load (node:internal/modules/cjs/loader:1261:25)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.require (node:internal/modules/cjs/loader:1575:12)
+    at require (node:internal/modules/helpers:191:16)
+    at Object.<anonymous> (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\routes\marketDirectoryRoutes.js:3:26)
+    at Module._compile (node:internal/modules/cjs/loader:1829:14)
+    at Object..js (node:internal/modules/cjs/loader:1969:10)
+    at Module.load (node:internal/modules/cjs/loader:1552:32)
+    at Module._load (node:internal/modules/cjs/loader:1354:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.require (node:internal/modules/cjs/loader:1575:12)
+    at require (node:internal/modules/helpers:191:16) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    'C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\backend\\src\\routes\\marketDirectoryRoutes.js',
+    'C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\backend\\src\\routes\\index.js',
+    'C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\backend\\src\\server.js'
+  ]
+}
+
+Node.js v25.8.2
+node:internal/modules/cjs/loader:1478
+  throw err;
+  ^
+
+Error: Cannot find module '../middleware/authMiddleware'
+Require stack:
+- C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\routes\marketDirectoryRoutes.js
+- C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\routes\index.js
+- C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+    at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+    at Module._load (node:internal/modules/cjs/loader:1261:25)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.require (node:internal/modules/cjs/loader:1575:12)
+    at require (node:internal/modules/helpers:191:16)
+    at Object.<anonymous> (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\routes\marketDirectoryRoutes.js:3:26)
+    at Module._compile (node:internal/modules/cjs/loader:1829:14)
+    at Object..js (node:internal/modules/cjs/loader:1969:10)
+    at Module.load (node:internal/modules/cjs/loader:1552:32)
+    at Module._load (node:internal/modules/cjs/loader:1354:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.require (node:internal/modules/cjs/loader:1575:12)
+    at require (node:internal/modules/helpers:191:16) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    'C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\backend\\src\\routes\\marketDirectoryRoutes.js',
+    'C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\backend\\src\\routes\\index.js',
+    'C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\backend\\src\\server.js'
+  ]
+}
+
+Node.js v25.8.2
+node:internal/modules/cjs/loader:1478
+  throw err;
+  ^
+
+Error: Cannot find module '../middleware/authMiddleware'
+Require stack:
+- C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\routes\marketDirectoryRoutes.js
+- C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\routes\index.js
+- C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+    at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+    at Module._load (node:internal/modules/cjs/loader:1261:25)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.require (node:internal/modules/cjs/loader:1575:12)
+    at require (node:internal/modules/helpers:191:16)
+    at Object.<anonymous> (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\routes\marketDirectoryRoutes.js:3:26)
+    at Module._compile (node:internal/modules/cjs/loader:1829:14)
+    at Object..js (node:internal/modules/cjs/loader:1969:10)
+    at Module.load (node:internal/modules/cjs/loader:1552:32)
+    at Module._load (node:internal/modules/cjs/loader:1354:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.require (node:internal/modules/cjs/loader:1575:12)
+    at require (node:internal/modules/helpers:191:16) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    'C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\backend\\src\\routes\\marketDirectoryRoutes.js',
+    'C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\backend\\src\\routes\\index.js',
+    'C:\\Users\\Darrly\\OneDrive\\Desktop\\work\\rodrigue\\backend\\src\\server.js'
+  ]
+}
+
+Node.js v25.8.2
+PrismaClientValidationError: 
+Invalid `prisma.cropPrice.findMany()` invocation in
+C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\services\marketDirectoryService.js:90:30
+
+  87 
+  88 const marketIds = districtMarkets.map((m) => m.id);
+  89 const officialPrices = marketIds.length
+→ 90   ? await prisma.cropPrice.findMany({
+         where: {
+           marketId: {
+             in: [
+               "91e90f32-0262-4eff-a0d7-dcc6d79879cd",
+               "fbd5cdd9-be82-4012-adcb-4e8a9135f7b8",
+               "6701b7b0-ac60-4177-89af-2c3985b1d340"
+             ]
+           },
+           cropName: "Wheat",
+           status: "Active",
+           wholesalePrice: {
+       +     not: Float
+           }
+         },
+         include: {
+           createdBy: {
+             select: {
+               id: true,
+               fullName: true
+             }
+           },
+           updatedBy: {
+             select: {
+               id: true,
+               fullName: true
+             }
+           }
+         },
+         orderBy: [
+           {
+             effectiveDate: "desc"
+           },
+           {
+             updatedAt: "desc"
+           }
+         ]
+       })
+
+Argument `not` must not be null.
+    at Nn (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:29:1363)
+    at ei.handleRequestError (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6911)
+    at ei.handleAndLogRequestError (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6593)
+    at ei.request (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6300)
+    at async a (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:130:9551)
+    at async Object.getNearbyMarkets (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\services\marketDirectoryService.js:90:7)
+    at async C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\controllers\marketDirectoryController.js:11:18 {
+  clientVersion: '6.16.2'
+}
+PrismaClientValidationError: 
+Invalid `prisma.cropPrice.findMany()` invocation in
+C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\services\marketDirectoryService.js:90:30
+
+  87 
+  88 const marketIds = districtMarkets.map((m) => m.id);
+  89 const officialPrices = marketIds.length
+→ 90   ? await prisma.cropPrice.findMany({
+         where: {
+           marketId: {
+             in: [
+               "91e90f32-0262-4eff-a0d7-dcc6d79879cd",
+               "fbd5cdd9-be82-4012-adcb-4e8a9135f7b8",
+               "6701b7b0-ac60-4177-89af-2c3985b1d340"
+             ]
+           },
+           cropName: "Wheat",
+           status: "Active",
+           wholesalePrice: {
+       +     not: Float
+           }
+         },
+         include: {
+           createdBy: {
+             select: {
+               id: true,
+               fullName: true
+             }
+           },
+           updatedBy: {
+             select: {
+               id: true,
+               fullName: true
+             }
+           }
+         },
+         orderBy: [
+           {
+             effectiveDate: "desc"
+           },
+           {
+             updatedAt: "desc"
+           }
+         ]
+       })
+
+Argument `not` must not be null.
+    at Nn (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:29:1363)
+    at ei.handleRequestError (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6911)
+    at ei.handleAndLogRequestError (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6593)
+    at ei.request (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6300)
+    at async a (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:130:9551)
+    at async Object.getNearbyMarkets (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\services\marketDirectoryService.js:90:7)
+    at async C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\controllers\marketDirectoryController.js:11:18 {
+  clientVersion: '6.16.2'
+}
+PrismaClientValidationError: 
+Invalid `prisma.cropPrice.findMany()` invocation in
+C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\services\marketDirectoryService.js:90:30
+
+  87 
+  88 const marketIds = districtMarkets.map((m) => m.id);
+  89 const officialPrices = marketIds.length
+→ 90   ? await prisma.cropPrice.findMany({
+         where: {
+           marketId: {
+             in: [
+               "91e90f32-0262-4eff-a0d7-dcc6d79879cd",
+               "fbd5cdd9-be82-4012-adcb-4e8a9135f7b8",
+               "6701b7b0-ac60-4177-89af-2c3985b1d340"
+             ]
+           },
+           cropName: "Wheat",
+           status: "Active",
+           retailPrice: {
+       +     not: Float
+           }
+         },
+         include: {
+           createdBy: {
+             select: {
+               id: true,
+               fullName: true
+             }
+           },
+           updatedBy: {
+             select: {
+               id: true,
+               fullName: true
+             }
+           }
+         },
+         orderBy: [
+           {
+             effectiveDate: "desc"
+           },
+           {
+             updatedAt: "desc"
+           }
+         ]
+       })
+
+Argument `not` must not be null.
+    at Nn (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:29:1363)
+    at ei.handleRequestError (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6911)
+    at ei.handleAndLogRequestError (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6593)
+    at ei.request (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:121:6300)
+    at async a (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\node_modules\@prisma\client\runtime\library.js:130:9551)
+    at async Object.getNearbyMarkets (C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\services\marketDirectoryService.js:90:7)
+    at async C:\Users\Darrly\OneDrive\Desktop\work\rodrigue\backend\src\controllers\marketDirectoryController.js:11:18 {
+  clientVersion: '6.16.2'
+}

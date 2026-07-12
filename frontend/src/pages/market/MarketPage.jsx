@@ -1,20 +1,21 @@
 ﻿import {
   ArrowDownRight,
   ArrowUpRight,
+  Banknote,
   BarChart3,
   Bell,
   Bot,
   Clock,
-  DollarSign,
   ExternalLink,
   Globe,
   MapPinned,
   Navigation,
   Store,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { toast } from "sonner";
 import { useFarmerData } from "../../context/FarmerDataContext";
-import { isBackendSessionActive, phase1BackendService } from "../../services/phase1Backend";
+import { isBackendSessionActive, phase1BackendService, splitRegionInput } from "../../services/phase1Backend";
 import { PageShell } from "../../components/common/PageShell";
 import { PageHeader } from "../../components/common/PageHeader";
 import { AppCard } from "../../components/common/AppCard";
@@ -162,6 +163,25 @@ function formatPriceLabel(row, fallbackUnit = "kg") {
   return `${formatRwf(row.currentPrice)} / ${row.unit || fallbackUnit}`;
 }
 
+function normalizeFarm(farm) {
+  if (!farm) return null;
+  const district =
+    farm.district ||
+    (farm.region ? splitRegionInput(farm.region).district : "") ||
+    "";
+  const latitude =
+    farm.latitude ??
+    farm.location?.lat ??
+    farm.location?.latitude ??
+    null;
+  const longitude =
+    farm.longitude ??
+    farm.location?.lng ??
+    farm.location?.longitude ??
+    null;
+  return { id: farm.id, name: farm.name || farm.farmName || "", district, latitude, longitude };
+}
+
 export function MarketPage() {
   const { currentFarms } = useFarmerData();
   const stored = useMemo(() => loadStoredState(), []);
@@ -177,7 +197,10 @@ export function MarketPage() {
   const [officialCurrentPrice, setOfficialCurrentPrice] = useState(null);
   const [marketAnalysis, setMarketAnalysis] = useState(null);
   const [backendAlerts, setBackendAlerts] = useState([]);
+  const [nearbyData, setNearbyData] = useState(null);
   const [state, setState] = useState({ loading: false, notice: "", source: "Official Backend Price" });
+  const [marketLoadStatus, setMarketLoadStatus] = useState("idle");
+  const toastShownRef = useRef(false);
 
   useEffect(() => {
     saveStoredState({ selectedCrop, selectedMarket, priceType, timeframe, targetPrice, alerts });
@@ -189,66 +212,123 @@ export function MarketPage() {
     }
   }, [farms, selectedFarmId]);
 
-  const selectedFarm = useMemo(() => farms.find((farm) => farm.id === selectedFarmId) || farms[0] || null, [farms, selectedFarmId]);
-  const backendFarmId = selectedFarm?.backendFarmId || selectedFarm?.id || "";
+  const selectedFarm = useMemo(() => {
+    if (!Array.isArray(farms) || farms.length === 0) return null;
+    return farms.find((farm) => String(farm.id) === String(selectedFarmId)) || farms[0] || null;
+  }, [farms, selectedFarmId]);
+
+  const normalizedFarm = useMemo(() => normalizeFarm(selectedFarm), [selectedFarm]);
+  const farmDistrict = normalizedFarm?.district || "";
+  const farmLatitude = normalizedFarm?.latitude ?? null;
+  const farmLongitude = normalizedFarm?.longitude ?? null;
+  const backendFarmId = selectedFarm?.backendFarmId || "";
   const backendMode = isBackendSessionActive() && Boolean(backendFarmId);
+
   useEffect(() => {
+    if (!selectedCrop || !normalizedFarm?.id) return;
     let cancelled = false;
     (async () => {
       try {
-        const records = await phase1BackendService.cropPrices.list({ cropName: selectedCrop, status: "Active" });
-        if (cancelled) return;
-        const latest = dedupeLatestPrices(Array.isArray(records) ? records : []);
-        setOfficialRecords(latest);
-        if (!selectedMarket || !latest.some((record) => record.marketName === selectedMarket)) {
-          const districtMatch = latest.find((record) => record.district === selectedFarm?.district);
-          setSelectedMarket(districtMatch?.marketName || latest[0]?.marketName || "");
+        if (backendMode && backendFarmId) {
+          const nearby = await phase1BackendService.cropPrices.nearby({
+            farmId: backendFarmId,
+            cropName: selectedCrop,
+            priceType,
+          });
+          if (cancelled) return;
+          if (nearby?.districtMarkets?.length > 0) {
+            setOfficialRecords(nearby.districtMarkets);
+            setNearbyData(nearby);
+            const firstWithPrice = nearby.districtMarkets.find((m) => m.currentPrice != null);
+            if (firstWithPrice) {
+              setSelectedMarket((prev) => prev || firstWithPrice.marketName);
+            } else {
+              setSelectedMarket((prev) => prev || nearby.districtMarkets[0]?.marketName || "");
+            }
+          } else {
+            setNearbyData(nearby);
+            setOfficialRecords([]);
+            setSelectedMarket((prev) => prev || "");
+          }
+          setMarketLoadStatus("success");
+        } else {
+          const records = await phase1BackendService.cropPrices.list({ cropName: selectedCrop, status: "Active" });
+          if (cancelled) return;
+          const latest = dedupeLatestPrices(Array.isArray(records) ? records : []);
+          setOfficialRecords(latest);
+          setSelectedMarket((prev) => {
+            if (prev && latest.some((r) => r.marketName === prev)) return prev;
+            const districtMatch = latest.find((r) => r.district === farmDistrict);
+            return districtMatch?.marketName || latest[0]?.marketName || "";
+          });
+          setMarketLoadStatus("success");
         }
       } catch (error) {
-        if (!cancelled) {
-          setOfficialRecords([]);
-          setSelectedMarket("");
-          setState((current) => ({ ...current, notice: error?.message || "Failed to load official crop prices." }));
+        if (cancelled) return;
+        if (backendMode) {
+          try {
+            const records = await phase1BackendService.cropPrices.list({ cropName: selectedCrop, status: "Active" });
+            if (cancelled) return;
+            const latest = dedupeLatestPrices(Array.isArray(records) ? records : []);
+            setOfficialRecords(latest);
+            setNearbyData(null);
+            setSelectedMarket((prev) => {
+              if (prev && latest.some((r) => r.marketName === prev)) return prev;
+              const districtMatch = latest.find((r) => r.district === farmDistrict);
+              return districtMatch?.marketName || latest[0]?.marketName || "";
+            });
+            setMarketLoadStatus("success");
+          } catch {
+            if (!cancelled) setMarketLoadStatus("error");
+          }
+        } else {
+          setMarketLoadStatus("error");
         }
       }
     })();
     return () => { cancelled = true; };
-  }, [selectedCrop, selectedFarm?.district, selectedMarket]);
+  }, [selectedCrop, backendFarmId, farmDistrict, priceType, backendMode, normalizedFarm?.id]);
 
   useEffect(() => {
-    let cancelled = false;
-    if (!selectedCrop || !selectedMarket) {
-      setOfficialCurrentPrice(null);
-      return () => { cancelled = true; };
+    if (marketLoadStatus === "success" && officialRecords.length > 0 && !toastShownRef.current) {
+      toast.success("Current prices were loaded from approved Market Officer records.", {
+        id: "official-market-data-loaded",
+        duration: 4000,
+      });
+      toastShownRef.current = true;
     }
+    if (marketLoadStatus !== "success") {
+      toastShownRef.current = false;
+    }
+  }, [marketLoadStatus, officialRecords.length]);
+
+  useEffect(() => {
+    if (!selectedCrop || !selectedMarket || !normalizedFarm) return;
+    let cancelled = false;
 
     (async () => {
       try {
         const current = await phase1BackendService.cropPrices.currentPrice({
           crop: selectedCrop,
           market: selectedMarket,
-          district: selectedFarm?.district,
+          district: farmDistrict,
           priceType,
         });
         if (!cancelled) setOfficialCurrentPrice(current);
       } catch (error) {
         if (!cancelled) {
           setOfficialCurrentPrice(null);
-          setState((current) => ({ ...current, notice: error?.message || `No official ${priceType.toLowerCase()} price exists yet for ${selectedCrop} at ${selectedMarket}.` }));
+          setState((prev) => ({ ...prev, notice: error?.message || `No official ${priceType.toLowerCase()} price exists yet for ${selectedCrop} at ${selectedMarket}.` }));
         }
       }
     })();
 
     return () => { cancelled = true; };
-  }, [selectedCrop, selectedMarket, selectedFarm?.district, priceType]);
+  }, [selectedCrop, selectedMarket, farmDistrict, priceType, normalizedFarm]);
 
   useEffect(() => {
+    if (!backendMode || !backendFarmId || !selectedCrop || !selectedMarket || !normalizedFarm) return;
     let cancelled = false;
-    if (!backendMode || !backendFarmId || !selectedCrop || !selectedMarket) {
-      setMarketAnalysis(null);
-      setBackendAlerts([]);
-      return () => { cancelled = true; };
-    }
 
     (async () => {
       try {
@@ -259,7 +339,7 @@ export function MarketPage() {
             timeframe,
             priceType,
             marketName: selectedMarket,
-            district: selectedFarm?.district,
+            district: farmDistrict,
           }),
           phase1BackendService.market.listAlerts(backendFarmId),
         ]);
@@ -288,15 +368,44 @@ export function MarketPage() {
     })();
 
     return () => { cancelled = true; };
-  }, [backendMode, backendFarmId, selectedCrop, selectedMarket, priceType, timeframe, selectedFarm?.district, officialCurrentPrice]);
+  }, [backendMode, backendFarmId, selectedCrop, selectedMarket, priceType, timeframe, farmDistrict, officialCurrentPrice, normalizedFarm]);
 
-  const marketOptions = useMemo(() => officialRecords.map((record) => record.marketName), [officialRecords]);
+  function mapNearbyMarketToRankingRow(market) {
+    const trendChange = market.percentageChange ?? 0;
+    return {
+      id: market.marketId || market.marketName,
+      name: market.marketName,
+      district: market.district,
+      province: market.province,
+      distanceKm: market.distanceKm,
+      currentPrice: market.currentPrice,
+      currentPriceLabel: market.currentPrice != null ? `${formatRwf(market.currentPrice)} / ${market.unit || "kg"}` : null,
+      demandLabel: (market.demandScore ?? 60) >= 82 ? "High" : (market.demandScore ?? 60) >= 68 ? "Medium" : "Low",
+      trendLabel: getTrendLabel(trendChange),
+      accessibilityLabel: (market.accessibilityScore ?? 72) >= 85 ? "Excellent" : (market.accessibilityScore ?? 72) >= 72 ? "Good" : "Limited",
+      opportunityScore: market.demandScore != null ? Math.min(100, Math.round(market.demandScore * 0.6 + (market.accessibilityScore ?? 72) * 0.4)) : null,
+      recommendation: "Official Price",
+      updatedAt: null,
+      coordinates: { lat: market.latitude, lng: market.longitude },
+      sameDistrict: true,
+    };
+  }
+
+  const marketOptions = useMemo(() => {
+    if (nearbyData?.districtMarkets?.length > 0) return nearbyData.districtMarkets.map((m) => m.marketName);
+    return officialRecords.map((record) => record.marketName);
+  }, [nearbyData, officialRecords]);
+
   const rankingRows = useMemo(() => {
     if (Array.isArray(marketAnalysis?.markets) && marketAnalysis.markets.length) return marketAnalysis.markets;
+    if (nearbyData?.districtMarkets?.length > 0) return nearbyData.districtMarkets.map(mapNearbyMarketToRankingRow);
     return buildFallbackRanking(officialRecords, priceType);
-  }, [marketAnalysis, officialRecords, priceType]);
+  }, [marketAnalysis, nearbyData, officialRecords, priceType]);
   const visibleAlerts = backendMode ? backendAlerts : alerts;
-  const bestMarket = marketAnalysis?.bestMarket || rankingRows[0] || null;
+  const bestMarket = nearbyData?.bestMarket
+    ? mapNearbyMarketToRankingRow(nearbyData.bestMarket)
+    : marketAnalysis?.bestMarket || rankingRows[0] || null;
+  const bestMarketReason = nearbyData?.bestMarketReason || null;
   const forecastRows = Array.isArray(marketAnalysis?.forecasts) ? marketAnalysis.forecasts : [];
   const selectedMarketRow = useMemo(
     () => rankingRows.find((row) => row.name === selectedMarket) || bestMarket || null,
@@ -411,24 +520,17 @@ export function MarketPage() {
           </div>
           <div className="mk-filter-right">
             <div className="mk-context-chips">
-              <span className="mk-context-chip">{selectedFarm?.district || "District unavailable"}</span>
+              <span className="mk-context-chip">{farmDistrict || "District unavailable"}</span>
               <span className="mk-context-chip">{selectedMarket || "No market selected"}</span>
-              <span className="mk-context-chip">{backendMode ? "Backend session active" : "Backend session unavailable"}</span>
+              <span className="mk-context-chip">{backendMode ? "Backend farm synced" : isBackendSessionActive() ? "Backend session active (local farm)" : "Backend session unavailable"}</span>
             </div>
           </div>
         </div>
       </AppCard>
 
-      {(state.notice || state.loading) ? (
-        <div className={`mk-notice ${state.loading ? "loading" : ""}`}>
-          <span className="mk-notice-dot" />
-          <span>{state.loading ? "Loading official market analysis..." : state.notice}</span>
-        </div>
-      ) : null}
-
       <div className="mk-kpi-grid">
         <div className="mk-kpi-card">
-          <div className="mk-kpi-icon green"><DollarSign size={18} /></div>
+          <div className="mk-kpi-icon green"><Banknote size={18} /></div>
           <div className="mk-kpi-body">
             <span className="mk-kpi-label">Current Official Price</span>
             <strong className="mk-kpi-value">{formatRwf(officialCurrentPrice?.currentPrice)}</strong>
@@ -454,6 +556,7 @@ export function MarketPage() {
             <span className="mk-kpi-label">Best Market Right Now</span>
             <strong className="mk-kpi-value">{bestMarket?.name || "--"}</strong>
             <span className="mk-kpi-sub">{bestMarket ? formatPriceLabel(bestMarket, currentPriceUnit) : "No ranked market available"}</span>
+            {bestMarket?.distanceKm != null ? <span className="mk-kpi-meta">{bestMarket.distanceKm} km from farm</span> : null}
           </div>
         </div>
 
@@ -473,7 +576,7 @@ export function MarketPage() {
             <div className="mk-card-head mk-card-head-split">
               <div>
                 <div className="mk-card-title-row">
-                  <DollarSign size={18} />
+                  <Banknote size={18} />
                   <h3>Official Price Overview</h3>
                 </div>
                 <span className="mk-card-subtitle">This is the current official price from Market Officer records, not a generated estimate.</span>
@@ -632,7 +735,7 @@ export function MarketPage() {
                   <strong className="mk-ai-decision">{marketAnalysis.aiDecision}</strong>
                 </div>
                 <div className="mk-ai-row"><Store size={14} /><span>Best market: <strong>{bestMarket?.name || "--"}</strong></span></div>
-                <div className="mk-ai-row"><DollarSign size={14} /><span>Official price: <strong>{formatRwf(officialCurrentPrice?.currentPrice)}</strong></span></div>
+                <div className="mk-ai-row"><Banknote size={14} /><span>Official price: <strong>{formatRwf(officialCurrentPrice?.currentPrice)}</strong></span></div>
                 <p className="mk-ai-reason">{marketAnalysis.aiReason}</p>
                 <div className="mk-ai-conf-section">
                   <div className="mk-ai-conf-top"><span>AI Confidence</span><strong>{marketAnalysis.aiConfidence}%</strong></div>
@@ -645,9 +748,9 @@ export function MarketPage() {
               <div className="mk-ai-body">
                 <div className="mk-ai-decision-row">
                   <span className="mk-ai-label">Current Status</span>
-                  <strong className="mk-ai-decision">Official price available</strong>
+                  <strong className="mk-ai-decision">{officialCurrentPrice ? "Official price loaded" : "Awaiting official price"}</strong>
                 </div>
-                <p className="mk-ai-reason">Advanced recommendation text is not available yet, but the current official price and nearby market ranking are still live from the backend.</p>
+                <p className="mk-ai-reason">{officialCurrentPrice ? "Advanced recommendation text is not available yet, but the current official price and nearby market ranking are still live from the backend." : "Select a crop and market to load the official price record. Once loaded, backend analysis will provide forecasts and selling recommendations."}</p>
               </div>
             )}
           </div>
@@ -664,7 +767,7 @@ export function MarketPage() {
             </div>
             <div className="mk-summary-stack">
               <div className="mk-summary-row"><span>Selected market</span><strong>{selectedMarketRow?.name || selectedMarket || "--"}</strong></div>
-              <div className="mk-summary-row"><span>District</span><strong>{selectedMarketRow?.district || selectedFarm?.district || "--"}</strong></div>
+              <div className="mk-summary-row"><span>District</span><strong>{selectedMarketRow?.district || farmDistrict || "--"}</strong></div>
               <div className="mk-summary-row"><span>Visible official price</span><strong>{selectedMarketRow ? formatPriceLabel(selectedMarketRow, currentPriceUnit) : "--"}</strong></div>
               <div className="mk-summary-row"><span>Tracked markets</span><strong>{rankingRows.length || 0}</strong></div>
               <div className="mk-summary-row"><span>Price type</span><strong>{priceType}</strong></div>

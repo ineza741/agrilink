@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="260" viewBox="0 0 400 260">
+  <rect width="400" height="260" fill="#fff3e0"/>
+  <rect x="0" y="0" width="400" height="4" fill="#ffcc80"/>
+  <g transform="translate(200,85)">
+    <ellipse cx="0" cy="0" rx="18" ry="10" fill="#e65100" opacity="0.15"/>
+    <ellipse cx="0" cy="-5" rx="12" ry="8" fill="#e65100" opacity="0.2"/>
+    <circle cx="-5" cy="-10" r="2" fill="#e65100" opacity="0.3"/>
+    <circle cx="5" cy="-10" r="2" fill="#e65100" opacity="0.3"/>
+    <path d="M-10 20 L-4 5" stroke="#e65100" stroke-width="1.2" fill="none" opacity="0.3"/>
+    <path d="M10 20 L4 5" stroke="#e65100" stroke-width="1.2" fill="none" opacity="0.3"/>
+    <path d="M-18 0 Q-25-8 -15-8" stroke="#ffcc80" stroke-width="1.2" fill="none" opacity="0.4"/>
+    <path d="M18 0 Q25-8 15-8" stroke="#ffcc80" stroke-width="1.2" fill="none" opacity="0.4"/>
+  </g>
+  <text x="200" y="155" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12" fill="#e65100" fill-opacity="0.5">Pest</text>
+  <text x="200" y="230" text-anchor="middle" font-family="system-ui,sans-serif" font-size="13" font-weight="600" fill="#e65100" fill-opacity="0.7">Tomato Leaf Miner</text>
+</svg>

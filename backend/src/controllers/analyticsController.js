@@ -1,5 +1,6 @@
-const asyncHandler = require("../utils/asyncHandler");
+﻿const asyncHandler = require("../utils/asyncHandler");
 const analyticsService = require("../services/analyticsService");
+const simpleAnalyticsService = require("../services/simpleAnalyticsService");
 
 const getFarmAnalyticsDashboard = asyncHandler(async (req, res) => {
   const data = await analyticsService.getFarmAnalyticsDashboard(
@@ -74,6 +75,43 @@ const exportAdminAnalytics = asyncHandler(async (req, res) => {
   });
 });
 
+const getSimpleReport = asyncHandler(async (req, res) => {
+  const data = await simpleAnalyticsService.buildSimpleAnalyticsReport({
+    user: req.user,
+    farmId: req.validated.query?.farmId || null,
+    range: req.validated.query?.range || "30d",
+  });
+
+  res.json({
+    success: true,
+    data,
+  });
+});
+
+const exportSimpleReportPdf = asyncHandler(async (req, res) => {
+  const result = await simpleAnalyticsService.exportSimpleAnalyticsPdf({
+    user: req.user,
+    farmId: req.validated.query?.farmId || null,
+    range: req.validated.query?.range || "30d",
+  });
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${result.fileName}"`);
+  res.send(result.buffer);
+});
+
+const exportSimpleReportExcel = asyncHandler(async (req, res) => {
+  const result = await simpleAnalyticsService.exportSimpleAnalyticsExcel({
+    user: req.user,
+    farmId: req.validated.query?.farmId || null,
+    range: req.validated.query?.range || "30d",
+  });
+
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="${result.fileName}"`);
+  res.send(result.buffer);
+});
+
 module.exports = {
   getFarmAnalyticsDashboard,
   getFarmAnalyticsHistory,
@@ -81,4 +119,7 @@ module.exports = {
   getAdminAnalyticsDashboard,
   getAdminAnalyticsHistory,
   exportAdminAnalytics,
+  getSimpleReport,
+  exportSimpleReportPdf,
+  exportSimpleReportExcel,
 };

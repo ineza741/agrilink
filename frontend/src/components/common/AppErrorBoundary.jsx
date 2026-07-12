@@ -50,8 +50,8 @@ export class AppErrorBoundary extends React.Component {
           <div className="app-runtime-fallback-copy">
             <strong>Something interrupted this screen.</strong>
             <p>
-              AgriSupport is still running in frontend demo mode. Reload the page or return to the
-              dashboard to continue the demonstration.
+              Something went wrong while loading this screen. Reload the page or return to the
+              dashboard.
             </p>
             <small>{getErrorMessage(this.state.error)}</small>
             <small style={{ color: "#d97706", marginTop: "4px", display: "block" }}>

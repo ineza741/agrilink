@@ -2,6 +2,7 @@
 const ApiError = require("../utils/ApiError");
 const { ensureFarmAccess } = require("./farmService");
 const { createAuditLog } = require("./auditLogService");
+const { normalizeDistrict, normalizeProvince } = require("../utils/districtNormalizer");
 
 const PRICE_TYPE_CONFIG = {
   Wholesale: { field: "wholesalePrice", historyOldField: "oldWholesale", historyNewField: "newWholesale" },
@@ -9,26 +10,9 @@ const PRICE_TYPE_CONFIG = {
   "Farm Gate": { field: "farmGatePrice", historyOldField: "oldFarmGate", historyNewField: "newFarmGate" },
 };
 
-const RWANDA_MARKET_DIRECTORY = [
-  { name: "Nyamata Market", district: "Bugesera District", province: "Eastern Province", lat: -2.1405, lng: 30.1022, access: 88, road: "Paved highway access" },
-  { name: "Gako Market", district: "Bugesera District", province: "Eastern Province", lat: -2.1754, lng: 30.1035, access: 76, road: "Good feeder-road access" },
-  { name: "Ruhuha Market", district: "Bugesera District", province: "Eastern Province", lat: -2.2392, lng: 30.1936, access: 69, road: "Seasonal feeder access" },
-  { name: "Zinia Market", district: "Kicukiro District", province: "Kigali City", lat: -1.9838, lng: 30.1014, access: 82, road: "Urban collector road" },
-  { name: "Kanserege Market", district: "Kicukiro District", province: "Kigali City", lat: -1.9927, lng: 30.1086, access: 78, road: "Mixed traffic route" },
-  { name: "Kicukiro New Modern Market", district: "Kicukiro District", province: "Kigali City", lat: -1.9704, lng: 30.1059, access: 91, road: "Modern wholesale entry" },
-  { name: "Nyabugogo Market", district: "Nyarugenge District", province: "Kigali City", lat: -1.9446, lng: 30.0619, access: 89, road: "Major truck route" },
-  { name: "Kimironko Market", district: "Gasabo District", province: "Kigali City", lat: -1.944, lng: 30.1131, access: 87, road: "High-volume urban market" },
-  { name: "Musanze Main Market", district: "Musanze District", province: "Northern Province", lat: -1.4996, lng: 29.6344, access: 84, road: "Regional collector point" },
-  { name: "Kinigi Exchange Point", district: "Musanze District", province: "Northern Province", lat: -1.4328, lng: 29.5874, access: 67, road: "Mountain access road" },
-  { name: "Huye Central Market", district: "Huye District", province: "Southern Province", lat: -2.5967, lng: 29.7394, access: 83, road: "Reliable district road" },
-  { name: "Ngoma Trading Point", district: "Huye District", province: "Southern Province", lat: -2.6125, lng: 29.7488, access: 72, road: "Good but slower loading access" },
-  { name: "Rubavu Border Market", district: "Rubavu District", province: "Western Province", lat: -1.679, lng: 29.2589, access: 86, road: "Border trade route" },
-  { name: "Gisenyi Produce Market", district: "Rubavu District", province: "Western Province", lat: -1.7026, lng: 29.2579, access: 80, road: "Urban + border route" },
-  { name: "Rwamagana Market", district: "Rwamagana District", province: "Eastern Province", lat: -1.9499, lng: 30.4347, access: 79, road: "District aggregation route" },
-  { name: "Kigabiro Trading Hub", district: "Rwamagana District", province: "Eastern Province", lat: -1.9524, lng: 30.4416, access: 74, road: "Cooperative buyer route" },
-  { name: "Kayonza Market", district: "Kayonza District", province: "Eastern Province", lat: -1.8772, lng: 30.6451, access: 81, road: "Processor route access" },
-  { name: "Mukarange Collection Point", district: "Kayonza District", province: "Eastern Province", lat: -1.8779, lng: 30.6507, access: 71, road: "Feeder-road aggregation point" },
-];
+async function loadMarketDirectory() {
+  return prisma.market.findMany({ where: { active: true } });
+}
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
@@ -80,15 +64,13 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 }
 
 function inferFarmDistrict(farm) {
-  const searchSpace = [farm?.district, farm?.sector, farm?.province, farm?.farmName].filter(Boolean).join(" ").toLowerCase();
-  const found = RWANDA_MARKET_DIRECTORY.find((market) => searchSpace.includes(market.district.toLowerCase()) || searchSpace.includes(market.name.toLowerCase()));
-  return found?.district || farm?.district || "Kicukiro District";
+  if (farm?.district) return farm.district;
+  return "Kicukiro District";
 }
 
 function inferFarmProvince(farm) {
-  const district = inferFarmDistrict(farm);
-  const found = RWANDA_MARKET_DIRECTORY.find((market) => market.district === district);
-  return found?.province || farm?.province || "Kigali City";
+  if (farm?.province) return farm.province;
+  return "Kigali City";
 }
 
 function createMapEmbedUrl(farm, markets) {
@@ -138,8 +120,10 @@ function buildOfficialPricePayload(record, history, priceType) {
   const normalizedPriceType = normalizePriceType(priceType);
   const config = PRICE_TYPE_CONFIG[normalizedPriceType];
   const currentPrice = record[config.field] != null ? Number(record[config.field]) : null;
-  const previousPrice = history?.[config.historyOldField] != null ? Number(history[config.historyOldField]) : normalizedPriceType === "Wholesale" && record.previousPrice != null ? Number(record.previousPrice) : null;
-  const percentageChange = previousPrice && currentPrice != null ? Number((((currentPrice - previousPrice) / previousPrice) * 100).toFixed(1)) : previousPrice === 0 && currentPrice != null ? 0 : null;
+  const rawPreviousPrice = history?.[config.historyOldField] != null ? Number(history[config.historyOldField]) : normalizedPriceType === "Wholesale" && record.previousPrice != null ? Number(record.previousPrice) : null;
+  const isInitialCreation = rawPreviousPrice === 0 && history != null;
+  const previousPrice = isInitialCreation ? currentPrice : rawPreviousPrice;
+  const percentageChange = previousPrice != null && currentPrice != null ? Number((((currentPrice - previousPrice) / previousPrice) * 100).toFixed(1)) : null;
 
   return {
     crop: record.cropName,
@@ -191,22 +175,24 @@ async function buildMarketData({ farm, crop, timeframe, priceType = "Wholesale",
   const farmProvince = inferFarmProvince(farm);
   const farmLat = Number(farm?.latitude || -1.9441);
   const farmLng = Number(farm?.longitude || 30.0619);
+  const dbMarkets = await loadMarketDirectory();
 
   const markets = officialRecords
     .map((record) => {
-      const marketDirectory = RWANDA_MARKET_DIRECTORY.find((market) => market.name === record.marketName) || RWANDA_MARKET_DIRECTORY.find((market) => market.district === record.district) || null;
+      const marketDirectory = dbMarkets.find((market) => market.marketName === record.marketName) || dbMarkets.find((market) => normalizeDistrict(market.district) === normalizeDistrict(record.district)) || null;
       const official = buildOfficialPricePayload(record, historyMap.get(record.id), normalizedPriceType);
-      const distanceKm = marketDirectory ? haversineKm(farmLat, farmLng, marketDirectory.lat, marketDirectory.lng) : 0;
-      const demandScore = clamp(Math.round(68 + (marketDirectory?.access || 72) * 0.18 - distanceKm * 1.1 + (official.currentPrice || 0) / 150), 42, 97);
+      const distanceKm = marketDirectory ? haversineKm(farmLat, farmLng, Number(marketDirectory.latitude), Number(marketDirectory.longitude)) : 0;
+      const accessScore = 72;
+      const demandScore = clamp(Math.round(68 + accessScore * 0.18 - distanceKm * 1.1 + (official.currentPrice || 0) / 150), 42, 97);
       const trendChange = official.percentageChange ?? 0;
-      const opportunityScore = clamp(Math.round(demandScore * 0.45 + (marketDirectory?.access || 72) * 0.25 + Math.max(0, 100 - distanceKm * 3) * 0.15 + Math.min(100, (official.currentPrice || 0) / 20) * 0.15), 35, 98);
+      const opportunityScore = clamp(Math.round(demandScore * 0.45 + accessScore * 0.25 + Math.max(0, 100 - distanceKm * 3) * 0.15 + Math.min(100, (official.currentPrice || 0) / 20) * 0.15), 35, 98);
 
       return {
         id: `${record.id}-${normalizedPriceType}`,
         crop: record.cropName,
         name: record.marketName,
         district: record.district,
-        province: marketDirectory?.province || farmProvince,
+        province: normalizeProvince(marketDirectory?.province || farmProvince),
         distanceKm: Number(distanceKm.toFixed(1)),
         distanceLabel: `${distanceKm.toFixed(1)} km`,
         currentPrice: official.currentPrice,
@@ -221,12 +207,12 @@ async function buildMarketData({ farm, crop, timeframe, priceType = "Wholesale",
         demandLabel: getDemandLabel(demandScore),
         trendChange,
         trendLabel: getTrendLabel(trendChange),
-        accessibilityScore: marketDirectory?.access || 72,
-        accessibilityLabel: (marketDirectory?.access || 72) >= 85 ? "Excellent" : (marketDirectory?.access || 72) >= 72 ? "Good" : "Limited",
+        accessibilityScore: accessScore,
+        accessibilityLabel: accessScore >= 85 ? "Excellent" : accessScore >= 72 ? "Good" : "Limited",
         recommendation: getRecommendationLabel(opportunityScore),
         opportunityScore,
-        routeNote: marketDirectory?.road || "Market route information unavailable.",
-        coordinates: { lat: marketDirectory?.lat || farmLat, lng: marketDirectory?.lng || farmLng },
+        routeNote: "Market route information available.",
+        coordinates: { lat: Number(marketDirectory?.latitude || farmLat), lng: Number(marketDirectory?.longitude || farmLng) },
         updatedAt: record.updatedAt,
         effectiveDate: record.effectiveDate,
         updatedBy: official.updatedBy,
@@ -235,7 +221,7 @@ async function buildMarketData({ farm, crop, timeframe, priceType = "Wholesale",
     .sort((a, b) => b.opportunityScore - a.opportunityScore);
 
   const selectedMarket = markets.find((item) => marketName && item.name === marketName)
-    || markets.find((item) => item.district === farmDistrict)
+    || markets.find((item) => normalizeDistrict(item.district) === normalizeDistrict(farmDistrict))
     || markets[0];
 
   const averageChangePct = markets.length

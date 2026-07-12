@@ -457,10 +457,13 @@ model PestDiagnosis {
   farmId              String
   cropName            String
   symptom             String
+  symptoms            String          @default("")
   affectedArea        Int
   uploadedImageName   String?
+  uploadedImagePath   String?
   diseaseName         String
   scientificName      String
+  conditionId         String?
   confidence          Int
   currentRisk         String
   forecastRisk        String
@@ -469,6 +472,7 @@ model PestDiagnosis {
   yieldLoss           Int
   economicLoss        Float
   priority            String
+  status              String          @default("Pending")
   district            String
   cropStage           String
   weatherContribution Json?
@@ -477,12 +481,21 @@ model PestDiagnosis {
   explanation         Json?
   outbreakForecast    Json?
   recommendation      Json?
+  diagnosisSource     String?
+  modelVersion        String?
+  imageQuality        String?
+  acceptedAt          DateTime?
+  completedAt         DateTime?
+  rejectedAt          DateTime?
+  rejectionReason     String?
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
+  condition           DiseaseLibrary? @relation(fields: [conditionId], references: [id], onDelete: SetNull)
   farm                Farm            @relation(fields: [farmId], references: [id], onDelete: Cascade)
   actionLogs          PestActionLog[]
 
   @@index([farmId, cropName, createdAt])
+  @@index([district, createdAt])
   @@map("pest_diagnoses")
 }
 
@@ -502,6 +515,55 @@ model PestActionLog {
   @@index([diagnosisId, createdAt])
   @@index([farmId, createdAt])
   @@map("pest_action_logs")
+}
+
+model DiseaseLibrary {
+  id                  String   @id @default(uuid())
+  name                String
+  scientificName      String
+  type                String   @default("Disease")
+  affectedCrops       String
+  symptoms            String
+  prevention          String
+  treatment           String
+  severity            String   @default("Medium")
+  imageUrl            String?
+  imageAuthor         String?
+  imageLicence        String?
+  imageAttribution    String?
+  modelClassLabel     String?
+  recognitionSupported Boolean @default(false)
+  severityGuidance    String?
+  source              String?
+  sourceUrl           String?
+  verified            Boolean  @default(false)
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  diagnoses           PestDiagnosis[]
+  outbreaks           OutbreakRecord[]
+
+  @@map("disease_library")
+}
+
+model OutbreakRecord {
+  id                String           @id @default(uuid())
+  diseaseId         String?
+  diseaseName       String
+  farmId            String?
+  district          String
+  sector            String?
+  latitude          Float?
+  longitude         Float?
+  severity          String           @default("Moderate")
+  confirmationStatus String          @default("Confirmed")
+  detectedAt        DateTime         @default(now())
+  createdAt         DateTime         @default(now())
+  condition         DiseaseLibrary?  @relation(fields: [diseaseId], references: [id], onDelete: SetNull)
+
+  @@index([district, detectedAt])
+  @@map("outbreak_records")
 }
 
 model NotificationPreference {
@@ -878,6 +940,32 @@ model MarketOfficerProfile {
   @@map("market_officer_profiles")
 }
 
+model Market {
+  id                  String   @id @default(uuid())
+  marketName          String
+  province            String
+  district            String
+  sector              String?
+  cell                String?
+  village             String?
+  latitude            Float?
+  longitude           Float?
+  marketType          String?
+  cropsSupported      Json?
+  active              Boolean  @default(true)
+  dataSourceName      String?
+  dataSourceReference String?
+  verifiedAt          DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  cropPrices          CropPrice[]
+
+  @@index([district, active])
+  @@index([marketName])
+  @@map("markets")
+}
+
 model CropPrice {
   id               String   @id @default(uuid())
   cropName         String
@@ -885,6 +973,7 @@ model CropPrice {
   marketName       String
   district         String
   sector           String?
+  marketId         String?
   unit             String   @default("kg")
   currency         String   @default("RWF")
   wholesalePrice   Float
@@ -902,9 +991,11 @@ model CropPrice {
   createdBy        User     @relation("CropPriceCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
   updatedBy        User?    @relation("CropPriceUpdater", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   histories        CropPriceHistory[]
+  market           Market?  @relation(fields: [marketId], references: [id])
 
   @@index([cropName, marketName, status])
   @@index([district, cropName])
+  @@index([marketId])
   @@index([effectiveDate])
   @@map("crop_prices")
 }

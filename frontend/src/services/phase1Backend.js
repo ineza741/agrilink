@@ -64,7 +64,7 @@ function normalizeVerificationStatus(status = "") {
   return String(status).trim().toLowerCase() || "pending";
 }
 
-function splitRegionInput(region = "") {
+export function splitRegionInput(region = "") {
   const parts = String(region)
     .split(",")
     .map((part) => part.trim())
@@ -134,6 +134,49 @@ async function requestJson(path, options = {}) {
     }
 
     return payload;
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`Phase 1 backend request timed out after ${timeoutMs}ms.`);
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function requestBlob(path, options = {}) {
+  const {
+    method = "GET",
+    token = getStoredAccessToken(),
+    timeoutMs = REQUEST_TIMEOUT_MS,
+    headers = {},
+  } = options;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...headers,
+      },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      let payload = null;
+      try {
+        payload = await response.json();
+      } catch {
+        payload = null;
+      }
+      throw new Error(payload?.message || `Request failed with status ${response.status}`);
+    }
+
+    return response.blob();
   } catch (error) {
     if (error?.name === "AbortError") {
       throw new Error(`Phase 1 backend request timed out after ${timeoutMs}ms.`);
@@ -1092,6 +1135,9 @@ export const phase1BackendService = {
       const query = new URLSearchParams();
       if (params.crop) query.set("crop", params.crop);
       if (params.timeframe) query.set("timeframe", params.timeframe);
+      if (params.priceType) query.set("priceType", params.priceType);
+      if (params.marketName) query.set("marketName", params.marketName);
+      if (params.district) query.set("district", params.district);
       const suffix = query.toString() ? `?${query.toString()}` : "";
       const response = await requestJson(`/market/farms/${farmId}/latest${suffix}`);
       return mapBackendMarketAnalysis(response?.data);
@@ -1119,8 +1165,19 @@ export const phase1BackendService = {
       const query = new URLSearchParams();
       if (params.crop) query.set("crop", params.crop);
       if (params.search) query.set("search", params.search);
+      if (params.type) query.set("type", params.type);
+      if (params.page) query.set("page", params.page);
+      if (params.pageSize) query.set("pageSize", params.pageSize);
       const suffix = query.toString() ? `?${query.toString()}` : "";
       const response = await requestJson(`/pests/library${suffix}`);
+      return {
+        data: Array.isArray(response?.data) ? response.data : [],
+        pagination: response?.pagination || null,
+      };
+    },
+    async symptoms(crop) {
+      const suffix = crop ? `?crop=${encodeURIComponent(crop)}` : "";
+      const response = await requestJson(`/pests/symptoms${suffix}`);
       return Array.isArray(response?.data) ? response.data : [];
     },
     async analyze(farmId, payload) {
@@ -1138,6 +1195,25 @@ export const phase1BackendService = {
       const response = await requestJson(`/pests/farms/${farmId}/history`);
       return (Array.isArray(response?.data) ? response.data : []).map(mapBackendPestHistory);
     },
+    async outbreaks(params = {}) {
+      const query = new URLSearchParams();
+      if (params.district) query.set("district", params.district);
+      const suffix = query.toString() ? `?${query.toString()}` : "";
+      const response = await requestJson(`/pests/outbreaks${suffix}`);
+      return response?.data || { risk: "None", intensity: 0, trend: "Stable", nearbyCases: 0, records: [] };
+    },
+    async acceptDiagnosis(diagnosisId) {
+      const response = await requestJson(`/pests/diagnoses/${diagnosisId}/accept`, { method: "PATCH" });
+      return mapBackendPestDiagnosis(response?.data);
+    },
+    async completeDiagnosis(diagnosisId) {
+      const response = await requestJson(`/pests/diagnoses/${diagnosisId}/complete`, { method: "PATCH" });
+      return mapBackendPestDiagnosis(response?.data);
+    },
+    async rejectDiagnosis(diagnosisId) {
+      const response = await requestJson(`/pests/diagnoses/${diagnosisId}/reject`, { method: "PATCH" });
+      return mapBackendPestDiagnosis(response?.data);
+    },
     async listActions(diagnosisId) {
       const response = await requestJson(`/pests/diagnoses/${diagnosisId}/actions`);
       return (Array.isArray(response?.data) ? response.data : []).map(mapBackendPestAction);
@@ -1148,6 +1224,20 @@ export const phase1BackendService = {
         body: payload,
       });
       return mapBackendPestAction(response?.data);
+    },
+    async uploadImage(file) {
+      const formData = new FormData();
+      formData.append("image", file);
+      const token = getStoredAccessToken();
+      const response = await fetch(`${API_BASE_URL}/pests/upload-image`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+      let payload = null;
+      try { payload = await response.json(); } catch { payload = null; }
+      if (!response.ok) throw new Error(payload?.message || `Upload failed with status ${response.status}`);
+      return payload?.data || null;
     },
   },
   recommendations: {
@@ -1338,6 +1428,28 @@ export const phase1BackendService = {
       });
       return mapBackendAnalyticsExport(response?.data);
     },
+    async simpleReport(params = {}) {
+      const query = new URLSearchParams();
+      if (params.farmId) query.set("farmId", params.farmId);
+      if (params.range) query.set("range", params.range);
+      const suffix = query.toString() ? `?${query.toString()}` : "";
+      const response = await requestJson(`/analytics/simple-report${suffix}`);
+      return response?.data || null;
+    },
+    async exportSimpleReportPdf(params = {}) {
+      const query = new URLSearchParams();
+      if (params.farmId) query.set("farmId", params.farmId);
+      if (params.range) query.set("range", params.range);
+      const suffix = query.toString() ? `?${query.toString()}` : "";
+      return requestBlob(`/analytics/simple-report/export/pdf${suffix}`);
+    },
+    async exportSimpleReportExcel(params = {}) {
+      const query = new URLSearchParams();
+      if (params.farmId) query.set("farmId", params.farmId);
+      if (params.range) query.set("range", params.range);
+      const suffix = query.toString() ? `?${query.toString()}` : "";
+      return requestBlob(`/analytics/simple-report/export/excel${suffix}`);
+    },
   },
   admin: {
     async dashboardSummary() {
@@ -1461,6 +1573,15 @@ export const phase1BackendService = {
     },
   },
   cropPrices: {
+    async nearby(params = {}) {
+      const query = new URLSearchParams();
+      if (params.farmId) query.set("farmId", params.farmId);
+      if (params.cropName) query.set("cropName", params.cropName);
+      if (params.priceType) query.set("priceType", params.priceType);
+      const suffix = query.toString() ? `?${query.toString()}` : "";
+      const response = await requestJson(`/market-directory/nearby${suffix}`);
+      return response?.data || null;
+    },
     async list(params = {}) {
       const query = new URLSearchParams();
       if (params.cropName) query.set("cropName", params.cropName);
@@ -1475,6 +1596,16 @@ export const phase1BackendService = {
     async current() {
       const response = await requestJson("/crop-prices/current");
       return Array.isArray(response?.data) ? response.data : [];
+    },
+    async currentPrice(params = {}) {
+      const query = new URLSearchParams();
+      if (params.crop) query.set("crop", params.crop);
+      if (params.market) query.set("market", params.market);
+      if (params.district) query.set("district", params.district);
+      if (params.priceType) query.set("priceType", params.priceType);
+      const suffix = query.toString() ? `?${query.toString()}` : "";
+      const response = await requestJson(`/crop-prices/current-price${suffix}`);
+      return response?.data || null;
     },
     async official() {
       const response = await requestJson("/crop-prices/official");
@@ -1560,4 +1691,5 @@ export const phase1BackendService = {
     },
   },
 };
+
 

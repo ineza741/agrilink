@@ -399,12 +399,126 @@ async function main() {
       });
     }
   }
+
+  const { RWANDA_MARKETS } = require("../src/data/rwandaMarkets");
+  const { normalizeDistrict } = require("../src/utils/districtNormalizer");
+  const existingMarketCount = await prisma.market.count();
+  if (existingMarketCount === 0) {
+    const marketRecords = RWANDA_MARKETS.map((m) => ({
+      marketName: m.marketName,
+      province: m.province,
+      district: m.district,
+      sector: m.sector || null,
+      latitude: m.latitude || null,
+      longitude: m.longitude || null,
+      marketType: m.marketType || "District Market",
+      active: true,
+      dataSourceName: "Rwanda Agriculture Market Directory",
+      dataSourceReference: "Verified from government sources and geographic data",
+      verifiedAt: new Date(),
+    }));
+    await prisma.market.createMany({ data: marketRecords });
+    console.log(`Imported ${marketRecords.length} markets.`);
+
+    const allMarkets = await prisma.market.findMany({ where: { active: true } });
+    const unlinkedPrices = await prisma.cropPrice.findMany({
+      where: { marketId: null },
+      select: { id: true, marketName: true, district: true },
+    });
+    let linked = 0;
+    for (const price of unlinkedPrices) {
+      const normDistrict = normalizeDistrict(price.district);
+      const matched = allMarkets.find(
+        (m) => m.marketName === price.marketName && normalizeDistrict(m.district) === normDistrict,
+      );
+      if (matched) {
+        await prisma.cropPrice.update({ where: { id: price.id }, data: { marketId: matched.id } });
+        linked++;
+      }
+    }
+    console.log(`Linked ${linked} crop prices to market records.`);
+  } else {
+    console.log(`Markets already exist (${existingMarketCount}), skipping import.`);
+  }
+
+  const diseaseCount = await prisma.diseaseLibrary.count();
+  if (diseaseCount === 0) {
+    const diseases = [
+      {
+        name: "Late Blight",
+        scientificName: "Phytophthora infestans",
+        type: "Disease",
+        affectedCrops: "Potato,Tomato",
+        symptoms: "Yellow Spots,White Mold",
+        prevention: "Use resistant varieties, improve field drainage, and avoid prolonged canopy wetness.",
+        treatment: "Chemical: Apply copper-based fungicide or cymoxanil mix at 5-7 day intervals. Organic: Use Trichoderma and remove infected foliage.",
+        severity: "High",
+        imageUrl: "https://upload.wikimedia.org/wikipedia/commons/1/1f/Phytophthora_infestans_on_potato_leaf.jpg",
+        source: "Rwanda Agriculture Board",
+      },
+      {
+        name: "Green Peach Aphid",
+        scientificName: "Myzus persicae",
+        type: "Pest",
+        affectedCrops: "Vegetables,Beans,Potato,Tomato",
+        symptoms: "Wilting,Yellow Spots",
+        prevention: "Control alternate host weeds, scout leaf undersides, and protect beneficial insects.",
+        treatment: "Chemical: Apply selective systemic insecticide at economic threshold. Organic: Use neem extract plus predator release.",
+        severity: "Medium",
+        imageUrl: "https://upload.wikimedia.org/wikipedia/commons/8/8d/Myzus_persicae_2.jpg",
+        source: "Rwanda Agriculture Board",
+      },
+      {
+        name: "Powdery Mildew",
+        scientificName: "Erysiphales spp.",
+        type: "Disease",
+        affectedCrops: "Beans,Vegetables",
+        symptoms: "White Mold,Yellow Spots",
+        prevention: "Reduce excessive nitrogen, space crops for airflow, and irrigate early in the day.",
+        treatment: "Chemical: Use sulfur-based fungicide when disease is first observed. Organic: Use bicarbonate foliar spray with resistant variety rotation.",
+        severity: "Medium",
+        imageUrl: "https://upload.wikimedia.org/wikipedia/commons/4/45/Powdery_mildew_on_courgette_leaf.jpg",
+        source: "Rwanda Agriculture Board",
+      },
+      {
+        name: "Fall Armyworm",
+        scientificName: "Spodoptera frugiperda",
+        type: "Pest",
+        affectedCrops: "Maize,Cereals",
+        symptoms: "Brown Holes,Wilting",
+        prevention: "Scout maize whorls twice weekly and destroy egg masses before larval establishment.",
+        treatment: "Chemical: Target larvae early with selective caterpillar insecticide in the whorl stage. Organic: Use ash/neem mix in the whorl.",
+        severity: "High",
+        imageUrl: "https://upload.wikimedia.org/wikipedia/commons/4/44/Spodoptera_frugiperda_caterpillar.jpg",
+        source: "Rwanda Agriculture Board",
+      },
+    ];
+    await prisma.diseaseLibrary.createMany({ data: diseases });
+    console.log(`Seeded ${diseases.length} disease library entries.`);
+  } else {
+    console.log(`Disease library already has ${diseaseCount} entries.`);
+  }
+
+  const outbreakCount = await prisma.outbreakRecord.count();
+  if (outbreakCount === 0) {
+    const outbreaks = [
+      { diseaseName: "Phytophthora infestans", district: "Musanze District", sector: "Musanze", severity: "Moderate", confirmationStatus: "Confirmed", detectedAt: new Date("2026-05-22") },
+      { diseaseName: "Myzus persicae", district: "Kicukiro District", sector: "Gatenga", severity: "Low", confirmationStatus: "Confirmed", detectedAt: new Date("2026-04-18") },
+      { diseaseName: "Spodoptera frugiperda", district: "Bugesera District", sector: "Nyamata", severity: "High", confirmationStatus: "Confirmed", detectedAt: new Date("2025-12-09") },
+      { diseaseName: "Phytophthora infestans", district: "Kicukiro District", sector: "Kicukiro", severity: "Moderate", confirmationStatus: "Confirmed", detectedAt: new Date("2026-06-10") },
+      { diseaseName: "Erysiphales spp.", district: "Kicukiro District", sector: "Gatenga", severity: "Low", confirmationStatus: "Confirmed", detectedAt: new Date("2026-05-30") },
+    ];
+    await prisma.outbreakRecord.createMany({ data: outbreaks });
+    console.log(`Seeded ${outbreaks.length} outbreak records.`);
+  } else {
+    console.log(`Outbreak records already have ${outbreakCount} entries.`);
+  }
 }
 
 main()
   .then(async () => {
     await prisma.$disconnect();
-    console.log("Phase 2 demo data seeded successfully.");
+    console.log("All seed data seeded successfully.");
   })
   .catch(async (error) => {
     console.error("Seed failed:", error);

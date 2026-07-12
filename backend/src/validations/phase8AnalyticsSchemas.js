@@ -1,4 +1,4 @@
-const { z } = require("zod");
+﻿const { z } = require("zod");
 
 const farmIdParamsSchema = z.object({
   farmId: z.string().uuid(),
@@ -25,6 +25,7 @@ const adminTemplates = [
 ];
 const complianceStandards = ["MINAGRI", "RAB", "FAO", "NGO"];
 const exportFormats = ["pdf", "excel", "json", "share", "gis", "powerbi", "dataset", "report"];
+const simpleRanges = ["7d", "30d", "90d"];
 
 const farmerAnalyticsQuerySchema = z.object({
   dateRange: z.enum(dateRanges).optional(),
@@ -40,6 +41,11 @@ const adminAnalyticsQuerySchema = z.object({
   selectedComparison: z.string().min(2).optional(),
   selectedCompliance: z.enum(complianceStandards).optional(),
   selectedExportFormat: z.string().min(2).optional(),
+});
+
+const simpleReportQuerySchema = z.object({
+  farmId: z.string().uuid().optional(),
+  range: z.enum(simpleRanges).optional(),
 });
 
 const farmAnalyticsDashboardSchema = z.object({
@@ -91,6 +97,12 @@ const adminAnalyticsExportSchema = z.object({
   }),
 });
 
+const simpleReportSchema = z.object({
+  params: z.object({}).optional(),
+  query: simpleReportQuerySchema.optional(),
+  body: z.object({}).optional(),
+});
+
 module.exports = {
   farmAnalyticsDashboardSchema,
   farmAnalyticsHistorySchema,
@@ -98,6 +110,7 @@ module.exports = {
   adminAnalyticsDashboardSchema,
   adminAnalyticsHistorySchema,
   adminAnalyticsExportSchema,
+  simpleReportSchema,
   dateRanges,
   chartFilters,
   farmerTemplates,
