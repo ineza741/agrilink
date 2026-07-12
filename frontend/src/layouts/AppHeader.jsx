@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, CloudOff, LogOut, Menu, Moon, RefreshCw, Search, Settings, UserCircle2 } from "lucide-react";
+import { Bell, ChevronDown, LogOut, Menu, RefreshCw, Search, Settings, UserCircle2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { brandConfig, routeMeta } from "../data/navigation";
@@ -38,7 +38,7 @@ const farmerSearchPlaceholders = {
 export function AppHeader({ onToggleSidebar = () => {} }) {
   const { user, logout } = useAuth();
   const farmerData = useFarmerData();
-  const { isOffline, pendingSyncItems, syncNow, syncing } = useMobileSupport();
+  const { isOffline, syncNow, syncing } = useMobileSupport();
   const navigate = useNavigate();
   const location = useLocation();
   const isAdmin = isAdminRole(user?.role);
@@ -171,21 +171,14 @@ export function AppHeader({ onToggleSidebar = () => {} }) {
         {renderGlobalSearch("Search farmers, regions, or data records...")}
 
         <div className="header-tools">
-          <div className="header-sync-cluster">
-            <span className={isOffline ? "header-status-badge offline" : "header-status-badge"}>
-              <CloudOff size={14} />
-              <span>{isOffline ? "Offline Mode" : "Online"}</span>
-            </span>
-            <button
-              type="button"
-              className="header-sync-button"
-              onClick={syncNow}
-              disabled={isOffline || syncing}
-            >
-              <RefreshCw size={14} className={syncing ? "spinning" : ""} />
-              <span>{syncing ? "Syncing..." : `Sync${pendingSyncItems.length ? ` (${pendingSyncItems.length})` : ""}`}</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            className="header-sync-button"
+            onClick={syncNow}
+            disabled={isOffline || syncing}
+          >
+            <RefreshCw size={14} className={syncing ? "spinning" : ""} />
+          </button>
           <div className="farmer-header-menu-wrap">
             <button
               type="button"
@@ -282,21 +275,14 @@ export function AppHeader({ onToggleSidebar = () => {} }) {
 
       <div className="farmer-header-actions">
         {farmerSearchPlaceholder ? renderGlobalSearch(farmerSearchPlaceholder) : null}
-        <div className="header-sync-cluster">
-          <span className={isOffline ? "header-status-badge offline" : "header-status-badge"}>
-            <CloudOff size={14} />
-            <span>{isOffline ? "Offline Mode" : "Online"}</span>
-          </span>
-          <button
-            type="button"
-            className="header-sync-button"
-            onClick={syncNow}
-            disabled={isOffline || syncing}
-          >
-            <RefreshCw size={14} className={syncing ? "spinning" : ""} />
-            <span>{syncing ? "Syncing..." : `Sync${pendingSyncItems.length ? ` (${pendingSyncItems.length})` : ""}`}</span>
-          </button>
-        </div>
+        <button
+          type="button"
+          className="header-sync-button"
+          onClick={syncNow}
+          disabled={isOffline || syncing}
+        >
+          <RefreshCw size={14} className={syncing ? "spinning" : ""} />
+        </button>
         <div className="farmer-header-menu-wrap">
           <button
             type="button"

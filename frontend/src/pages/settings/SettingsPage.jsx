@@ -1,25 +1,20 @@
 import {
-  Cloud,
-  CloudOff,
   Download,
   FileText,
   Languages,
   Mic,
   MicOff,
   MessageSquareText,
-  RadioTower,
   RefreshCw,
+  RadioTower,
   Save,
   Smartphone,
-  Wifi,
-  WifiOff,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useMobileSupport } from "../../context/MobileSupportContext";
 
 export function SettingsPage() {
   const {
-    browserOnline,
     isOffline,
     offlineMode,
     setOfflineMode,
@@ -33,8 +28,6 @@ export function SettingsPage() {
     addVoiceNote,
     downloadableGuides = [],
     downloadGuide,
-    pendingSyncItems = [],
-    queueSyncItem,
     syncNow,
     syncing = false,
     lastSyncAt,
@@ -101,10 +94,6 @@ export function SettingsPage() {
     setVoiceStatus(isOffline ? "Saved offline. Pending sync." : "Voice note saved.");
   };
 
-  const saveMobilePreferences = () => {
-    queueSyncItem("Mobile and offline preferences");
-  };
-
   return (
     <section className="st-page">
       <div className="st-header">
@@ -118,36 +107,6 @@ export function SettingsPage() {
       </div>
 
       <div className="st-sync-grid">
-        <article className="st-sync-card">
-          <div className={`st-sync-icon ${browserOnline ? 'green' : 'amber'}`}>
-            {browserOnline ? <Wifi size={20} /> : <WifiOff size={20} />}
-          </div>
-          <div className="st-sync-info">
-            <span>Network Status</span>
-            <strong>{browserOnline ? "Online" : "Offline"}</strong>
-            <span className={`st-sync-badge ${browserOnline ? 'green' : 'slate'}`}>{browserOnline ? "Connected" : "Disconnected"}</span>
-          </div>
-        </article>
-        <article className="st-sync-card">
-          <div className={`st-sync-icon ${isOffline ? 'amber' : 'green'}`}>
-            {isOffline ? <CloudOff size={20} /> : <Cloud size={20} />}
-          </div>
-          <div className="st-sync-info">
-            <span>Current Mode</span>
-            <strong>{isOffline ? "Offline-ready" : "Live Sync"}</strong>
-            <span className={`st-sync-badge ${isOffline ? 'slate' : 'green'}`}>{isOffline ? "Offline" : "Active"}</span>
-          </div>
-        </article>
-        <article className="st-sync-card">
-          <div className="st-sync-icon slate">
-            <RefreshCw size={20} />
-          </div>
-          <div className="st-sync-info">
-            <span>Pending Queue</span>
-            <strong>{pendingSyncItems.length} item{pendingSyncItems.length !== 1 ? 's' : ''}</strong>
-            <span className={`st-sync-badge ${pendingSyncItems.length > 0 ? 'amber' : 'green'}`}>{pendingSyncItems.length > 0 ? "Pending" : "Empty"}</span>
-          </div>
-        </article>
         <article className="st-sync-card">
           <div className="st-sync-icon green">
             <RadioTower size={20} />
@@ -165,20 +124,9 @@ export function SettingsPage() {
           <article className="st-card">
             <div className="st-card-header">
               <h2>Offline &amp; Device Controls</h2>
-              <button type="button" className="st-btn primary" onClick={saveMobilePreferences}>
+              <button type="button" className="st-btn primary" onClick={() => {}}>
                 <Download size={18} />
                 <span>Save Offline Profile</span>
-              </button>
-            </div>
-
-            <div className="st-toggle-row">
-              <div className="st-toggle-icon">{isOffline ? <CloudOff size={22} /> : <Cloud size={22} />}</div>
-              <div className="st-toggle-body">
-                <strong>Offline Mode</strong>
-                <p>Store changes locally and queue them for sync when the connection is restored.</p>
-              </div>
-              <button type="button" className={`st-toggle-switch ${offlineMode ? 'active' : ''}`} onClick={() => setOfflineMode(!offlineMode)} aria-label="Offline Mode" role="switch" aria-checked={offlineMode}>
-                <i />
               </button>
             </div>
 
@@ -218,7 +166,7 @@ export function SettingsPage() {
               <span className="st-badge"><Smartphone size={15} /> Low-end smartphone ready</span>
               <span className="st-badge"><MessageSquareText size={15} /> SMS enabled</span>
               <span className="st-badge"><Languages size={15} /> Local language support</span>
-              <span className="st-badge"><CloudOff size={15} /> Offline ready</span>
+              <span className="st-badge"><MicOff size={15} /> Voice notes enabled</span>
             </div>
           </article>
 
@@ -261,16 +209,8 @@ export function SettingsPage() {
             </div>
             <div className="st-sync-info-grid">
               <div className="st-sync-info-item">
-                <span>Network State</span>
-                <strong>{browserOnline ? "Online" : "Offline"}</strong>
-              </div>
-              <div className="st-sync-info-item">
                 <span>Current Mode</span>
                 <strong>{isOffline ? "Offline-ready" : "Live Sync"}</strong>
-              </div>
-              <div className="st-sync-info-item">
-                <span>Pending Queue</span>
-                <strong>{pendingSyncItems.length} item(s)</strong>
               </div>
               <div className="st-sync-info-item">
                 <span>Last Sync</span>
